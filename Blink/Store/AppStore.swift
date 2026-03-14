@@ -7,7 +7,7 @@ final class AppStore {
     var activeProjectId: String?
 
     // Tabs
-    var tabs: [Tab] = Tab.dummy
+    var tabs: [AppTab] = AppTab.dummy
     var activeTabId: String?
 
     // Theme
@@ -32,7 +32,7 @@ final class AppStore {
         activeTabId = id
     }
 
-    func projectTabs(for projectId: String) -> [Tab] {
+    func projectTabs(for projectId: String) -> [AppTab] {
         tabs.filter { $0.projectId == projectId }
     }
 
