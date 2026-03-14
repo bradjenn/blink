@@ -2,12 +2,23 @@ import SwiftUI
 
 @main
 struct BApp: App {
+    @State private var themeManager = ThemeManager()
+    @State private var store = AppStore()
+
     var body: some Scene {
         WindowGroup {
-            Text("Blink")
-                .frame(minWidth: 800, minHeight: 500)
+            Shell()
+                .environment(store)
+                .environment(\.theme, themeManager.activeTheme)
+                .frame(
+                    minWidth: Layout.windowMinWidth,
+                    minHeight: Layout.windowMinHeight
+                )
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 1200, height: 750)
+        .defaultSize(
+            width: Layout.windowDefaultWidth,
+            height: Layout.windowDefaultHeight
+        )
     }
 }
