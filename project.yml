@@ -1,0 +1,42 @@
+name: Blink
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
+targets:
+  Blink:
+    type: application
+    platform: macOS
+    sources:
+      - Blink
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app
+        INFOPLIST_KEY_CFBundleDisplayName: Blink
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_NAME: Blink
+  BTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - BTests
+    dependencies:
+      - target: Blink
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.tests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Blink.app/Contents/MacOS/Blink"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Blink:
+    build:
+      targets:
+        Blink: all
+        BTests: [test]
+    test:
+      targets:
+        - BTests
