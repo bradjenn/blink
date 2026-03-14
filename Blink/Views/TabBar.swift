@@ -15,30 +15,29 @@ struct TabBarView: View {
         HStack(spacing: 0) {
             // Logo area — width matches sidebar
             HStack {
-                Text("KRUX")
-                    .font(Fonts.primary(size: 11, weight: .bold))
+                Text("BLINK")
+                    .font(Fonts.primary(size: 11, weight: .bold).leading(.tight))
                     .tracking(1.65) // 0.15em * 11pt = 1.65pt
                     .textCase(.uppercase)
                     .foregroundStyle(theme.textDim)
             }
+            .padding(.leading, 16)
             .frame(width: Layout.sidebarWidth, alignment: .leading)
-            .padding(.leading, Layout.tabBarLogoPaddingLeft)
+            .frame(maxHeight: .infinity)
             .overlay(alignment: .trailing) {
-                theme.border.frame(width: 1)
+                theme.border.frame(width: 1).frame(maxHeight: .infinity)
             }
 
-            // Tab pills — scrollable
+            // Tab pills
             if store.activeProjectId != nil {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(projectTabs) { tab in
-                            TabPill(
-                                tab: tab,
-                                isActive: store.activeTabId == tab.id,
-                                onSelect: { store.setActiveTab(tab.id) },
-                                onClose: { store.closeTab(tab.id) }
-                            )
-                        }
+                HStack(spacing: 0) {
+                    ForEach(projectTabs) { tab in
+                        TabPill(
+                            tab: tab,
+                            isActive: store.activeTabId == tab.id,
+                            onSelect: { store.setActiveTab(tab.id) },
+                            onClose: { store.closeTab(tab.id) }
+                        )
                     }
                 }
 
@@ -75,31 +74,35 @@ struct TabPill: View {
     @State private var isCloseHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(tab.label)
-                .font(Fonts.primary(size: 12))
-                .foregroundStyle(isActive || isHovered ? theme.text : theme.textMuted)
-                .lineLimit(1)
+        Button(action: onSelect) {
+            HStack(spacing: 6) {
+                Text(tab.label)
+                    .font(Fonts.primary(size: 12).leading(.tight))
+                    .foregroundStyle(isActive || isHovered ? theme.text : theme.textMuted)
+                    .lineLimit(1)
 
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(isCloseHovered ? theme.danger : theme.textDim)
-                    .padding(2)
-                    .background(
-                        isCloseHovered
-                            ? theme.danger.opacity(0.15)
-                            : Color.clear
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(isCloseHovered ? theme.danger : theme.textDim)
+                        .padding(2)
+                        .background(
+                            isCloseHovered
+                                ? theme.danger.opacity(0.15)
+                                : Color.clear
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovered ? 1 : 0)
+                .animation(.easeInOut(duration: 0.1), value: isHovered)
+                .onHover { isCloseHovered = $0 }
             }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .animation(.easeInOut(duration: 0.1), value: isHovered)
-            .onHover { isCloseHovered = $0 }
+            .padding(.horizontal, Layout.tabPillPaddingH)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, Layout.tabPillPaddingH)
-        .frame(maxHeight: .infinity)
+        .buttonStyle(.plain)
         .background(
             isActive || isHovered
                 ? Color.white.opacity(0.02)
@@ -110,8 +113,6 @@ struct TabPill: View {
                 theme.accent.frame(height: 2)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
         .onHover { isHovered = $0 }
     }
 }

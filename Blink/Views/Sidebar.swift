@@ -12,7 +12,7 @@ struct SidebarView: View {
             // Header: "PROJECTS" + add button
             HStack {
                 Text("PROJECTS")
-                    .font(Fonts.primary(size: 11, weight: .medium))
+                    .font(Fonts.primary(size: 11, weight: .medium).leading(.tight))
                     .tracking(0.55) // Tailwind tracking-wider = 0.05em * 11pt
                     .textCase(.uppercase)
                     .foregroundStyle(theme.textDim)
@@ -69,7 +69,7 @@ struct SidebarView: View {
                         Image(systemName: "gearshape")
                             .font(.system(size: 14, weight: .light))
                         Text("Settings")
-                            .font(Fonts.primary(size: 12.5))
+                            .font(Fonts.primary(size: 12.5).leading(.tight))
                     }
                     .foregroundStyle(isSettingsHovered ? theme.text : theme.textDim)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -82,8 +82,5 @@ struct SidebarView: View {
         }
         .frame(maxHeight: .infinity)
         .background(theme.bg2)
-        .overlay(alignment: .trailing) {
-            theme.border.frame(width: 1)
-        }
     }
 }

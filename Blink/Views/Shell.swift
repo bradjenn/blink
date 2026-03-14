@@ -12,9 +12,12 @@ struct Shell: View {
 
             // Body: sidebar + content
             HStack(spacing: 0) {
-                // Sidebar — 340pt, border-right
+                // Sidebar — 340pt
                 SidebarView()
                     .frame(width: Layout.sidebarWidth)
+
+                // Vertical divider between sidebar and content
+                theme.border.frame(width: 1)
 
                 // Content + status line
                 VStack(spacing: 0) {
@@ -29,6 +32,9 @@ struct Shell: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Horizontal divider above status line
+                    theme.border.frame(height: 1)
 
                     // Status line — 32pt
                     StatusLine()

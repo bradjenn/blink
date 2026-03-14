@@ -21,13 +21,13 @@ struct StatusLine: View {
             }
             .frame(minWidth: 0)
 
-            // Center: project name
+            // Center: project name (left-aligned within flex space)
             if let project = activeProject {
                 Text(project.name)
-                    .font(Fonts.primary(size: 12))
+                    .font(Fonts.primary(size: 12).leading(.tight))
                     .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             } else {
                 Spacer()
@@ -66,9 +66,6 @@ struct StatusLine: View {
         .padding(.horizontal, Layout.statusLinePaddingH)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.bg)
-        .overlay(alignment: .top) {
-            theme.border.frame(height: 1)
-        }
         .font(Fonts.primary(size: 12))
     }
 }
