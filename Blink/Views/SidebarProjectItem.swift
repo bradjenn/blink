@@ -18,7 +18,7 @@ struct SidebarProjectItem: View {
             ProjectFavicon()
 
             // Name + path
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(project.name)
                     .font(Fonts.primary(size: 15, weight: .medium))
                     .foregroundStyle(isActive ? theme.text : theme.textMuted)
