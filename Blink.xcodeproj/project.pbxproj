@@ -16,10 +16,12 @@
 		6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D47A5C0A44933E63A3104C /* Constants.swift */; };
 		7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
 		9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */; };
+		9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */; };
 		B515CCF60006105913EE07AC /* StartScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBECED94726237307F2628C /* StartScreen.swift */; };
 		C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912BF0925C71AED8B1C12E74 /* Tab.swift */; };
 		CC0823E8E40E82EC4A6D7199 /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC454B9A44EB926A6C43A58B /* TabBar.swift */; };
 		CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 454E601831980C64BDA0BDD1 /* ThemeManager.swift */; };
+		D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */; };
 		D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
 		EC0AF83FC7C2722793015744 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED9F4FAD326C2510EE7917 /* Project.swift */; };
 /* End PBXBuildFile section */
@@ -50,6 +52,8 @@
 		7FBECED94726237307F2628C /* StartScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreen.swift; sourceTree = "<group>"; };
 		8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
 		912BF0925C71AED8B1C12E74 /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
+		A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFavicon.swift; sourceTree = "<group>"; };
+		BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarProjectItem.swift; sourceTree = "<group>"; };
 		D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		DC454B9A44EB926A6C43A58B /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -133,8 +137,10 @@
 		E60DBAEDB631B2250ACE8672 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */,
 				2918567AE906E413040E51F2 /* Shell.swift */,
 				8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */,
+				BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */,
 				7FBECED94726237307F2628C /* StartScreen.swift */,
 				495E310460549B685EDCF6C4 /* StatusLine.swift */,
 				DC454B9A44EB926A6C43A58B /* TabBar.swift */,
@@ -221,8 +227,10 @@
 				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,
 				6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */,
 				EC0AF83FC7C2722793015744 /* Project.swift in Sources */,
+				D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */,
 				41326086246AF35521615246 /* Shell.swift in Sources */,
 				3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */,
+				9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */,
 				B515CCF60006105913EE07AC /* StartScreen.swift in Sources */,
 				2DCA080F86B7E5A194C8F14A /* StatusLine.swift in Sources */,
 				C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */,
