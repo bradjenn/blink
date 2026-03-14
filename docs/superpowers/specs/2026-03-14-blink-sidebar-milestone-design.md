@@ -71,12 +71,13 @@ struct Theme {
     let magenta: Color   // Purple accent
 
     // Computed
-    var accentGlow: Color      // accent at 20% opacity
-    var accentGlowStrong: Color // accent at 35% opacity
+    var accentGlow: Color       // accent at 20% opacity
+    var accentGlowStrong: Color  // accent at 35% opacity
+    var accent2Glow: Color       // accent2 at 20% opacity
 }
 ```
 
-### Cyberpunk Theme (Default)
+### Cyberpunk Theme (Default, internal key: "ghostty")
 
 | Token | Hex Value |
 |-------|-----------|
@@ -111,9 +112,7 @@ AppStore
   ├── tabs: [Tab]                  // id, type, label, projectId, terminalId?
   ├── activeTabId: String?
   ├── theme: String                // "ghostty" default
-  ├── keyboardMode: KeyboardMode   // .terminal | .prefix | .sidebar
-  ├── sidebarSelectedIndex: Int
-  ├── sidebarVisible: Bool
+  ├── sidebarVisible: Bool         // true default, no toggle mechanism in M1 (always visible)
   └── (terminal settings stubbed for later)
 ```
 
@@ -163,6 +162,7 @@ Each project gets 1-2 dummy tabs to test the tab bar and terminal count badge.
 - Default size: 1200 x 750
 - Background: `#080810`
 - Standard macOS title bar (hideable later)
+- Force dark appearance (`.preferredColorScheme(.dark)` or `NSApp.appearance = NSAppearance(named: .darkAqua)`) to prevent light-mode title bar mismatch
 
 ### Layout Tree
 
@@ -178,8 +178,10 @@ Window (#080810 background)
       │
       ├── HStack(spacing: 0) ──────────── flex-1
       │    ├── Sidebar ──────────────────── 340pt width, border-right
-      │    │    ├── Header ──────────────── "PROJECTS" 11pt uppercase + add button
+      │    │    ├── Header ──────────────── "PROJECTS" 11pt font-medium uppercase + add btn
       │    │    │    padding: 16pt left, 12pt top, 8pt bottom
+      │    │    │    Add button: 18pt note-add icon, strokeWidth 1.5
+      │    │    │    color textMuted, hover → text, non-functional in M1
       │    │    ├── ScrollView ──────────── flex-1, project items
       │    │    │    └── ProjectItem ─────── see below
       │    │    └── Footer
@@ -209,29 +211,24 @@ Each project row, pixel-matched to Krux's `Sidebar.tsx`:
 **Padding:** 8pt top, 12pt right, 8pt bottom, 10pt left
 **Left border:** 3pt wide — accent color when active, transparent when inactive
 **Active background:** accent at 4% opacity
-**Hover background:** white at 4% opacity (inactive items only)
+**Hover background:** accent2 (`#0fc5ed`) at 4% opacity (inactive items only)
 **Icon:** 15pt, folder icon fallback (ProjectFavicon)
 **Name:** 15pt, font-medium, truncated
 **Path:** 13pt, textDim, truncated, 1pt top margin, `~` substitution for home dir
 **Terminal count:** 12pt, accent color, with animated pulse dot
-**Pulse dot:** 6pt (1.5pt radius), accent color, `box-shadow: 0 0 4px accentGlow`, 2s ease-in-out infinite animation (opacity 1 → 0.4 → 1)
+**Pulse dot:** 6pt circle, accent color, shadow `0 0 4pt accentGlow`, 2s ease-in-out infinite animation (opacity 1 → 0.4 → 1)
+**Terminal count number:** Only displayed when count >= 2. With exactly 1 terminal, show only the pulse dot (no number).
 **Remove button:** 13pt delete icon, opacity 0, transitions to opacity 1 on row hover, textDim → danger on hover
 **Gap between icon and text:** 10pt (gap-2.5)
 
-### Sidebar Vim Selection Overlay
+### Sidebar Vim Selection Overlay (Milestone 2)
 
-When `keyboardMode == .sidebar`, the selected item gets:
+Deferred to Milestone 2 (keyboard navigation). When implemented:
 - Background: `rgba(255, 255, 255, 0.06)`
 - Outline: 1pt solid accent2, -1pt offset
+- Vim hint bar in footer: `j/k nav  Enter select  Esc back`
 
 ### Sidebar Footer
-
-**Vim hint bar** (only when keyboardMode == .sidebar):
-- Height: auto, padding 4pt vertical 12pt horizontal
-- Font: 10pt mono
-- Content: `j/k nav  Enter select  Esc back`
-- Keys styled in accent2 color
-- Border top and bottom
 
 **Settings button:**
 - Height: 32pt
@@ -252,7 +249,7 @@ When `keyboardMode == .sidebar`, the selected item gets:
 **Tab pills:**
 - Height: 100%
 - Padding: 0 14pt horizontal
-- Font: 12px (xs)
+- Font: 12pt
 - Active: text color, 2pt bottom border accent, white/2% bg
 - Inactive: textMuted, transparent bottom border
 - Hover: text color, white/2% bg
@@ -274,7 +271,7 @@ When `keyboardMode == .sidebar`, the selected item gets:
 - Project name: textMuted, truncated, 16pt horizontal padding
 
 **Right section:**
-- Git status placeholder: branch icon (10pt) + branch name in textMuted + colored diff counts (green +N, yellow ~N, red -N)
+- Git status placeholder: branch icon (10pt) + branch name in textMuted + colored diff counts (green +N, yellow ~N, danger -N)
 - Terminal count: "N terms" in textMuted
 
 ### Start Screen
@@ -289,7 +286,7 @@ Simple centered content when no project is selected:
 | Interaction | Behavior |
 |------------|----------|
 | Click project | Sets `activeProjectId`, updates sidebar highlight + tab bar + status line |
-| Hover project (inactive) | 4% white background overlay |
+| Hover project (inactive) | 4% accent2 background overlay |
 | Hover project | Remove button fades in (100ms) |
 | Hover remove button | Color transitions textDim → danger (100ms) |
 | Click remove button | Removes from dummy list (no persistence yet) |
@@ -304,7 +301,18 @@ Simple centered content when no project is selected:
 **Primary:** JetBrains Mono (must be installed on system)
 **Fallback chain:** "JetBrains Mono", "SF Mono", "Fira Code", .monospaced (system)
 
-The app uses monospace everywhere, matching Krux's terminal aesthetic.
+The app uses monospace everywhere, matching Krux's terminal aesthetic. In SwiftUI, use `Font.custom("JetBrains Mono", size: N)` with `.monospaced` as the system fallback.
+
+## SwiftUI Implementation Notes
+
+These notes help bridge CSS/React concepts to SwiftUI equivalents:
+
+- **Hover states:** Use `@State private var isHovered = false` + `.onHover { isHovered = $0 }` modifier (macOS only)
+- **Sidebar slide animation:** Use `.offset(x: sidebarVisible ? 0 : -340)` with `.animation(.easeInOut(duration: 0.2), value: sidebarVisible)` — the CSS negative-margin trick doesn't apply in SwiftUI
+- **`@Observable` vs `@ObservableObject`:** This project uses `@Observable` (Swift 5.9 Observation macro, macOS 14+), NOT the older Combine-based `@ObservableObject`. Views automatically track property access without `@Published` wrappers
+- **`Color(hex:)`:** SwiftUI has no built-in hex color initializer. We create a `Color` extension that parses hex strings — this is the foundation of the theme system
+- **`Project.color`:** Present in the model for future use (project-specific accent colors). Not rendered in Milestone 1
+- **`Project.createdAt`:** Uses Swift-native `Date` type (intentional improvement over Krux's string-based `created_at`)
 
 ## What's NOT in Milestone 1
 
