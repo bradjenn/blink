@@ -8,7 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */; };
+		2479CF78716744EBA0FC8244 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762E93713BEF3B6BAE6DB7CC /* Theme.swift */; };
 		7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
+		CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 454E601831980C64BDA0BDD1 /* ThemeManager.swift */; };
+		D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,9 +26,12 @@
 
 /* Begin PBXFileReference section */
 		104F7EE9EE6F91C459A8CC7C /* BApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BApp.swift; sourceTree = "<group>"; };
+		454E601831980C64BDA0BDD1 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		48431B2C296BDB92BF0BB93C /* Blink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blink.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F1A584AD3B660EC20B6A81 /* BTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		762E93713BEF3B6BAE6DB7CC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHexTests.swift; sourceTree = "<group>"; };
+		D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -37,10 +43,21 @@
 			path = BTests;
 			sourceTree = "<group>";
 		};
+		73D24F7B2165BC5E03F1C38C /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */,
+				762E93713BEF3B6BAE6DB7CC /* Theme.swift */,
+				454E601831980C64BDA0BDD1 /* ThemeManager.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
 		A668A2BE284733E6CF606FC7 /* Blink */ = {
 			isa = PBXGroup;
 			children = (
 				104F7EE9EE6F91C459A8CC7C /* BApp.swift */,
+				73D24F7B2165BC5E03F1C38C /* Theme */,
 			);
 			path = Blink;
 			sourceTree = "<group>";
@@ -138,6 +155,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
+				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,
+				2479CF78716744EBA0FC8244 /* Theme.swift in Sources */,
+				CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
