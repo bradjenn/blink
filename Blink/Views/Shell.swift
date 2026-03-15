@@ -77,12 +77,7 @@ struct Shell: View {
                         } else if let tabId = store.activeTabId,
                                   let projectId = store.activeProjectId,
                                   let project = store.projects.first(where: { $0.id == projectId }) {
-                            // Always show a background that matches the terminal's
-                            // eventual appearance — prevents wallpaper flash during
-                            // tab switch when .id(tabId) recreates the NSView
-                            if store.hasWallpaper {
-                                theme.bg.opacity(store.backgroundOpacity)
-                            } else {
+                            if !store.hasWallpaper {
                                 theme.bg
                             }
                             TerminalView(
@@ -91,7 +86,6 @@ struct Shell: View {
                                 surfaceManager: surfaceManager,
                                 workingDirectory: project.path
                             )
-                            .id(tabId)
                         } else {
                             // Project selected but no tabs yet
                             if store.hasWallpaper {
