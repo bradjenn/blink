@@ -97,6 +97,8 @@ struct TerminalTheme {
         lines.append("selection-background = \(selectionBackground)")
         lines.append("selection-foreground = \(selectionForeground)")
         lines.append("background-opacity = \(backgroundOpacity)")
+        lines.append("window-padding-x = 16")
+        lines.append("window-padding-y = 10")
         return lines.joined(separator: "\n") + "\n"
     }
 
