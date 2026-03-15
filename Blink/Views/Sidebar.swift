@@ -81,6 +81,10 @@ struct SidebarView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(theme.bg2)
+        .background(
+            store.hasWallpaper
+                ? AnyShapeStyle(theme.bg2.opacity(store.backgroundOpacity))
+                : AnyShapeStyle(theme.bg2)
+        )
     }
 }

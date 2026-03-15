@@ -65,7 +65,11 @@ struct StatusLine: View {
         }
         .padding(.horizontal, Layout.statusLinePaddingH)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.bg)
+        .background(
+            store.hasWallpaper
+                ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
+                : AnyShapeStyle(theme.bg)
+        )
         .font(Fonts.primary(size: 12))
     }
 }
