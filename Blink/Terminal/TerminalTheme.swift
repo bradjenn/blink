@@ -100,6 +100,19 @@ struct TerminalTheme {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// Hand-tuned accent overrides for favorite themes where auto-derivation
+    /// picks the wrong identity color.
+    /// Format: theme name → (accent hex, accent2 hex)
+    private static let accentOverrides: [String: (String, String)] = [
+        "Josean": ("#47ff9c", "#0fc5ed"),
+        "Kanagawa Wave": ("#dca561", "#7e9cd8"),
+        "Solarized Dark Patched": ("#b58900", "#268bd2"),
+        "Rose Pine": ("#ebbcba", "#31748f"),
+        "Gruvbox Dark": ("#fabd2f", "#83a598"),
+        "Nord": ("#88c0d0", "#81a1c1"),
+        "Catppuccin Mocha": ("#cba6f7", "#89dceb"),
+    ]
+
     /// Derive a UI Theme from this terminal theme's palette.
     func deriveUITheme() -> Theme {
         let bgColor = Color(hex: background)
@@ -108,8 +121,16 @@ struct TerminalTheme {
 
         let textColor = Self.brighterColor(fgColor, pal15Color)
 
-        // Accent: use cursor-color if it differs from foreground, else palette[4] (blue)
-        let accentHex = (cursorColor.lowercased() != foreground.lowercased()) ? cursorColor : palette[4]
+        // Check for hand-tuned accent overrides first, then auto-derive
+        let accentHex: String
+        let accent2Hex: String
+        if let override_ = Self.accentOverrides[name] {
+            accentHex = override_.0
+            accent2Hex = override_.1
+        } else {
+            accentHex = (cursorColor.lowercased() != foreground.lowercased()) ? cursorColor : palette[4]
+            accent2Hex = palette[6]
+        }
 
         return Theme(
             id: name,
@@ -118,7 +139,7 @@ struct TerminalTheme {
             bg2: Self.adjustBrightness(bgColor, by: -0.08),
             border: Self.adjustBrightness(bgColor, by: 0.12),
             accent: Color(hex: accentHex),
-            accent2: Color(hex: palette[6]),
+            accent2: Color(hex: accent2Hex),
             text: textColor,
             textMuted: textColor.opacity(0.6),
             textDim: textColor.opacity(0.4),
