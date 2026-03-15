@@ -121,7 +121,7 @@ struct TerminalTheme {
         let fgColor = Color(hex: foreground)
         let pal15Color = Color(hex: palette[15])
 
-        let textColor = Self.brighterColor(fgColor, pal15Color)
+        let textColor = fgColor
 
         // Check for hand-tuned accent overrides first, then auto-derive
         let accentHex: String
