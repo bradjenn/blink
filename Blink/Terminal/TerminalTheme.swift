@@ -98,6 +98,7 @@ struct TerminalTheme {
         lines.append("selection-foreground = \(selectionForeground)")
         // Always fully transparent — SwiftUI handles the background layer
         lines.append("background-opacity = 0")
+        lines.append("font-size = 16")
         lines.append("window-padding-x = 16")
         lines.append("window-padding-y = 10")
         lines.append("audible-bell = false")
