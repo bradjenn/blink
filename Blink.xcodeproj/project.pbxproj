@@ -21,6 +21,7 @@
 		747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */; };
 		7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
 		829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F051F6B723C8DC22255A384 /* SettingsPage.swift */; };
+		86EFAC178EF50F836BB7493F /* ThemeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538CB77F5AAA97B589E93411 /* ThemeCard.swift */; };
 		92A3D8F325ED0F5B9007ABC3 /* everforest.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E7511997BAA46E9D924A8619 /* everforest.jpg */; };
 		9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */; };
 		9D7653F138E03F29AA3979D0 /* akane-bridge.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */; };
@@ -62,6 +63,7 @@
 		48431B2C296BDB92BF0BB93C /* Blink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blink.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		495E310460549B685EDCF6C4 /* StatusLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusLine.swift; sourceTree = "<group>"; };
 		4D827DCB9D74780EBED3851F /* ship-at-sea.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "ship-at-sea.jpg"; sourceTree = "<group>"; };
+		538CB77F5AAA97B589E93411 /* ThemeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeCard.swift; sourceTree = "<group>"; };
 		55ED9F4FAD326C2510EE7917 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		67F1A584AD3B660EC20B6A81 /* BTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "pink-lakeside.png"; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 			isa = PBXGroup;
 			children = (
 				F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */,
+				538CB77F5AAA97B589E93411 /* ThemeCard.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -314,6 +317,7 @@
 				C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */,
 				CC0823E8E40E82EC4A6D7199 /* TabBar.swift in Sources */,
 				2479CF78716744EBA0FC8244 /* Theme.swift in Sources */,
+				86EFAC178EF50F836BB7493F /* ThemeCard.swift in Sources */,
 				CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */,
 				A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */,
 			);
