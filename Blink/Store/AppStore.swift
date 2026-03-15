@@ -95,14 +95,30 @@ final class AppStore {
         backgroundImage != nil
     }
 
+    // Last active tab per project — remembered when switching away
+    private var lastActiveTab: [String: String] = [:]
+
     // MARK: - Actions
 
     func setActiveProject(_ id: String?) {
+        // Remember current tab for the project we're leaving
+        if let currentProject = activeProjectId, let currentTab = activeTabId {
+            lastActiveTab[currentProject] = currentTab
+        }
+
         activeProjectId = id
         activeView = .projects
         if let id {
-            let projectTabs = projectTabs(for: id)
-            activeTabId = projectTabs.first?.id
+            // Restore last active tab, or fall back to first tab
+            if let remembered = lastActiveTab[id],
+               projectTabs(for: id).contains(where: { $0.id == remembered }) {
+                activeTabId = remembered
+            } else {
+                activeTabId = projectTabs(for: id).first?.id
+            }
+            if let tabId = activeTabId {
+                clearUnread(tabId)
+            }
         } else {
             activeTabId = nil
         }
