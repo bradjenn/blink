@@ -5,10 +5,14 @@ import AppKit
 /// The background position means it doesn't intercept hit testing or hover events.
 struct PointerCursorRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> PointerTrackingView {
-        PointerTrackingView()
+        let view = PointerTrackingView()
+        view.autoresizingMask = [.width, .height]
+        return view
     }
 
-    func updateNSView(_ nsView: PointerTrackingView, context: Context) {}
+    func updateNSView(_ nsView: PointerTrackingView, context: Context) {
+        nsView.updateTrackingAreas()
+    }
 }
 
 class PointerTrackingView: NSView {
@@ -42,6 +46,10 @@ extension View {
     /// Adds a pointing hand cursor when hovering. Uses a background NSView
     /// with NSTrackingArea so it doesn't interfere with SwiftUI onHover.
     func pointerCursor() -> some View {
-        self.overlay(PointerCursorRepresentable().allowsHitTesting(false))
+        self.overlay(
+            PointerCursorRepresentable()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+        )
     }
 }
