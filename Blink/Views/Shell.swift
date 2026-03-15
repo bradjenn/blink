@@ -1,12 +1,19 @@
 import SwiftUI
+import GhosttyKit
 
 struct Shell: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
+    let ghosttyApp: GhosttyApp
+
+    private var sidebarWidth: CGFloat {
+        store.sidebarVisible ? Layout.sidebarWidth : Layout.sidebarCollapsedWidth
+    }
+
     var body: some View {
         ZStack {
-            // Wallpaper layer (behind everything, pinned to window bounds)
+            // Wallpaper layer
             if let wallpaperId = store.backgroundImage {
                 GeometryReader { geo in
                     wallpaperImage(for: wallpaperId)
@@ -19,49 +26,74 @@ struct Shell: View {
                 }
             }
 
-            // Main layout
-            VStack(spacing: 0) {
-                // Tab bar — full width, 36pt
-                TabBarView()
-                    .frame(height: Layout.tabBarHeight)
+            // Main layout — two columns with a single full-height divider
+            HStack(spacing: 0) {
+                // LEFT COLUMN: logo header + sidebar
+                VStack(spacing: 0) {
+                    // Logo header (same height as tab bar)
+                    TabBarLogoArea()
+                        .frame(height: Layout.tabBarHeight)
 
-                // Body: sidebar + content
-                HStack(spacing: 0) {
-                    // Sidebar — 340pt
+                    // Horizontal border under logo
+                    theme.border.frame(height: 1)
+
+                    // Sidebar content
                     SidebarView()
-                        .frame(width: Layout.sidebarWidth)
+                }
+                .frame(width: sidebarWidth)
+                .background(
+                    store.hasWallpaper
+                        ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
+                        : AnyShapeStyle(theme.bg2)
+                )
 
-                    // Vertical divider between sidebar and content
-                    theme.border.frame(width: 1)
+                // Full-height divider
+                theme.border.frame(width: 1)
 
-                    // Content + status line
-                    VStack(spacing: 0) {
-                        // Content area
-                        ZStack {
-                            // Background layer
+                // RIGHT COLUMN: tab bar + content + status line
+                VStack(spacing: 0) {
+                    // Tab bar (tabs only, no logo)
+                    TabBarTabsArea()
+                        .frame(height: Layout.tabBarHeight)
+
+                    // Horizontal border under tabs
+                    theme.border.frame(height: 1)
+
+                    // Content area
+                    ZStack {
+                        if store.activeView == .settings {
                             if store.hasWallpaper {
                                 theme.bg.opacity(store.backgroundOpacity)
                             } else {
                                 theme.bg
                             }
-
-                            if store.activeView == .settings {
-                                SettingsPage()
-                            } else if store.activeProjectId == nil {
-                                StartScreen()
+                            SettingsPage()
+                        } else if store.activeProjectId == nil {
+                            if store.hasWallpaper {
+                                theme.bg.opacity(store.backgroundOpacity)
+                            } else {
+                                theme.bg
                             }
+                            StartScreen()
+                        } else {
+                            // Terminal — libghostty handles background transparency
+                            // via background-opacity config. When no wallpaper is set,
+                            // add a solid bg so the window isn't see-through.
+                            if !store.hasWallpaper {
+                                theme.bg
+                            }
+                            TerminalView(app: ghosttyApp)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        // Horizontal divider above status line
-                        theme.border.frame(height: 1)
-
-                        // Status line — 32pt
-                        StatusLine()
-                            .frame(height: Layout.statusLineHeight)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Horizontal divider above status line
+                    theme.border.frame(height: 1)
+
+                    // Status line
+                    StatusLine()
+                        .frame(height: Layout.statusLineHeight)
                 }
-                .frame(maxHeight: .infinity)
             }
             .background(store.hasWallpaper ? Color.clear : theme.bg)
             .font(Fonts.primary(size: 13))
