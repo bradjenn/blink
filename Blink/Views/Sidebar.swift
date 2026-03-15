@@ -190,7 +190,7 @@ struct CollapsedProjectIcon: View {
         Button(action: onSelect) {
             ZStack(alignment: .bottomTrailing) {
                 ProjectFavicon(projectName: project.name, projectPath: project.path, size: 30)
-                    .opacity(isHovered ? 1.0 : 0.7)
+                    .opacity(isActive ? 1.0 : (isHovered ? 0.8 : 0.4))
                     .scaleEffect(isHovered ? 1.08 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isHovered)
                     .overlay(
