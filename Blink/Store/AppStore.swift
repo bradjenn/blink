@@ -5,6 +5,14 @@ enum ActiveView {
     case settings
 }
 
+private enum StorageKeys {
+    static let theme = "blink.theme"
+    static let backgroundImage = "blink.backgroundImage"
+    static let backgroundOpacity = "blink.backgroundOpacity"
+    static let backgroundBlur = "blink.backgroundBlur"
+    static let sidebarVisible = "blink.sidebarVisible"
+}
+
 @Observable
 final class AppStore {
     // Projects
@@ -16,18 +24,49 @@ final class AppStore {
     var activeTabId: String?
 
     // Theme
-    var theme: String = "Josean"
+    var theme: String {
+        didSet { UserDefaults.standard.set(theme, forKey: StorageKeys.theme) }
+    }
 
     // View
     var activeView: ActiveView = .projects
 
     // Background
-    var backgroundImage: String? = nil
-    var backgroundOpacity: Double = 0.75
-    var backgroundBlur: Double = 0
+    var backgroundImage: String? {
+        didSet { UserDefaults.standard.set(backgroundImage, forKey: StorageKeys.backgroundImage) }
+    }
+    var backgroundOpacity: Double {
+        didSet { UserDefaults.standard.set(backgroundOpacity, forKey: StorageKeys.backgroundOpacity) }
+    }
+    var backgroundBlur: Double {
+        didSet { UserDefaults.standard.set(backgroundBlur, forKey: StorageKeys.backgroundBlur) }
+    }
 
     // Sidebar
-    var sidebarVisible: Bool = true
+    var sidebarVisible: Bool {
+        didSet { UserDefaults.standard.set(sidebarVisible, forKey: StorageKeys.sidebarVisible) }
+    }
+
+    init() {
+        let defaults = UserDefaults.standard
+
+        self.theme = defaults.string(forKey: StorageKeys.theme) ?? "Josean"
+        self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
+        self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
+
+        // Double defaults to 0.0 if unset, so check for existence
+        if defaults.object(forKey: StorageKeys.backgroundOpacity) != nil {
+            self.backgroundOpacity = defaults.double(forKey: StorageKeys.backgroundOpacity)
+        } else {
+            self.backgroundOpacity = 0.75
+        }
+
+        if defaults.object(forKey: StorageKeys.backgroundBlur) != nil {
+            self.backgroundBlur = defaults.double(forKey: StorageKeys.backgroundBlur)
+        } else {
+            self.backgroundBlur = 0
+        }
+    }
 
     // MARK: - View Actions
 

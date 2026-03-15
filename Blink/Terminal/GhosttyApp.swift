@@ -28,13 +28,22 @@ final class GhosttyApp {
             return
         }
 
-        // Load default theme for initial config
-        // Use full opacity initially — wallpaper state isn't known yet
-        let configString: String
-        if let defaultTheme = TerminalTheme.load(name: "Josean") {
-            configString = defaultTheme.toConfigString(backgroundOpacity: 1.0)
+        // Load persisted theme and wallpaper state for initial config
+        let defaults = UserDefaults.standard
+        let themeName = defaults.string(forKey: "blink.theme") ?? "Josean"
+        let hasWallpaper = defaults.string(forKey: "blink.backgroundImage") != nil
+        let opacity: Double
+        if hasWallpaper, defaults.object(forKey: "blink.backgroundOpacity") != nil {
+            opacity = defaults.double(forKey: "blink.backgroundOpacity")
         } else {
-            configString = "background-opacity = 1.0\n"
+            opacity = 1.0
+        }
+
+        let configString: String
+        if let defaultTheme = TerminalTheme.load(name: themeName) {
+            configString = defaultTheme.toConfigString(backgroundOpacity: opacity)
+        } else {
+            configString = "background-opacity = \(opacity)\n"
         }
 
         let tempURL = FileManager.default.temporaryDirectory

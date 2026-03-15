@@ -43,7 +43,8 @@ final class ThemeManager {
     init() {
         availableThemes = TerminalTheme.availableThemes()
 
-        let defaultName = "Josean"
+        // Load persisted theme, fall back to Josean
+        let defaultName = UserDefaults.standard.string(forKey: "blink.theme") ?? "Josean"
         if let theme = TerminalTheme.load(name: defaultName) {
             activeTerminalTheme = theme
             activeTheme = theme.deriveUITheme()
