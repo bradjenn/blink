@@ -79,7 +79,7 @@ struct TabBarTabsArea: View {
         .background(
             store.hasWallpaper
                 ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-                : AnyShapeStyle(theme.bg2)
+                : AnyShapeStyle(theme.bg)
         )
     }
 }
