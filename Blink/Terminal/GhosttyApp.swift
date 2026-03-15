@@ -29,11 +29,12 @@ final class GhosttyApp {
         }
 
         // Load default theme for initial config
+        // Use full opacity initially — wallpaper state isn't known yet
         let configString: String
         if let defaultTheme = TerminalTheme.load(name: "Josean") {
-            configString = defaultTheme.toConfigString(backgroundOpacity: 0.85)
+            configString = defaultTheme.toConfigString(backgroundOpacity: 1.0)
         } else {
-            configString = "background-opacity = 0.85\n"
+            configString = "background-opacity = 1.0\n"
         }
 
         let tempURL = FileManager.default.temporaryDirectory

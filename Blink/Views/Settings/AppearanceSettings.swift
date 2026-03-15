@@ -67,7 +67,7 @@ struct AppearanceSettings: View {
                                 name: "None",
                                 filename: nil,
                                 isSelected: store.backgroundImage == nil,
-                                onSelect: { store.setBackgroundImage(nil) }
+                                onSelect: { setWallpaper(nil) }
                             )
 
                             ForEach(WallpaperPreset.all) { preset in
@@ -75,7 +75,7 @@ struct AppearanceSettings: View {
                                     name: preset.name,
                                     filename: preset.filename,
                                     isSelected: store.backgroundImage == preset.id,
-                                    onSelect: { store.setBackgroundImage(preset.id) }
+                                    onSelect: { setWallpaper(preset.id) }
                                 )
                             }
 
@@ -106,9 +106,10 @@ struct AppearanceSettings: View {
                                     set: { newValue in
                                         store.setBackgroundOpacity(newValue)
                                         if let termTheme = themeManager.activeTerminalTheme {
+                                            let effectiveOpacity = store.hasWallpaper ? newValue : 1.0
                                             ghosttyApp.updateConfig(
                                                 terminalTheme: termTheme,
-                                                backgroundOpacity: newValue
+                                                backgroundOpacity: effectiveOpacity
                                             )
                                         }
                                     }
@@ -170,6 +171,12 @@ struct AppearanceSettings: View {
         }
     }
 
+    /// Set wallpaper and update terminal opacity accordingly.
+    private func setWallpaper(_ image: String?) {
+        store.setBackgroundImage(image)
+        updateTerminalOpacity()
+    }
+
     private func pickCustomWallpaper() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg]
@@ -177,6 +184,15 @@ struct AppearanceSettings: View {
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
             store.setBackgroundImage(url.path)
+            updateTerminalOpacity()
+        }
+    }
+
+    /// Sync terminal background-opacity: use store value when wallpaper is set, 1.0 otherwise.
+    private func updateTerminalOpacity() {
+        if let termTheme = themeManager.activeTerminalTheme {
+            let effectiveOpacity = store.hasWallpaper ? store.backgroundOpacity : 1.0
+            ghosttyApp.updateConfig(terminalTheme: termTheme, backgroundOpacity: effectiveOpacity)
         }
     }
 }

@@ -173,7 +173,8 @@ struct ThemePicker: View {
         store.theme = name
         themeManager.setTheme(name: name)
         if let termTheme = themeManager.activeTerminalTheme {
-            ghosttyApp.updateConfig(terminalTheme: termTheme, backgroundOpacity: store.backgroundOpacity)
+            let effectiveOpacity = store.hasWallpaper ? store.backgroundOpacity : 1.0
+            ghosttyApp.updateConfig(terminalTheme: termTheme, backgroundOpacity: effectiveOpacity)
         }
         onDismiss()
     }
