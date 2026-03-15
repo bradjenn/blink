@@ -89,9 +89,17 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: Layout.sidebarSettingsHeight)
                     .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { isSettingsHovered = $0 }
+                .onHover { hovering in
+                    isSettingsHovered = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
             }
         }
     }
@@ -136,9 +144,17 @@ struct SidebarView: View {
                         .foregroundStyle(isSettingsHovered ? theme.text : theme.textDim)
                         .frame(maxWidth: .infinity)
                         .frame(height: Layout.sidebarSettingsHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { isSettingsHovered = $0 }
+                .onHover { hovering in
+                    isSettingsHovered = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
             }
         }
     }
