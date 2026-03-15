@@ -73,6 +73,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let fbSize = convertToBacking(frame.size)
         ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
 
+        // Auto-focus after surface creation
+        DispatchQueue.main.async { [weak self] in
+            self?.focus()
+        }
     }
 
     // MARK: - View Properties
