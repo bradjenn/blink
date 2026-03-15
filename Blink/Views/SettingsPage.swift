@@ -4,6 +4,8 @@ struct SettingsPage: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
+    let ghosttyApp: GhosttyApp
+
     enum SettingsTab: String, CaseIterable {
         case appearance = "Appearance"
         case terminal = "Terminal"
@@ -63,23 +65,22 @@ struct SettingsPage: View {
                 .padding(.trailing, 16)
 
                 // Content area — fills remaining space
-                ScrollView(.vertical, showsIndicators: true) {
-                    switch selectedTab {
-                    case .appearance:
-                        AppearanceSettings()
-                    case .terminal:
-                        Text("Terminal settings coming soon")
-                            .font(Fonts.primary(size: 14))
-                            .foregroundStyle(theme.textDim)
-                            .padding(32)
-                    case .keyboardShortcuts:
-                        Text("Keyboard shortcuts coming soon")
-                            .font(Fonts.primary(size: 14))
-                            .foregroundStyle(theme.textDim)
-                            .padding(32)
-                    }
+                switch selectedTab {
+                case .appearance:
+                    AppearanceSettings(ghosttyApp: ghosttyApp)
+                case .terminal:
+                    Text("Terminal settings coming soon")
+                        .font(Fonts.primary(size: 14))
+                        .foregroundStyle(theme.textDim)
+                        .padding(32)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .keyboardShortcuts:
+                    Text("Keyboard shortcuts coming soon")
+                        .font(Fonts.primary(size: 14))
+                        .foregroundStyle(theme.textDim)
+                        .padding(32)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

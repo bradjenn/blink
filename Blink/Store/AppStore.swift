@@ -16,7 +16,7 @@ final class AppStore {
     var activeTabId: String?
 
     // Theme
-    var theme: String = "ghostty"
+    var theme: String = "Josean"
 
     // View
     var activeView: ActiveView = .projects

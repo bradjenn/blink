@@ -6,155 +6,167 @@ struct AppearanceSettings: View {
     @Environment(AppStore.self) private var store
     @Environment(ThemeManager.self) private var themeManager
 
-    private let themeColumns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+    let ghosttyApp: GhosttyApp
+
+    @State private var showThemePicker = false
+
     private let wallpaperColumns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            Text("Appearance")
-                .font(Fonts.primary(size: 18, weight: .bold))
-                .foregroundStyle(theme.text)
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 32) {
+                    Text("Appearance")
+                        .font(Fonts.primary(size: 18, weight: .bold))
+                        .foregroundStyle(theme.text)
 
-            // Theme section
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Theme")
-                    .font(Fonts.primary(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                Text("Choose a color scheme for the app")
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textMuted)
+                    // Theme section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Theme")
+                            .font(Fonts.primary(size: 14, weight: .medium))
+                            .foregroundStyle(theme.text)
+                        Text("Color scheme for the app and terminal")
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.textMuted)
 
-                LazyVGrid(columns: themeColumns, spacing: 12) {
-                    ForEach(Theme.allThemes, id: \.id) { preset in
-                        ThemeCard(
-                            theme: preset,
-                            isSelected: store.theme == preset.id,
-                            onSelect: {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    store.theme = preset.id
-                                    themeManager.setTheme(id: preset.id)
-                                }
+                        Button {
+                            showThemePicker = true
+                        } label: {
+                            HStack {
+                                Text(store.theme)
+                                    .font(Fonts.primary(size: 13))
+                                    .foregroundStyle(theme.text)
+                                Spacer()
+                                Text("Change")
+                                    .font(Fonts.primary(size: 12))
+                                    .foregroundStyle(theme.accent)
                             }
-                        )
-                    }
-                }
-                .padding(.top, 4)
-            }
-
-            // Background image section
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Background image")
-                    .font(Fonts.primary(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                Text("Show a wallpaper behind the content area")
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textMuted)
-
-                LazyVGrid(columns: wallpaperColumns, spacing: 12) {
-                    WallpaperCard(
-                        name: "None",
-                        filename: nil,
-                        isSelected: store.backgroundImage == nil,
-                        onSelect: { store.setBackgroundImage(nil) }
-                    )
-
-                    ForEach(WallpaperPreset.all) { preset in
-                        WallpaperCard(
-                            name: preset.name,
-                            filename: preset.filename,
-                            isSelected: store.backgroundImage == preset.id,
-                            onSelect: { store.setBackgroundImage(preset.id) }
-                        )
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(theme.bg2)
+                            .overlay(
+                                Rectangle()
+                                    .stroke(theme.border, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
-                    WallpaperCard(
-                        name: "Custom...",
-                        filename: nil,
-                        isSelected: store.backgroundImage != nil
-                            && !(store.backgroundImage!.hasPrefix("preset:")),
-                        onSelect: { pickCustomWallpaper() }
-                    )
+                    // Background image section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Background image")
+                            .font(Fonts.primary(size: 14, weight: .medium))
+                            .foregroundStyle(theme.text)
+                        Text("Show a wallpaper behind the content area")
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.textMuted)
+
+                        LazyVGrid(columns: wallpaperColumns, spacing: 12) {
+                            WallpaperCard(
+                                name: "None",
+                                filename: nil,
+                                isSelected: store.backgroundImage == nil,
+                                onSelect: { store.setBackgroundImage(nil) }
+                            )
+
+                            ForEach(WallpaperPreset.all) { preset in
+                                WallpaperCard(
+                                    name: preset.name,
+                                    filename: preset.filename,
+                                    isSelected: store.backgroundImage == preset.id,
+                                    onSelect: { store.setBackgroundImage(preset.id) }
+                                )
+                            }
+
+                            WallpaperCard(
+                                name: "Custom...",
+                                filename: nil,
+                                isSelected: store.backgroundImage != nil
+                                    && !(store.backgroundImage!.hasPrefix("preset:")),
+                                onSelect: { pickCustomWallpaper() }
+                            )
+                        }
+                        .padding(.top, 4)
+                    }
+
+                    // Background opacity section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Background opacity")
+                            .font(Fonts.primary(size: 14, weight: .medium))
+                            .foregroundStyle(theme.text)
+                        Text("How translucent the terminal overlay is (lower = more wallpaper visible)")
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.textMuted)
+
+                        HStack(spacing: 12) {
+                            Slider(
+                                value: Binding(
+                                    get: { store.backgroundOpacity },
+                                    set: { newValue in
+                                        store.setBackgroundOpacity(newValue)
+                                        if let termTheme = themeManager.activeTerminalTheme {
+                                            ghosttyApp.updateConfig(
+                                                terminalTheme: termTheme,
+                                                backgroundOpacity: newValue
+                                            )
+                                        }
+                                    }
+                                ),
+                                in: 0.1...1.0,
+                                step: 0.05
+                            )
+                            .disabled(!store.hasWallpaper)
+                            .tint(theme.accent)
+
+                            Text("\(Int(store.backgroundOpacity * 100))%")
+                                .font(Fonts.primary(size: 12))
+                                .foregroundStyle(theme.textMuted)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+
+                    // Background blur section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Background blur")
+                            .font(Fonts.primary(size: 14, weight: .medium))
+                            .foregroundStyle(theme.text)
+                        Text("Apply gaussian blur to the wallpaper image")
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.textMuted)
+
+                        HStack(spacing: 12) {
+                            Slider(
+                                value: Binding(
+                                    get: { store.backgroundBlur },
+                                    set: { store.setBackgroundBlur($0) }
+                                ),
+                                in: 0...32,
+                                step: 1
+                            )
+                            .disabled(!store.hasWallpaper)
+                            .tint(theme.accent)
+
+                            Text("\(Int(store.backgroundBlur))px")
+                                .font(Fonts.primary(size: 12))
+                                .foregroundStyle(theme.textMuted)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+
+                    Spacer()
                 }
-                .padding(.top, 4)
+                .padding(.horizontal, 32)
+                .padding(.top, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Hide titlebar section
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Hide titlebar")
-                    .font(Fonts.primary(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                Text("Remove the native window titlebar for a cleaner look")
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textMuted)
-
-                Toggle("", isOn: .constant(false))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .disabled(true)
-                    .opacity(0.5)
+            if showThemePicker {
+                ThemePicker(
+                    ghosttyApp: ghosttyApp,
+                    onDismiss: { showThemePicker = false }
+                )
             }
-
-            // Background opacity section
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Background opacity")
-                    .font(Fonts.primary(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                Text("How translucent the terminal overlay is (lower = more wallpaper visible)")
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textMuted)
-
-                HStack(spacing: 12) {
-                    Slider(
-                        value: Binding(
-                            get: { store.backgroundOpacity },
-                            set: { store.setBackgroundOpacity($0) }
-                        ),
-                        in: 0.1...1.0,
-                        step: 0.05
-                    )
-                    .disabled(!store.hasWallpaper)
-                    .tint(theme.accent)
-
-                    Text("\(Int(store.backgroundOpacity * 100))%")
-                        .font(Fonts.primary(size: 12))
-                        .foregroundStyle(theme.textMuted)
-                        .frame(width: 40, alignment: .trailing)
-                }
-            }
-
-            // Background blur section
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Background blur")
-                    .font(Fonts.primary(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                Text("Apply gaussian blur to the wallpaper image")
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textMuted)
-
-                HStack(spacing: 12) {
-                    Slider(
-                        value: Binding(
-                            get: { store.backgroundBlur },
-                            set: { store.setBackgroundBlur($0) }
-                        ),
-                        in: 0...32,
-                        step: 1
-                    )
-                    .disabled(!store.hasWallpaper)
-                    .tint(theme.accent)
-
-                    Text("\(Int(store.backgroundBlur))px")
-                        .font(Fonts.primary(size: 12))
-                        .foregroundStyle(theme.textMuted)
-                        .frame(width: 40, alignment: .trailing)
-                }
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func pickCustomWallpaper() {

@@ -28,9 +28,13 @@ final class GhosttyApp {
             return
         }
 
-        // Write Blink's terminal settings to a temp file and load it.
-        // The ghostty config API only supports loading from files, not programmatic set.
-        let configString = "background-opacity = 0.85\n"
+        // Load default theme for initial config
+        let configString: String
+        if let defaultTheme = TerminalTheme.load(name: "Josean") {
+            configString = defaultTheme.toConfigString(backgroundOpacity: 0.85)
+        } else {
+            configString = "background-opacity = 0.85\n"
+        }
 
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
@@ -75,6 +79,39 @@ final class GhosttyApp {
         if self.app == nil {
             print("[GhosttyApp] Failed to create ghostty app")
         }
+    }
+
+    /// Hot-reload the terminal config with new theme colors and opacity.
+    func updateConfig(terminalTheme: TerminalTheme, backgroundOpacity: Double) {
+        guard let app else { return }
+
+        let configString = terminalTheme.toConfigString(backgroundOpacity: backgroundOpacity)
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
+            .appendingPathExtension("conf")
+
+        guard let _ = try? configString.write(to: tempURL, atomically: true, encoding: .utf8) else {
+            print("[GhosttyApp] Failed to write temp config for update")
+            return
+        }
+
+        guard let newCfg = ghostty_config_new() else {
+            try? FileManager.default.removeItem(at: tempURL)
+            return
+        }
+
+        ghostty_config_load_file(newCfg, tempURL.path)
+        try? FileManager.default.removeItem(at: tempURL)
+        ghostty_config_finalize(newCfg)
+
+        ghostty_app_update_config(app, newCfg)
+
+        // We own the config lifecycle — free old, keep new
+        if let oldConfig = config {
+            ghostty_config_free(oldConfig)
+        }
+        config = newCfg
     }
 
     deinit {

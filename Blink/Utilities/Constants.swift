@@ -3,6 +3,7 @@ import SwiftUI
 enum Layout {
     // Sidebar
     static let sidebarWidth: CGFloat = 340
+    static let sidebarCollapsedWidth: CGFloat = 50
     static let sidebarItemPadding = EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 12)
     static let sidebarItemBorderWidth: CGFloat = 3
     static let sidebarItemGap: CGFloat = 10        // gap-2.5

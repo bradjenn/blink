@@ -67,7 +67,7 @@ struct Shell: View {
                             } else {
                                 theme.bg
                             }
-                            SettingsPage()
+                            SettingsPage(ghosttyApp: ghosttyApp)
                         } else if store.activeProjectId == nil {
                             if store.hasWallpaper {
                                 theme.bg.opacity(store.backgroundOpacity)

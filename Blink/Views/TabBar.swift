@@ -1,6 +1,44 @@
 import SwiftUI
 
-struct TabBarView: View {
+/// Logo area — sits in the left sidebar column header.
+struct TabBarLogoArea: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    @State private var isToggleHovered = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Toggle button — centered in the collapsed icon column width
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    store.sidebarVisible.toggle()
+                }
+            }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(isToggleHovered ? theme.text : theme.textDim)
+                    .frame(width: Layout.sidebarCollapsedWidth, height: Layout.tabBarHeight)
+            }
+            .buttonStyle(.plain)
+            .onHover { isToggleHovered = $0 }
+
+            if store.sidebarVisible {
+                Text("BLINK")
+                    .font(Fonts.primary(size: 11, weight: .bold).leading(.tight))
+                    .tracking(1.65)
+                    .textCase(.uppercase)
+                    .foregroundStyle(theme.textDim)
+                    .lineLimit(1)
+                    .padding(.leading, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+/// Tabs area — sits in the right content column header.
+struct TabBarTabsArea: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
@@ -13,22 +51,6 @@ struct TabBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Logo area — width matches sidebar
-            HStack {
-                Text("BLINK")
-                    .font(Fonts.primary(size: 11, weight: .bold).leading(.tight))
-                    .tracking(1.65) // 0.15em * 11pt = 1.65pt
-                    .textCase(.uppercase)
-                    .foregroundStyle(theme.textDim)
-            }
-            .padding(.leading, 16)
-            .frame(width: Layout.sidebarWidth, alignment: .leading)
-            .frame(maxHeight: .infinity)
-            .overlay(alignment: .trailing) {
-                theme.border.frame(width: 1).frame(maxHeight: .infinity)
-            }
-
-            // Tab pills
             if store.activeProjectId != nil {
                 HStack(spacing: 0) {
                     ForEach(projectTabs) { tab in
@@ -41,7 +63,6 @@ struct TabBarView: View {
                     }
                 }
 
-                // Plus button
                 Button(action: { /* new tab — future */ }) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .medium))
@@ -60,9 +81,6 @@ struct TabBarView: View {
                 ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
                 : AnyShapeStyle(theme.bg2)
         )
-        .overlay(alignment: .bottom) {
-            theme.border.frame(height: 1)
-        }
     }
 }
 
