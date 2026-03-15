@@ -20,13 +20,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     // MARK: - Init
 
-    private let placeholderBg: String
-
-    init(app: GhosttyApp, tabId: String, workingDirectory: String, placeholderBg: String = "#000000") {
+    init(app: GhosttyApp, tabId: String, workingDirectory: String) {
         self.ghosttyApp = app
         self.tabId = tabId
         self.workingDirectory = workingDirectory
-        self.placeholderBg = placeholderBg
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         // Layer setup for transparency — Metal renders text at full opacity
@@ -34,9 +31,6 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         wantsLayer = true
         layer?.isOpaque = false
 
-        // Placeholder background — prevents wallpaper flash before Metal starts rendering.
-        // Cleared in createSurface() once the Ghostty renderer takes over.
-        layer?.backgroundColor = NSColor(Color(hex: placeholderBg)).cgColor
 
         updateTrackingAreas()
     }
@@ -79,10 +73,6 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let fbSize = convertToBacking(frame.size)
         ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
 
-        // Clear placeholder background after Metal has had time to render its first frame
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.layer?.backgroundColor = nil
-        }
     }
 
     // MARK: - View Properties

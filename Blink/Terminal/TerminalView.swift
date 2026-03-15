@@ -50,13 +50,10 @@ struct TerminalView: NSViewRepresentable {
         if let existing = surfaceManager.surface(for: tabId) {
             surfaceView = existing
         } else {
-            // Pass theme bg as placeholder to prevent wallpaper flash during Metal init
-            let bgHex = theme.bg.hexString ?? "#000000"
             surfaceView = surfaceManager.createSurface(
                 tabId: tabId,
                 app: ghosttyApp,
-                workingDirectory: workingDirectory,
-                placeholderBg: bgHex
+                workingDirectory: workingDirectory
             )
         }
         container.showSurface(surfaceView, tabId: tabId)

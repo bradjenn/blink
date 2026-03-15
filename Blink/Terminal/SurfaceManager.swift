@@ -7,8 +7,8 @@ final class SurfaceManager {
     var surfaces: [String: TerminalSurfaceView] = [:]
 
     /// Create a new terminal surface for a tab.
-    func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String, placeholderBg: String = "#000000") -> TerminalSurfaceView {
-        let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory, placeholderBg: placeholderBg)
+    func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String) -> TerminalSurfaceView {
+        let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory)
         surfaces[tabId] = view
         return view
     }

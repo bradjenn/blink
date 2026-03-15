@@ -77,7 +77,11 @@ struct Shell: View {
                         } else if let tabId = store.activeTabId,
                                   let projectId = store.activeProjectId,
                                   let project = store.projects.first(where: { $0.id == projectId }) {
-                            if !store.hasWallpaper {
+                            // SwiftUI handles the background — terminal is fully transparent.
+                            // This layer is always present so there's no flash during Metal init.
+                            if store.hasWallpaper {
+                                theme.bg.opacity(store.backgroundOpacity)
+                            } else {
                                 theme.bg
                             }
                             TerminalView(

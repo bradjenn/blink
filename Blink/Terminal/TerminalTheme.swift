@@ -85,7 +85,7 @@ struct TerminalTheme {
     }
 
     /// Build a Ghostty config string from this theme's colors.
-    func toConfigString(backgroundOpacity: Double) -> String {
+    func toConfigString(backgroundOpacity: Double = 0) -> String {
         var lines = [String]()
         for (i, color) in palette.enumerated() {
             lines.append("palette = \(i)=\(color)")
@@ -96,7 +96,8 @@ struct TerminalTheme {
         lines.append("cursor-text = \(cursorText)")
         lines.append("selection-background = \(selectionBackground)")
         lines.append("selection-foreground = \(selectionForeground)")
-        lines.append("background-opacity = \(backgroundOpacity)")
+        // Always fully transparent — SwiftUI handles the background layer
+        lines.append("background-opacity = 0")
         lines.append("window-padding-x = 16")
         lines.append("window-padding-y = 10")
         return lines.joined(separator: "\n") + "\n"
