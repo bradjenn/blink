@@ -42,6 +42,6 @@ extension View {
     /// Adds a pointing hand cursor when hovering. Uses a background NSView
     /// with NSTrackingArea so it doesn't interfere with SwiftUI onHover.
     func pointerCursor() -> some View {
-        self.background(PointerCursorRepresentable())
+        self.overlay(PointerCursorRepresentable().allowsHitTesting(false))
     }
 }
