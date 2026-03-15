@@ -12,6 +12,9 @@ targets:
     platform: macOS
     sources:
       - Blink
+    resources:
+      - path: Blink/Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app
