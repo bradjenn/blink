@@ -79,10 +79,12 @@ struct ThemePicker: View {
             }
             .frame(width: 500, height: 450)
             .background(theme.bg)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
-                Rectangle()
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(theme.border, lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
             .onKeyPress(.upArrow) {
                 selectedIndex = max(0, selectedIndex - 1)
                 return .handled

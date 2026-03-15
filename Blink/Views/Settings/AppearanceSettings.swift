@@ -44,8 +44,9 @@ struct AppearanceSettings: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .background(theme.bg2)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(
-                                Rectangle()
+                                RoundedRectangle(cornerRadius: 8)
                                     .stroke(theme.border, lineWidth: 1)
                             )
                         }

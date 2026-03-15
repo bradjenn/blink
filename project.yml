@@ -11,9 +11,14 @@ targets:
     type: application
     platform: macOS
     sources:
-      - Blink
+      - path: Blink
+        excludes:
+          - Resources/Themes
+      - path: Blink/Resources/Themes
+        type: folder
+        buildPhase: resources
     resources:
-      - path: Blink/Resources
+      - path: Blink/Resources/Wallpapers
         buildPhase: resources
     dependencies:
       - framework: Frameworks/GhosttyKit.xcframework
