@@ -213,6 +213,11 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         return key_ev
     }
 
+    // Suppress system alert sound for unhandled key commands
+    override func doCommand(by selector: Selector) {
+        // No-op — prevents NSBeep for commands like moveUp:, moveDown:, etc.
+    }
+
     // MARK: - NSTextInputClient
 
     func hasMarkedText() -> Bool {

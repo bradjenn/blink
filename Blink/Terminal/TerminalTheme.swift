@@ -102,6 +102,7 @@ struct TerminalTheme {
         lines.append("window-padding-x = 16")
         lines.append("window-padding-y = 10")
         lines.append("audible-bell = false")
+        lines.append("visual-bell = false")
         return lines.joined(separator: "\n") + "\n"
     }
 
