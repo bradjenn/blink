@@ -17,6 +17,8 @@ struct SidebarProjectItem: View {
         HStack(spacing: Layout.sidebarItemGap) {
             // Project avatar
             ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
+                .scaleEffect(isHovered ? 1.1 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isHovered)
 
             // Name + path
             VStack(alignment: .leading, spacing: 3) {
