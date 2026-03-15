@@ -57,7 +57,7 @@ struct TabBarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             store.hasWallpaper
-                ? AnyShapeStyle(theme.bg2.opacity(store.backgroundOpacity))
+                ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
                 : AnyShapeStyle(theme.bg2)
         )
         .overlay(alignment: .bottom) {
