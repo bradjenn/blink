@@ -19,6 +19,7 @@
 		6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D47A5C0A44933E63A3104C /* Constants.swift */; };
 		72715E9F6026FC71B127E9C8 /* akane-mist.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F9A82625A455F5E823649549 /* akane-mist.jpg */; };
 		747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */; };
+		79BDDFFBAAE362E7E39DAC8A /* WallpaperCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE79A9F7347C5201472A699 /* WallpaperCard.swift */; };
 		7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
 		829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F051F6B723C8DC22255A384 /* SettingsPage.swift */; };
 		86EFAC178EF50F836BB7493F /* ThemeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538CB77F5AAA97B589E93411 /* ThemeCard.swift */; };
@@ -77,6 +78,7 @@
 		C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "gruvbox-ferns.jpg"; sourceTree = "<group>"; };
 		D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		DC454B9A44EB926A6C43A58B /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
+		DEE79A9F7347C5201472A699 /* WallpaperCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperCard.swift; sourceTree = "<group>"; };
 		E7511997BAA46E9D924A8619 /* everforest.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = everforest.jpg; sourceTree = "<group>"; };
 		F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettings.swift; sourceTree = "<group>"; };
 		F9A82625A455F5E823649549 /* akane-mist.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-mist.jpg"; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 			children = (
 				F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */,
 				538CB77F5AAA97B589E93411 /* ThemeCard.swift */,
+				DEE79A9F7347C5201472A699 /* WallpaperCard.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -319,6 +322,7 @@
 				2479CF78716744EBA0FC8244 /* Theme.swift in Sources */,
 				86EFAC178EF50F836BB7493F /* ThemeCard.swift in Sources */,
 				CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */,
+				79BDDFFBAAE362E7E39DAC8A /* WallpaperCard.swift in Sources */,
 				A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
