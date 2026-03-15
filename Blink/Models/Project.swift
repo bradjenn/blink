@@ -1,10 +1,10 @@
 import Foundation
 
-struct Project: Identifiable, Equatable, Hashable {
+struct Project: Identifiable, Equatable, Hashable, Codable {
     let id: String
     let name: String
     let path: String
-    let color: String     // Hex color, reserved for future use
+    let color: String
     let createdAt: Date
 
     /// Home directory path prefix replacement for display.
@@ -14,13 +14,4 @@ struct Project: Identifiable, Equatable, Hashable {
             with: "~"
         )
     }
-}
-
-extension Project {
-    static let dummy: [Project] = [
-        Project(id: "1", name: "blink", path: "/Users/bradley/Code/blink", color: "#c8ff00", createdAt: Date()),
-        Project(id: "2", name: "krux", path: "/Users/bradley/Code/krux", color: "#0fc5ed", createdAt: Date()),
-        Project(id: "3", name: "api-server", path: "/Users/bradley/Code/api-server", color: "#a277ff", createdAt: Date()),
-        Project(id: "4", name: "dotfiles", path: "/Users/bradley/Code/dotfiles", color: "#44ffb1", createdAt: Date()),
-    ]
 }

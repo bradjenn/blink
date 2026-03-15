@@ -11,12 +11,15 @@ private enum StorageKeys {
     static let backgroundOpacity = "blink.backgroundOpacity"
     static let backgroundBlur = "blink.backgroundBlur"
     static let sidebarVisible = "blink.sidebarVisible"
+    static let projects = "blink.projects"
 }
 
 @Observable
 final class AppStore {
     // Projects
-    var projects: [Project] = Project.dummy
+    var projects: [Project] {
+        didSet { Self.saveProjects(projects) }
+    }
     var activeProjectId: String?
 
     // Tabs
@@ -53,6 +56,7 @@ final class AppStore {
     init() {
         let defaults = UserDefaults.standard
 
+        self.projects = Self.loadProjects()
         self.theme = defaults.string(forKey: StorageKeys.theme) ?? "Josean"
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
@@ -204,6 +208,40 @@ final class AppStore {
         if activeTabId == id {
             let remaining = projectTabs(for: tab.projectId)
             activeTabId = remaining.last?.id
+        }
+    }
+
+    // MARK: - Project Management
+
+    /// Add a project from a directory path.
+    func addProject(path: String) {
+        // Don't add duplicates
+        guard !projects.contains(where: { $0.path == path }) else { return }
+
+        let name = (path as NSString).lastPathComponent
+        let project = Project(
+            id: UUID().uuidString,
+            name: name,
+            path: path,
+            color: "#7aa2f7",
+            createdAt: Date()
+        )
+        projects.append(project)
+    }
+
+    // MARK: - Project Persistence
+
+    private static func loadProjects() -> [Project] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKeys.projects),
+              let projects = try? JSONDecoder().decode([Project].self, from: data) else {
+            return []
+        }
+        return projects
+    }
+
+    private static func saveProjects(_ projects: [Project]) {
+        if let data = try? JSONEncoder().encode(projects) {
+            UserDefaults.standard.set(data, forKey: StorageKeys.projects)
         }
     }
 }

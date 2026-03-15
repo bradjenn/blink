@@ -32,7 +32,7 @@ struct SidebarView: View {
 
                 Spacer()
 
-                Button(action: { /* non-functional */ }) {
+                Button(action: { pickProjectFolder() }) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isAddHovered ? theme.text : theme.textMuted)
@@ -103,7 +103,7 @@ struct SidebarView: View {
     private var collapsedSidebar: some View {
         VStack(spacing: 0) {
             // Add button
-            Button(action: { /* non-functional */ }) {
+            Button(action: { pickProjectFolder() }) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
@@ -144,6 +144,17 @@ struct SidebarView: View {
                 .onHover { isSettingsHovered = $0 }
                 .pointerCursor()
             }
+        }
+    }
+
+    private func pickProjectFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a project folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            store.addProject(path: url.path)
         }
     }
 }
