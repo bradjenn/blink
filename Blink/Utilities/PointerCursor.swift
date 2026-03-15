@@ -17,6 +17,9 @@ private class PointerCursorNSView: NSView {
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
     }
+
+    // Pass through all mouse events so SwiftUI onHover still works
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 extension View {
