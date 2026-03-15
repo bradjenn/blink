@@ -1,5 +1,10 @@
 import SwiftUI
 
+enum ActiveView {
+    case projects
+    case settings
+}
+
 @Observable
 final class AppStore {
     // Projects
@@ -13,8 +18,40 @@ final class AppStore {
     // Theme
     var theme: String = "ghostty"
 
+    // View
+    var activeView: ActiveView = .projects
+
+    // Background
+    var backgroundImage: String? = nil
+    var backgroundOpacity: Double = 0.75
+    var backgroundBlur: Double = 0
+
     // Sidebar
     var sidebarVisible: Bool = true
+
+    // MARK: - View Actions
+
+    func setActiveView(_ view: ActiveView) {
+        activeView = view
+    }
+
+    // MARK: - Background Actions
+
+    func setBackgroundImage(_ image: String?) {
+        backgroundImage = image
+    }
+
+    func setBackgroundOpacity(_ opacity: Double) {
+        backgroundOpacity = max(0.1, min(1.0, opacity))
+    }
+
+    func setBackgroundBlur(_ blur: Double) {
+        backgroundBlur = max(0, min(32, blur))
+    }
+
+    var hasWallpaper: Bool {
+        backgroundImage != nil
+    }
 
     // MARK: - Actions
 
