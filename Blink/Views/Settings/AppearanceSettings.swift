@@ -53,7 +53,7 @@ struct AppearanceSettings: View {
                 LazyVGrid(columns: wallpaperColumns, spacing: 12) {
                     WallpaperCard(
                         name: "None",
-                        imageName: nil,
+                        filename: nil,
                         isSelected: store.backgroundImage == nil,
                         onSelect: { store.setBackgroundImage(nil) }
                     )
@@ -61,9 +61,7 @@ struct AppearanceSettings: View {
                     ForEach(WallpaperPreset.all) { preset in
                         WallpaperCard(
                             name: preset.name,
-                            imageName: preset.filename
-                                .replacingOccurrences(of: ".jpg", with: "")
-                                .replacingOccurrences(of: ".png", with: ""),
+                            filename: preset.filename,
                             isSelected: store.backgroundImage == preset.id,
                             onSelect: { store.setBackgroundImage(preset.id) }
                         )
@@ -71,7 +69,7 @@ struct AppearanceSettings: View {
 
                     WallpaperCard(
                         name: "Custom...",
-                        imageName: nil,
+                        filename: nil,
                         isSelected: store.backgroundImage != nil
                             && !(store.backgroundImage!.hasPrefix("preset:")),
                         onSelect: { pickCustomWallpaper() }

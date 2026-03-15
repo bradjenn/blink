@@ -15,7 +15,7 @@ struct SettingsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header: back button
+            // Header: back button — aligned over nav tabs
             Button(action: { store.setActiveView(.projects) }) {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
@@ -27,11 +27,11 @@ struct SettingsPage: View {
             }
             .buttonStyle(.plain)
             .onHover { isBackHovered = $0 }
-            .padding(.horizontal, 32)
+            .padding(.leading, 32)
             .padding(.top, 24)
             .padding(.bottom, 16)
 
-            // Body: nav sidebar + content
+            // Body: nav + content fills available space
             HStack(alignment: .top, spacing: 0) {
                 // Nav sidebar
                 VStack(alignment: .leading, spacing: 4) {
@@ -58,13 +58,11 @@ struct SettingsPage: View {
                         .disabled(isDisabled)
                     }
                 }
-                .frame(width: 180)
+                .frame(width: 200)
+                .padding(.leading, 32)
                 .padding(.trailing, 16)
 
-                // Content divider
-                theme.border.frame(width: 1)
-
-                // Content area
+                // Content area — fills remaining space
                 ScrollView(.vertical, showsIndicators: true) {
                     switch selectedTab {
                     case .appearance:
@@ -83,9 +81,7 @@ struct SettingsPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: 1024)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.bg)
     }
 }

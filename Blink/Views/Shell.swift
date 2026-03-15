@@ -6,15 +6,17 @@ struct Shell: View {
 
     var body: some View {
         ZStack {
-            // Wallpaper layer (behind everything)
+            // Wallpaper layer (behind everything, pinned to window bounds)
             if let wallpaperId = store.backgroundImage {
-                wallpaperImage(for: wallpaperId)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .scaleEffect(1.1)
-                    .blur(radius: store.backgroundBlur)
-                    .clipped()
-                    .ignoresSafeArea()
+                GeometryReader { geo in
+                    wallpaperImage(for: wallpaperId)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(1.1)
+                        .blur(radius: store.backgroundBlur)
+                        .clipped()
+                }
             }
 
             // Main layout
@@ -36,20 +38,17 @@ struct Shell: View {
                     VStack(spacing: 0) {
                         // Content area
                         ZStack {
+                            // Background layer
                             if store.hasWallpaper {
                                 theme.bg.opacity(store.backgroundOpacity)
                             } else {
                                 theme.bg
                             }
-                            if store.activeProjectId == nil {
+
+                            if store.activeView == .settings {
+                                SettingsPage()
+                            } else if store.activeProjectId == nil {
                                 StartScreen()
-                            } else {
-                                // Placeholder for terminal content
-                                if store.hasWallpaper {
-                                    theme.bg.opacity(store.backgroundOpacity)
-                                } else {
-                                    theme.bg
-                                }
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,27 +63,21 @@ struct Shell: View {
                 }
                 .frame(maxHeight: .infinity)
             }
-            .background(theme.bg)
+            .background(store.hasWallpaper ? Color.clear : theme.bg)
             .font(Fonts.primary(size: 13))
-
-            // Settings overlay
-            if store.activeView == .settings {
-                SettingsPage()
-            }
         }
     }
 
+    /// Load wallpaper image from bundle (preset) or file path (custom).
     private func wallpaperImage(for id: String) -> Image {
-        if let preset = WallpaperPreset.find(id) {
-            let name = preset.filename
-                .replacingOccurrences(of: ".jpg", with: "")
-                .replacingOccurrences(of: ".png", with: "")
-            return Image(name)
-        } else {
-            if let nsImage = NSImage(contentsOfFile: id) {
-                return Image(nsImage: nsImage)
-            }
-            return Image(systemName: "photo")
+        if let preset = WallpaperPreset.find(id),
+           let url = Bundle.main.url(forResource: preset.filename.replacingOccurrences(of: ".\(preset.filename.split(separator: ".").last ?? "")", with: ""),
+                                     withExtension: String(preset.filename.split(separator: ".").last ?? "")),
+           let nsImage = NSImage(contentsOf: url) {
+            return Image(nsImage: nsImage)
+        } else if !id.hasPrefix("preset:"), let nsImage = NSImage(contentsOfFile: id) {
+            return Image(nsImage: nsImage)
         }
+        return Image(systemName: "photo")
     }
 }
