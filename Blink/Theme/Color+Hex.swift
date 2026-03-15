@@ -29,4 +29,13 @@ extension Color {
             self = Color.clear
         }
     }
+
+    /// Convert a Color back to a hex string. Returns nil if conversion fails.
+    var hexString: String? {
+        let nsColor = NSColor(self).usingColorSpace(.sRGB) ?? NSColor(self)
+        let r = Int(nsColor.redComponent * 255)
+        let g = Int(nsColor.greenComponent * 255)
+        let b = Int(nsColor.blueComponent * 255)
+        return String(format: "#%02x%02x%02x", r, g, b)
+    }
 }
