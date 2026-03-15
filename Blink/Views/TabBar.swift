@@ -143,9 +143,7 @@ struct TabPill: View {
                 theme.accent.frame(height: 2)
             }
         }
-        .onHover { hovering in
-            isHovered = hovering
-            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-        }
+        .onHover { isHovered = $0 }
+        .pointerCursor()
     }
 }
