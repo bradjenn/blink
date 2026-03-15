@@ -57,6 +57,7 @@ final class AppStore {
 
     func setActiveProject(_ id: String?) {
         activeProjectId = id
+        activeView = .projects
         if let id {
             let projectTabs = projectTabs(for: id)
             activeTabId = projectTabs.first?.id
