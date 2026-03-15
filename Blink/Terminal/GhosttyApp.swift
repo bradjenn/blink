@@ -30,7 +30,7 @@ final class GhosttyApp {
 
         // Write Blink's terminal settings to a temp file and load it.
         // The ghostty config API only supports loading from files, not programmatic set.
-        let configString = "background-opacity = 0\n"
+        let configString = "background-opacity = 0.85\n"
 
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
