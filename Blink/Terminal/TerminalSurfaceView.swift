@@ -79,8 +79,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let fbSize = convertToBacking(frame.size)
         ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
 
-        // Clear placeholder background — Metal renderer takes over now
-        layer?.backgroundColor = nil
+        // Clear placeholder background after Metal has had time to render its first frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.layer?.backgroundColor = nil
+        }
     }
 
     // MARK: - View Properties
