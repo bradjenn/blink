@@ -177,9 +177,12 @@ struct CollapsedProjectIcon: View {
         Button(action: onSelect) {
             ZStack(alignment: .bottomTrailing) {
                 ProjectFavicon(projectName: project.name, projectPath: project.path, size: 30)
+                    .opacity(isHovered ? 1.0 : 0.7)
+                    .scaleEffect(isHovered ? 1.08 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isHovered)
                     .overlay(
                         RoundedRectangle(cornerRadius: 30 * 0.22)
-                            .stroke(isActive ? theme.accent.opacity(0.5) : Color.clear, lineWidth: 2)
+                            .stroke(isActive ? theme.accent.opacity(0.5) : (isHovered ? theme.accent.opacity(0.3) : Color.clear), lineWidth: 2)
                     )
 
                 if hasTerminals {
