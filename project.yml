@@ -15,12 +15,25 @@ targets:
     resources:
       - path: Blink/Resources
         buildPhase: resources
+    dependencies:
+      - framework: Frameworks/GhosttyKit.xcframework
+        embed: false
+      - sdk: Metal.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: CoreVideo.framework
+      - sdk: QuartzCore.framework
+      - sdk: IOSurface.framework
+      - sdk: Carbon.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app
         INFOPLIST_KEY_CFBundleDisplayName: Blink
         GENERATE_INFOPLIST_FILE: true
         PRODUCT_NAME: Blink
+        OTHER_LDFLAGS:
+          - "-lstdc++"
   BTests:
     type: bundle.unit-test
     platform: macOS
