@@ -27,22 +27,20 @@ enum Layout {
 }
 
 enum Fonts {
-    /// Returns the correct JetBrains Mono variant name for a given weight.
+    /// Returns the correct MesloLGS Nerd Font Mono variant for a given weight.
     /// SwiftUI's `.weight()` does NOT work with custom fonts — you must use the
     /// exact PostScript font name for each weight variant.
     static func primary(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name: String
         switch weight {
         case .bold:
-            name = "JetBrainsMono-Bold"
-        case .medium:
-            name = "JetBrainsMono-Medium"
-        case .semibold:
-            name = "JetBrainsMono-SemiBold"
+            name = "MesloLGSNerdFontMono-Bold"
+        case .medium, .semibold:
+            name = "MesloLGSNerdFontMono-Bold"
         case .light:
-            name = "JetBrainsMono-Light"
+            name = "MesloLGSNerdFontMono-Regular"
         default:
-            name = "JetBrainsMono-Regular"
+            name = "MesloLGSNerdFontMono-Regular"
         }
         return .custom(name, size: size)
     }
