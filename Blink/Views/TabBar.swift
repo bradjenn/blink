@@ -72,12 +72,19 @@ struct TabBarTabsArea: View {
                     guard let projectId = store.activeProjectId else { return }
                     store.openTab(projectId: projectId)
                 }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isPlusHovered ? theme.accent : theme.textDim)
-                        .frame(width: Layout.tabBarHeight, height: Layout.tabBarHeight)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isPlusHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(isPlusHovered ? theme.text : theme.textDim)
+                    }
+                    .frame(width: 22, height: 22)
+                    .scaleEffect(isPlusHovered ? 1.08 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isPlusHovered)
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 6)
                 .onHover { isPlusHovered = $0 }
             }
 

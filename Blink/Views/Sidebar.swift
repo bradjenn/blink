@@ -33,11 +33,16 @@ struct SidebarView: View {
                 Spacer()
 
                 Button(action: { pickProjectFolder() }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isAddHovered ? theme.text : theme.textMuted)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isAddHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
+                    }
+                    .frame(width: 22, height: 22)
+                    .scaleEffect(isAddHovered ? 1.08 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isAddHovered)
                 }
                 .buttonStyle(.plain)
                 .onHover { isAddHovered = $0 }
