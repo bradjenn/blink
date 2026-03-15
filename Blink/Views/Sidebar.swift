@@ -92,8 +92,10 @@ struct SidebarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { isSettingsHovered = $0 }
-                .pointerCursor()
+                .onHover { hovering in
+                    isSettingsHovered = hovering
+                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                }
             }
         }
     }
@@ -141,8 +143,10 @@ struct SidebarView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { isSettingsHovered = $0 }
-                .pointerCursor()
+                .onHover { hovering in
+                    isSettingsHovered = hovering
+                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                }
             }
         }
     }

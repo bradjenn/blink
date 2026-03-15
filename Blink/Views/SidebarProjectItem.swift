@@ -76,8 +76,10 @@ struct SidebarProjectItem: View {
         .animation(.easeInOut(duration: 0.1), value: isHovered)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
-        .onHover { isHovered = $0 }
-        .pointerCursor()
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
     }
 }
 
