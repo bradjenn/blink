@@ -98,8 +98,15 @@ final class GhosttyApp {
                 if let viewPtr = ghostty_surface_userdata(surface) {
                     let view = Unmanaged<TerminalSurfaceView>.fromOpaque(viewPtr).takeUnretainedValue()
                     let tabId = view.tabId
+
                     DispatchQueue.main.async {
-                        ghostty.store?.setTabTitle(tabId, title: titleStr)
+                        // Filter: only update title for known long-running processes
+                        if let displayName = TabTitleFilter.displayName(for: titleStr) {
+                            ghostty.store?.setTabTitle(tabId, title: displayName)
+                        } else if TabTitleFilter.isShellPrompt(titleStr) {
+                            // Back at shell prompt — revert to default tab name
+                            ghostty.store?.revertTabTitle(tabId)
+                        }
                         ghostty.store?.markUnread(tabId)
                     }
                 }

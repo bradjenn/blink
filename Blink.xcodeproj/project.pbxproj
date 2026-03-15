@@ -18,6 +18,7 @@
 		324134D47FCF4719C7416A98 /* pink-lakeside.png in Resources */ = {isa = PBXBuildFile; fileRef = 6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */; };
 		3896092C306A1F2211524895 /* akane-cliff.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 47B2C73311A57D7F5BD1F356 /* akane-cliff.jpg */; };
 		38A0767D5442E9D336859FEC /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */; };
+		3A8220686C7D69ECA5082A3E /* TabTitleFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63FA12A39D076503DB57B005 /* TabTitleFilter.swift */; };
 		3B2C02C5617FEA03A4BE956A /* IOSurface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B345D8C75FEDF50AD746BBAE /* IOSurface.framework */; };
 		3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */; };
 		41326086246AF35521615246 /* Shell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2918567AE906E413040E51F2 /* Shell.swift */; };
@@ -88,6 +89,7 @@
 		4D827DCB9D74780EBED3851F /* ship-at-sea.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "ship-at-sea.jpg"; sourceTree = "<group>"; };
 		55ED9F4FAD326C2510EE7917 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePicker.swift; sourceTree = "<group>"; };
+		63FA12A39D076503DB57B005 /* TabTitleFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabTitleFilter.swift; sourceTree = "<group>"; };
 		6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GhosttyKit.xcframework; path = Frameworks/GhosttyKit.xcframework; sourceTree = "<group>"; };
 		67F1A584AD3B660EC20B6A81 /* BTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "pink-lakeside.png"; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 			children = (
 				F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */,
 				34A3DE79377AAA27E649D315 /* SurfaceManager.swift */,
+				63FA12A39D076503DB57B005 /* TabTitleFilter.swift */,
 				B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */,
 				F6E53B8CED8557F923515E7F /* TerminalTheme.swift */,
 				728190F85A1AE0DB60BD39AB /* TerminalView.swift */,
@@ -403,6 +406,7 @@
 				FCEF539DCEAA441195942DEF /* SurfaceManager.swift in Sources */,
 				C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */,
 				CC0823E8E40E82EC4A6D7199 /* TabBar.swift in Sources */,
+				3A8220686C7D69ECA5082A3E /* TabTitleFilter.swift in Sources */,
 				4D9587506D4B00FC3A51C90E /* TerminalSurfaceView.swift in Sources */,
 				DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */,
 				C1FEB8B9037706A67ACA78DF /* TerminalView.swift in Sources */,

@@ -119,10 +119,12 @@ final class AppStore {
     @discardableResult
     func openTab(projectId: String) -> AppTab {
         let count = projectTabs(for: projectId).count + 1
+        let defaultLabel = "Terminal \(count)"
         let tab = AppTab(
             id: UUID().uuidString,
             type: "shell",
-            label: "Terminal \(count)",
+            label: defaultLabel,
+            defaultLabel: defaultLabel,
             projectId: projectId
         )
         tabs.append(tab)
@@ -135,6 +137,13 @@ final class AppStore {
     func setTabTitle(_ tabId: String, title: String) {
         if let idx = tabs.firstIndex(where: { $0.id == tabId }) {
             tabs[idx].label = title
+        }
+    }
+
+    /// Revert a tab's title to its default name.
+    func revertTabTitle(_ tabId: String) {
+        if let idx = tabs.firstIndex(where: { $0.id == tabId }) {
+            tabs[idx].label = tabs[idx].defaultLabel
         }
     }
 
