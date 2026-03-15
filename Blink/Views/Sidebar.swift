@@ -104,16 +104,23 @@ struct SidebarView: View {
 
     private var collapsedSidebar: some View {
         VStack(spacing: 0) {
-            // Add button
+            // Add button — styled like project icons
             Button(action: { pickProjectFolder() }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-                    .contentShape(Rectangle())
+                ZStack {
+                    RoundedRectangle(cornerRadius: 30 * 0.22)
+                        .fill(isAddHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.5))
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
+                }
+                .frame(width: 30, height: 30)
+                .opacity(isAddHovered ? 1.0 : 0.7)
+                .scaleEffect(isAddHovered ? 1.08 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isAddHovered)
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .frame(height: 38)
             .onHover { isAddHovered = $0 }
 
             // Project avatars
