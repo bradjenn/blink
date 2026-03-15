@@ -36,6 +36,8 @@ struct SidebarView: View {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isAddHovered ? theme.text : theme.textMuted)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .onHover { isAddHovered = $0 }
@@ -109,6 +111,7 @@ struct SidebarView: View {
                     .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { isAddHovered = $0 }
