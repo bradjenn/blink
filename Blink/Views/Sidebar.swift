@@ -121,6 +121,7 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
             .frame(height: 38)
+            .padding(.top, 8)
             .onHover { isAddHovered = $0 }
 
             // Project avatars
