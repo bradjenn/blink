@@ -64,7 +64,7 @@ struct SidebarView: View {
             // Footer: settings button
             VStack(spacing: 0) {
                 theme.border.frame(height: 1)
-                Button(action: { /* settings — M2+ */ }) {
+                Button(action: { store.setActiveView(.settings) }) {
                     HStack(spacing: 10) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 14, weight: .light))

@@ -1,0 +1,91 @@
+import SwiftUI
+
+struct SettingsPage: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    enum SettingsTab: String, CaseIterable {
+        case appearance = "Appearance"
+        case terminal = "Terminal"
+        case keyboardShortcuts = "Keyboard Shortcuts"
+    }
+
+    @State private var selectedTab: SettingsTab = .appearance
+    @State private var isBackHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header: back button
+            Button(action: { store.setActiveView(.projects) }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .medium))
+                    Text("Settings")
+                        .font(Fonts.primary(size: 16, weight: .bold))
+                }
+                .foregroundStyle(isBackHovered ? theme.text : theme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .onHover { isBackHovered = $0 }
+            .padding(.horizontal, 32)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            // Body: nav sidebar + content
+            HStack(alignment: .top, spacing: 0) {
+                // Nav sidebar
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(SettingsTab.allCases, id: \.self) { tab in
+                        let isActive = selectedTab == tab
+                        let isDisabled = tab != .appearance
+
+                        Button(action: { if !isDisabled { selectedTab = tab } }) {
+                            Text(tab.rawValue)
+                                .font(Fonts.primary(size: 14))
+                                .foregroundStyle(
+                                    isDisabled ? theme.textDim :
+                                    isActive ? theme.text : theme.textMuted
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    isActive ? Color.white.opacity(0.06) : Color.clear
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDisabled)
+                    }
+                }
+                .frame(width: 180)
+                .padding(.trailing, 16)
+
+                // Content divider
+                theme.border.frame(width: 1)
+
+                // Content area
+                ScrollView(.vertical, showsIndicators: true) {
+                    switch selectedTab {
+                    case .appearance:
+                        AppearanceSettings()
+                    case .terminal:
+                        Text("Terminal settings coming soon")
+                            .font(Fonts.primary(size: 14))
+                            .foregroundStyle(theme.textDim)
+                            .padding(32)
+                    case .keyboardShortcuts:
+                        Text("Keyboard shortcuts coming soon")
+                            .font(Fonts.primary(size: 14))
+                            .foregroundStyle(theme.textDim)
+                            .padding(32)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: 1024)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(theme.bg)
+    }
+}
