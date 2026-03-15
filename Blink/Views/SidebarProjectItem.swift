@@ -16,7 +16,7 @@ struct SidebarProjectItem: View {
     var body: some View {
         HStack(spacing: Layout.sidebarItemGap) {
             // Project avatar
-            ProjectFavicon(projectName: project.name, size: 24)
+            ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
 
             // Name + path
             VStack(alignment: .leading, spacing: 3) {

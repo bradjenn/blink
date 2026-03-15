@@ -162,9 +162,9 @@ struct CollapsedProjectIcon: View {
     var body: some View {
         Button(action: onSelect) {
             ZStack(alignment: .bottomTrailing) {
-                ProjectFavicon(projectName: project.name, size: 30)
+                ProjectFavicon(projectName: project.name, projectPath: project.path, size: 30)
                     .overlay(
-                        Circle()
+                        RoundedRectangle(cornerRadius: 30 * 0.22)
                             .stroke(isActive ? theme.accent.opacity(0.5) : Color.clear, lineWidth: 2)
                     )
 
