@@ -194,20 +194,6 @@ struct CollapsedProjectIcon: View {
         .frame(maxWidth: .infinity)
         .frame(height: 38)
         .onHover { isHovered = $0 }
-        .overlay(alignment: .trailing) {
-            if isHovered {
-                Text(project.name)
-                    .font(Fonts.primary(size: 12).leading(.tight))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                    .fixedSize()
-                    .offset(x: 50)
-                    .allowsHitTesting(false)
-            }
-        }
+        .help(project.name)
     }
 }
