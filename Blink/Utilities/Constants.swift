@@ -33,7 +33,7 @@ enum Fonts {
     static func primary(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name: String
         switch weight {
-        case .bold, .medium, .semibold:
+        case .bold:
             name = "MesloLGSNFM-Bold"
         default:
             name = "MesloLGSNFM-Regular"
