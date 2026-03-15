@@ -9,6 +9,7 @@ struct BApp: App {
         WindowGroup {
             Shell()
                 .environment(store)
+                .environment(themeManager)
                 .environment(\.theme, themeManager.activeTheme)
                 .frame(
                     minWidth: Layout.windowMinWidth,

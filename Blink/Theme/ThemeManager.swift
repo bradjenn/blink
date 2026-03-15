@@ -3,6 +3,12 @@ import SwiftUI
 @Observable
 final class ThemeManager {
     var activeTheme: Theme = .cyberpunk
+
+    func setTheme(id: String) {
+        if let theme = Theme.allThemes.first(where: { $0.id == id }) {
+            activeTheme = theme
+        }
+    }
 }
 
 // SwiftUI Environment key for the active theme
