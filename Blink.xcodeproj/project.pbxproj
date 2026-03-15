@@ -50,6 +50,7 @@
 		E767E51D6BDE0737F2665C24 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */; };
 		E9EB070FE40F8B8A43A5F6A6 /* Themes in Resources */ = {isa = PBXBuildFile; fileRef = 1EDE19D0FBE88E948C87BF23 /* Themes */; };
 		EC0AF83FC7C2722793015744 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED9F4FAD326C2510EE7917 /* Project.swift */; };
+		FCEF539DCEAA441195942DEF /* SurfaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3DE79377AAA27E649D315 /* SurfaceManager.swift */; };
 		FFE6F430E417FF7DF298E9DE /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */; };
 /* End PBXBuildFile section */
 
@@ -78,6 +79,7 @@
 		2918567AE906E413040E51F2 /* Shell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shell.swift; sourceTree = "<group>"; };
 		2D522965A18450240E8B1B57 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		2F051F6B723C8DC22255A384 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
+		34A3DE79377AAA27E649D315 /* SurfaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceManager.swift; sourceTree = "<group>"; };
 		4234ACA0B32348BB0F264CA9 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		454E601831980C64BDA0BDD1 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		47B2C73311A57D7F5BD1F356 /* akane-cliff.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-cliff.jpg"; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */,
+				34A3DE79377AAA27E649D315 /* SurfaceManager.swift */,
 				B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */,
 				F6E53B8CED8557F923515E7F /* TerminalTheme.swift */,
 				728190F85A1AE0DB60BD39AB /* TerminalView.swift */,
@@ -397,6 +400,7 @@
 				9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */,
 				B515CCF60006105913EE07AC /* StartScreen.swift in Sources */,
 				2DCA080F86B7E5A194C8F14A /* StatusLine.swift in Sources */,
+				FCEF539DCEAA441195942DEF /* SurfaceManager.swift in Sources */,
 				C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */,
 				CC0823E8E40E82EC4A6D7199 /* TabBar.swift in Sources */,
 				4D9587506D4B00FC3A51C90E /* TerminalSurfaceView.swift in Sources */,

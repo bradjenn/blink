@@ -64,6 +64,7 @@ struct SidebarView: View {
                                 project: project,
                                 isActive: store.activeProjectId == project.id,
                                 terminalCount: store.terminalCount(for: project.id),
+                                hasUnread: store.hasUnread(projectId: project.id),
                                 onSelect: { store.setActiveProject(project.id) },
                                 onRemove: { store.removeProject(project.id) }
                             )

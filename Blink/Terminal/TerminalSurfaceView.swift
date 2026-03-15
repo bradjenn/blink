@@ -10,10 +10,19 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
+    /// The tab ID this surface belongs to.
+    let tabId: String
+    /// The working directory for the shell.
+    private let workingDirectory: String
+    /// Called when the shell process exits.
+    var onClose: ((String) -> Void)?
+
     // MARK: - Init
 
-    init(app: GhosttyApp) {
+    init(app: GhosttyApp, tabId: String, workingDirectory: String) {
         self.ghosttyApp = app
+        self.tabId = tabId
+        self.workingDirectory = workingDirectory
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         // Layer setup for transparency — Metal renders text at full opacity
@@ -48,7 +57,11 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.scale_factor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
 
-        surface = ghostty_surface_new(app, &cfg)
+        // Set working directory — withCString ensures the C string lives through ghostty_surface_new
+        workingDirectory.withCString { cPath in
+            cfg.working_directory = cPath
+            surface = ghostty_surface_new(app, &cfg)
+        }
         if surface == nil {
             print("[TerminalSurfaceView] Failed to create surface")
             return
@@ -349,9 +362,25 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
     }
 
+    // MARK: - Focus
+
+    /// Grab keyboard focus for this terminal.
+    func focus() {
+        guard let window else { return }
+        window.makeFirstResponder(self)
+    }
+
     // MARK: - Cleanup
 
+    /// Free the ghostty surface. Called by SurfaceManager on tab close.
+    func teardown() {
+        if let surface {
+            ghostty_surface_free(surface)
+        }
+        surface = nil
+    }
+
     deinit {
-        if let surface { ghostty_surface_free(surface) }
+        teardown()
     }
 }

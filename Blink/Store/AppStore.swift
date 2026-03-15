@@ -20,8 +20,11 @@ final class AppStore {
     var activeProjectId: String?
 
     // Tabs
-    var tabs: [AppTab] = AppTab.dummy
+    var tabs: [AppTab] = []
     var activeTabId: String?
+
+    // Unread activity tracking
+    var unreadTabs: Set<String> = []
 
     // Theme
     var theme: String {
@@ -107,6 +110,50 @@ final class AppStore {
 
     func setActiveTab(_ id: String) {
         activeTabId = id
+        clearUnread(id)
+    }
+
+    // MARK: - Tab Actions
+
+    /// Create a new shell tab for a project.
+    @discardableResult
+    func openTab(projectId: String) -> AppTab {
+        let count = projectTabs(for: projectId).count + 1
+        let tab = AppTab(
+            id: UUID().uuidString,
+            type: "shell",
+            label: "Terminal \(count)",
+            projectId: projectId
+        )
+        tabs.append(tab)
+        activeTabId = tab.id
+        clearUnread(tab.id)
+        return tab
+    }
+
+    /// Update a tab's title.
+    func setTabTitle(_ tabId: String, title: String) {
+        if let idx = tabs.firstIndex(where: { $0.id == tabId }) {
+            tabs[idx].label = title
+        }
+    }
+
+    /// Mark a tab as having unread activity.
+    func markUnread(_ tabId: String) {
+        if tabId != activeTabId {
+            unreadTabs.insert(tabId)
+        }
+    }
+
+    /// Clear unread status for a tab.
+    func clearUnread(_ tabId: String) {
+        unreadTabs.remove(tabId)
+    }
+
+    /// Check if a project has any unread tabs.
+    func hasUnread(projectId: String) -> Bool {
+        let projectTabIds = Set(projectTabs(for: projectId).map(\.id))
+        return !unreadTabs.isDisjoint(with: projectTabIds)
     }
 
     func projectTabs(for projectId: String) -> [AppTab] {

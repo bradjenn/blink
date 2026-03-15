@@ -1,15 +1,25 @@
 import SwiftUI
 import GhosttyKit
 
-/// SwiftUI wrapper around TerminalSurfaceView.
+/// SwiftUI wrapper that looks up or creates a terminal surface for a tab.
 struct TerminalView: NSViewRepresentable {
-    let app: GhosttyApp
+    let tabId: String
+    let ghosttyApp: GhosttyApp
+    let surfaceManager: SurfaceManager
+    let workingDirectory: String
 
     func makeNSView(context: Context) -> TerminalSurfaceView {
-        TerminalSurfaceView(app: app)
+        if let existing = surfaceManager.surface(for: tabId) {
+            return existing
+        }
+        return surfaceManager.createSurface(
+            tabId: tabId,
+            app: ghosttyApp,
+            workingDirectory: workingDirectory
+        )
     }
 
     func updateNSView(_ nsView: TerminalSurfaceView, context: Context) {
-        // No dynamic updates needed for PoC
+        nsView.focus()
     }
 }

@@ -9,7 +9,6 @@ struct TabBarLogoArea: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Toggle button — centered in the collapsed icon column width
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     store.sidebarVisible.toggle()
@@ -42,6 +41,9 @@ struct TabBarTabsArea: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
+    let ghosttyApp: GhosttyApp
+    let surfaceManager: SurfaceManager
+
     @State private var isPlusHovered = false
 
     private var projectTabs: [AppTab] {
@@ -58,12 +60,18 @@ struct TabBarTabsArea: View {
                             tab: tab,
                             isActive: store.activeTabId == tab.id,
                             onSelect: { store.setActiveTab(tab.id) },
-                            onClose: { store.closeTab(tab.id) }
+                            onClose: {
+                                surfaceManager.destroySurface(tabId: tab.id)
+                                store.closeTab(tab.id)
+                            }
                         )
                     }
                 }
 
-                Button(action: { /* new tab — future */ }) {
+                Button(action: {
+                    guard let projectId = store.activeProjectId else { return }
+                    store.openTab(projectId: projectId)
+                }) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isPlusHovered ? theme.accent : theme.textDim)

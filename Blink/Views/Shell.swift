@@ -6,6 +6,7 @@ struct Shell: View {
     @Environment(AppStore.self) private var store
 
     let ghosttyApp: GhosttyApp
+    let surfaceManager: SurfaceManager
 
     private var sidebarWidth: CGFloat {
         store.sidebarVisible ? Layout.sidebarWidth : Layout.sidebarCollapsedWidth
@@ -30,14 +31,11 @@ struct Shell: View {
             HStack(spacing: 0) {
                 // LEFT COLUMN: logo header + sidebar
                 VStack(spacing: 0) {
-                    // Logo header (same height as tab bar)
                     TabBarLogoArea()
                         .frame(height: Layout.tabBarHeight)
 
-                    // Horizontal border under logo
                     theme.border.frame(height: 1)
 
-                    // Sidebar content
                     SidebarView()
                 }
                 .frame(width: sidebarWidth)
@@ -52,11 +50,12 @@ struct Shell: View {
 
                 // RIGHT COLUMN: tab bar + content + status line
                 VStack(spacing: 0) {
-                    // Tab bar (tabs only, no logo)
-                    TabBarTabsArea()
-                        .frame(height: Layout.tabBarHeight)
+                    TabBarTabsArea(
+                        ghosttyApp: ghosttyApp,
+                        surfaceManager: surfaceManager
+                    )
+                    .frame(height: Layout.tabBarHeight)
 
-                    // Horizontal border under tabs
                     theme.border.frame(height: 1)
 
                     // Content area
@@ -75,22 +74,40 @@ struct Shell: View {
                                 theme.bg
                             }
                             StartScreen()
-                        } else {
-                            // Terminal — libghostty handles background transparency
-                            // via background-opacity config. When no wallpaper is set,
-                            // add a solid bg so the window isn't see-through.
+                        } else if let tabId = store.activeTabId,
+                                  let projectId = store.activeProjectId,
+                                  let project = store.projects.first(where: { $0.id == projectId }) {
                             if !store.hasWallpaper {
                                 theme.bg
                             }
-                            TerminalView(app: ghosttyApp)
+                            TerminalView(
+                                tabId: tabId,
+                                ghosttyApp: ghosttyApp,
+                                surfaceManager: surfaceManager,
+                                workingDirectory: project.path
+                            )
+                            .id(tabId)
+                        } else {
+                            // Project selected but no tabs yet
+                            if store.hasWallpaper {
+                                theme.bg.opacity(store.backgroundOpacity)
+                            } else {
+                                theme.bg
+                            }
+                            VStack(spacing: 12) {
+                                Text("No terminals open")
+                                    .font(Fonts.primary(size: 16))
+                                    .foregroundStyle(theme.textDim)
+                                Text("Press + to open a terminal")
+                                    .font(Fonts.primary(size: 13))
+                                    .foregroundStyle(theme.textDim)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    // Horizontal divider above status line
                     theme.border.frame(height: 1)
 
-                    // Status line
                     StatusLine()
                         .frame(height: Layout.statusLineHeight)
                 }
@@ -100,7 +117,6 @@ struct Shell: View {
         }
     }
 
-    /// Load wallpaper image from bundle (preset) or file path (custom).
     private func wallpaperImage(for id: String) -> Image {
         if let preset = WallpaperPreset.find(id),
            let url = Bundle.main.url(forResource: preset.filename.replacingOccurrences(of: ".\(preset.filename.split(separator: ".").last ?? "")", with: ""),

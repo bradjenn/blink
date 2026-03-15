@@ -7,6 +7,10 @@ final class GhosttyApp {
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
 
+    /// Weak refs for routing callbacks back to Swift objects.
+    weak var store: AppStore?
+    weak var surfaceManager: SurfaceManager?
+
     /// Whether ghostty_init has been called. Must happen exactly once.
     private static var initialized = false
 
@@ -77,12 +81,47 @@ final class GhosttyApp {
             }
         }
 
-        // Stub callbacks — return false/no-op for PoC
-        runtime.action_cb = { _, _, _ in return false }
+        // Action callback — handle SET_TITLE for auto-updating tab names
+        runtime.action_cb = { app, target, action in
+            guard let app else { return false }
+            guard let ud = ghostty_app_userdata(app) else { return false }
+            let ghostty = Unmanaged<GhosttyApp>.fromOpaque(ud).takeUnretainedValue()
+
+            switch action.tag {
+            case GHOSTTY_ACTION_SET_TITLE:
+                guard target.tag == GHOSTTY_TARGET_SURFACE else { return false }
+                let surface = target.target.surface
+                guard let titlePtr = action.action.set_title.title else { return false }
+                let titleStr = String(cString: titlePtr)
+
+                // Find the tab via the surface's view userdata
+                if let viewPtr = ghostty_surface_userdata(surface) {
+                    let view = Unmanaged<TerminalSurfaceView>.fromOpaque(viewPtr).takeUnretainedValue()
+                    let tabId = view.tabId
+                    DispatchQueue.main.async {
+                        ghostty.store?.setTabTitle(tabId, title: titleStr)
+                        ghostty.store?.markUnread(tabId)
+                    }
+                }
+                return true
+
+            default:
+                return false
+            }
+        }
+
+        // Close surface callback — fired when shell process exits
+        runtime.close_surface_cb = { userdata, _ in
+            guard let ud = userdata else { return }
+            let view = Unmanaged<TerminalSurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async {
+                view.onClose?(view.tabId)
+            }
+        }
+
         runtime.read_clipboard_cb = { _, _, _ in return false }
         runtime.confirm_read_clipboard_cb = { _, _, _, _ in }
         runtime.write_clipboard_cb = { _, _, _, _, _ in }
-        runtime.close_surface_cb = { _, _ in }
 
         // Create the app
         self.app = ghostty_app_new(&runtime, cfg)

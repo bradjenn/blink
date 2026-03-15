@@ -6,6 +6,7 @@ struct SidebarProjectItem: View {
     let project: Project
     let isActive: Bool
     let terminalCount: Int
+    let hasUnread: Bool
     let onSelect: () -> Void
     let onRemove: () -> Void
 
@@ -31,10 +32,16 @@ struct SidebarProjectItem: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Terminal count + pulse dot
+            // Terminal count + pulse dot (pulses when unread activity)
             if terminalCount > 0 {
                 HStack(spacing: 4) {
-                    PulseDot(color: theme.accent, glowColor: theme.accentGlow)
+                    if hasUnread {
+                        PulseDot(color: theme.accent, glowColor: theme.accentGlow)
+                    } else {
+                        Circle()
+                            .fill(theme.accent)
+                            .frame(width: 6, height: 6)
+                    }
                     if terminalCount > 1 {
                         Text("\(terminalCount)")
                             .font(Fonts.primary(size: 12))
