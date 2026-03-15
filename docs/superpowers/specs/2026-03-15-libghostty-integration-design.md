@@ -28,7 +28,8 @@ Four components, minimal footprint:
 
 A Swift class wrapping the `ghostty_app_t` lifecycle:
 
-- Creates `ghostty_config_t` with defaults, finalizes it
+- Creates `ghostty_config_t` programmatically — does NOT load Ghostty's config files (`~/.config/ghostty/config`). Blink owns all terminal settings. Calls `ghostty_config_new()`, sets values via the config API, then `ghostty_config_finalize()`.
+- **Critical config for PoC:** `background-opacity` set to match Blink's wallpaper opacity (enables transparent background with crisp text rendering — this is the core value proposition)
 - Builds `ghostty_runtime_config_s` with C function pointer callbacks (wakeup, action handler, clipboard, close surface)
 - Calls `ghostty_app_new(&runtime_cfg, config)` to create the app handle
 - **Wakeup callback drives the render loop:** The wakeup callback is called from any thread and must dispatch `ghostty_app_tick()` onto the main thread via `DispatchQueue.main.async`. There is no timer — the wakeup callback is the sole driver of updates.
@@ -52,6 +53,7 @@ A Swift class wrapping the `ghostty_app_t` lifecycle:
   - `userdata` = `Unmanaged.passUnretained(self).toOpaque()`
   - `scale_factor` = `NSScreen.main!.backingScaleFactor`
 - libghostty's Metal renderer draws directly onto this view
+- **Transparency setup:** `wantsLayer = true`, `layer?.isOpaque = false`, and the view itself must report `isOpaque = false`. This allows the transparent terminal background (set via `background-opacity` config) to composite over Blink's wallpaper ZStack layer. Metal renders text glyphs at full opacity independently — no text transparency.
 - **Size must be in framebuffer pixels** (not points): call `self.convertToBacking(size)` before passing to `ghostty_surface_set_size()`
 - Sets content scale via `ghostty_surface_set_content_scale()`
 - Overrides `keyDown`, `keyUp`, `flagsChanged` → `ghostty_surface_key()`
@@ -76,7 +78,7 @@ A Swift class wrapping the `ghostty_app_t` lifecycle:
 ## Explicitly Out of Scope
 
 - Per-tab surface management (all tabs share one terminal for now)
-- Theme color passthrough to libghostty
+- Full theme color passthrough to libghostty (only background-opacity is wired up for now)
 - Custom font configuration
 - Splits
 - Terminal lifecycle tied to tab open/close
@@ -89,6 +91,7 @@ A Swift class wrapping the `ghostty_app_t` lifecycle:
 3. You can type commands and see output
 4. The terminal resizes when the window resizes
 5. Keyboard input works (arrow keys, ctrl sequences, etc.)
+6. **Terminal background is transparent** — wallpaper/background shows through while text remains fully opaque and crisp
 
 ## Dependencies
 
