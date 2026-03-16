@@ -269,6 +269,20 @@ final class AppStore {
             let remaining = projectTabs(for: tab.projectId)
             activeTabId = remaining.last?.id
         }
+        reindexTabs(for: tab.projectId)
+    }
+
+    /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
+    private func reindexTabs(for projectId: String) {
+        var counter = 0
+        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].type == "shell" {
+            counter += 1
+            let newDefault = "Terminal \(counter)"
+            if tabs[i].label == tabs[i].defaultLabel {
+                tabs[i].label = newDefault
+            }
+            tabs[i].defaultLabel = newDefault
+        }
     }
 
     // MARK: - Project Management

@@ -56,6 +56,36 @@ struct BApp: App {
                 }
                 .keyboardShortcut("b", modifiers: .command)
             }
+
+            CommandGroup(replacing: .newItem) {
+                Button("New Tab") {
+                    if let projectId = store.activeProjectId {
+                        store.openTab(projectId: projectId)
+                    }
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
+                Button("Close Tab") {
+                    if let tabId = store.activeTabId {
+                        store.closeTab(tabId)
+                    }
+                }
+                .keyboardShortcut("w", modifiers: .command)
+
+                Divider()
+
+                ForEach(1...9, id: \.self) { number in
+                    Button("Tab \(number)") {
+                        if let projectId = store.activeProjectId {
+                            let projectTabs = store.projectTabs(for: projectId)
+                            if number <= projectTabs.count {
+                                store.setActiveTab(projectTabs[number - 1].id)
+                            }
+                        }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
+                }
+            }
         }
     }
 }
