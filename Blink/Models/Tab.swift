@@ -6,4 +6,5 @@ struct AppTab: Identifiable, Equatable, Hashable {
     var label: String
     var defaultLabel: String
     let projectId: String
+    var command: String? = nil
 }

@@ -40,6 +40,7 @@ struct TerminalView: NSViewRepresentable {
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
     let workingDirectory: String
+    var command: String? = nil
     @Environment(\.theme) private var theme
 
     func makeNSView(context: Context) -> TerminalContainerView {
@@ -54,7 +55,8 @@ struct TerminalView: NSViewRepresentable {
             surfaceView = surfaceManager.createSurface(
                 tabId: tabId,
                 app: ghosttyApp,
-                workingDirectory: workingDirectory
+                workingDirectory: workingDirectory,
+                command: command
             )
         }
         container.showSurface(surfaceView, tabId: tabId)

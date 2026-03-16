@@ -6,9 +6,15 @@ final class SurfaceManager {
     /// Tab ID → live terminal view
     var surfaces: [String: TerminalSurfaceView] = [:]
 
+    /// Called when a shell process exits.
+    var onProcessExit: ((String) -> Void)?
+
     /// Create a new terminal surface for a tab.
-    func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String) -> TerminalSurfaceView {
-        let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory)
+    func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String, command: String? = nil) -> TerminalSurfaceView {
+        let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory, command: command)
+        view.onClose = { [weak self] tabId in
+            self?.onProcessExit?(tabId)
+        }
         surfaces[tabId] = view
         return view
     }

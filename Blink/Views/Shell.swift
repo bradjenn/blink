@@ -94,7 +94,8 @@ struct Shell: View {
                                 tabId: tabId,
                                 ghosttyApp: ghosttyApp,
                                 surfaceManager: surfaceManager,
-                                workingDirectory: project.path
+                                workingDirectory: project.path,
+                                command: store.tabs.first(where: { $0.id == tabId })?.command
                             )
                         } else {
                             VStack(spacing: 12) {

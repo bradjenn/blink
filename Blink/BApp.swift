@@ -10,6 +10,7 @@ struct BApp: App {
     @State private var store = AppStore()
     @State private var ghosttyApp = GhosttyApp()
     @State private var surfaceManager = SurfaceManager()
+    @State private var gitMonitor = GitStatusMonitor()
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +18,7 @@ struct BApp: App {
                 .background(WindowTitleBarConfigurator())
                 .environment(store)
                 .environment(themeManager)
+                .environment(gitMonitor)
                 .environment(\.theme, themeManager.activeTheme)
                 .frame(
                     minWidth: Layout.windowMinWidth,
@@ -28,6 +30,13 @@ struct BApp: App {
                     ghosttyApp.store = store
                     ghosttyApp.surfaceManager = surfaceManager
                     store.surfaceManager = surfaceManager
+                    surfaceManager.onProcessExit = { tabId in
+                        // Auto-close tabs that ran a command (e.g. lazygit)
+                        if let tab = store.tabs.first(where: { $0.id == tabId }), tab.command != nil {
+                            surfaceManager.destroySurface(tabId: tabId)
+                            store.closeTab(tabId)
+                        }
+                    }
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -66,6 +75,17 @@ struct BApp: App {
                     store.focusTerminal()
                 }
                 .keyboardShortcut("l", modifiers: .control)
+
+                Button("Open Git") {
+                    if let projectId = store.activeProjectId {
+                        if let existing = store.projectTabs(for: projectId).first(where: { $0.command == "lazygit" }) {
+                            store.setActiveTab(existing.id)
+                        } else {
+                            store.openTab(projectId: projectId, command: "lazygit", label: "lazygit")
+                        }
+                    }
+                }
+                .keyboardShortcut("g", modifiers: .command)
             }
 
             CommandGroup(replacing: .newItem) {

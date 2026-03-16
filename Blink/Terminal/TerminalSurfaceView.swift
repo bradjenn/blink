@@ -15,15 +15,18 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     let tabId: String
     /// The working directory for the shell.
     private let workingDirectory: String
+    /// Optional command to run instead of the default shell.
+    private let command: String?
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
 
     // MARK: - Init
 
-    init(app: GhosttyApp, tabId: String, workingDirectory: String) {
+    init(app: GhosttyApp, tabId: String, workingDirectory: String, command: String? = nil) {
         self.ghosttyApp = app
         self.tabId = tabId
         self.workingDirectory = workingDirectory
+        self.command = command
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         // Layer setup for transparency — Metal renders text at full opacity
@@ -66,14 +69,22 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             ghostty_env_var_s(key: strdup("COLORTERM"), value: strdup("truecolor")),
         ]
 
-        // Set working directory — withCString ensures the C string lives through ghostty_surface_new
-        workingDirectory.withCString { cPath in
-            cfg.working_directory = cPath
-            envVars.withUnsafeMutableBufferPointer { buf in
-                cfg.env_vars = buf.baseAddress
-                cfg.env_var_count = buf.count
-                surface = ghostty_surface_new(app, &cfg)
+        // Set working directory and optional command
+        let createWithConfig = { [self] (cmdPtr: UnsafePointer<CChar>?) in
+            workingDirectory.withCString { cPath in
+                cfg.working_directory = cPath
+                cfg.command = cmdPtr
+                envVars.withUnsafeMutableBufferPointer { buf in
+                    cfg.env_vars = buf.baseAddress
+                    cfg.env_var_count = buf.count
+                    surface = ghostty_surface_new(app, &cfg)
+                }
             }
+        }
+        if let command {
+            command.withCString { createWithConfig($0) }
+        } else {
+            createWithConfig(nil)
         }
 
         // Free strdup'd strings
@@ -391,6 +402,16 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         case 0x3A, 0x3D: return .option
         case 0x37, 0x36: return .command
         default: return []
+        }
+    }
+
+    // MARK: - Text Input
+
+    /// Send a string to the terminal as if it were typed.
+    func sendText(_ text: String) {
+        guard let surface else { return }
+        text.withCString { ptr in
+            ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
         }
     }
 

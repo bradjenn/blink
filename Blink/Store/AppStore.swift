@@ -238,15 +238,16 @@ final class AppStore {
 
     /// Create a new shell tab for a project.
     @discardableResult
-    func openTab(projectId: String) -> AppTab {
+    func openTab(projectId: String, command: String? = nil, label: String? = nil) -> AppTab {
         let count = projectTabs(for: projectId).count + 1
-        let defaultLabel = "Terminal \(count)"
+        let defaultLabel = label ?? "Terminal \(count)"
         let tab = AppTab(
             id: UUID().uuidString,
             type: "shell",
             label: defaultLabel,
             defaultLabel: defaultLabel,
-            projectId: projectId
+            projectId: projectId,
+            command: command
         )
         tabs.append(tab)
         activeTabId = tab.id
@@ -319,7 +320,7 @@ final class AppStore {
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
     private func reindexTabs(for projectId: String) {
         var counter = 0
-        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].type == "shell" {
+        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].type == "shell" && tabs[i].command == nil {
             counter += 1
             let newDefault = "Terminal \(counter)"
             if tabs[i].label == tabs[i].defaultLabel {

@@ -26,6 +26,7 @@
 		3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */; };
 		41326086246AF35521615246 /* Shell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2918567AE906E413040E51F2 /* Shell.swift */; };
 		4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1448D063BC06561A433B9DEC /* AppStore.swift */; };
+		F1E2D3C4B5A6978869012345 /* GitStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */; };
 		495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */; };
 		4C153E196C842764C6E58F0D /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */; };
 		4D9587506D4B00FC3A51C90E /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */; };
@@ -78,6 +79,7 @@
 		104F7EE9EE6F91C459A8CC7C /* BApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BApp.swift; sourceTree = "<group>"; };
 		12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-bridge.jpg"; sourceTree = "<group>"; };
 		1448D063BC06561A433B9DEC /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-pagoda.jpg"; sourceTree = "<group>"; };
 		15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
@@ -152,6 +154,7 @@
 			isa = PBXGroup;
 			children = (
 				1448D063BC06561A433B9DEC /* AppStore.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -409,6 +412,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */,
+				F1E2D3C4B5A6978869012345 /* GitStatus.swift in Sources */,
 				747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */,
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
 				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,

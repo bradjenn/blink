@@ -101,12 +101,16 @@ final class GhosttyApp {
                     let tabId = view.tabId
 
                     DispatchQueue.main.async {
-                        // Filter: only update title for known long-running processes
-                        if let displayName = TabTitleFilter.displayName(for: titleStr) {
-                            ghostty.store?.setTabTitle(tabId, title: displayName)
-                        } else if TabTitleFilter.isShellPrompt(titleStr) {
-                            // Back at shell prompt — revert to default tab name
-                            ghostty.store?.revertTabTitle(tabId)
+                        // Skip title updates for tabs with an explicit command (e.g. lazygit)
+                        let isCommandTab = ghostty.store?.tabs.first(where: { $0.id == tabId })?.command != nil
+                        if !isCommandTab {
+                            // Filter: only update title for known long-running processes
+                            if let displayName = TabTitleFilter.displayName(for: titleStr) {
+                                ghostty.store?.setTabTitle(tabId, title: displayName)
+                            } else if TabTitleFilter.isShellPrompt(titleStr) {
+                                // Back at shell prompt — revert to default tab name
+                                ghostty.store?.revertTabTitle(tabId)
+                            }
                         }
                         ghostty.store?.markUnread(tabId)
                     }
