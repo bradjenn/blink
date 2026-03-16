@@ -8,82 +8,80 @@ struct Shell: View {
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
 
-    private var sidebarWidth: CGFloat {
+    @State private var isSettingsHovered = false
+
+    private var topBarLeadingWidth: CGFloat {
+        store.sidebarVisible ? Layout.sidebarWidth : Layout.logoAreaCollapsedWidth
+    }
+
+    private var footerLeadingWidth: CGFloat {
         store.sidebarVisible ? Layout.sidebarWidth : Layout.sidebarCollapsedWidth
+    }
+
+    private var isSettingsActive: Bool {
+        store.activeView == .settings
+    }
+
+    private var chromeBackground: AnyShapeStyle {
+        store.hasWallpaper
+            ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
+            : AnyShapeStyle(theme.bg)
     }
 
     var body: some View {
         ZStack {
-            // Wallpaper layer
+            // Layer 1: Wallpaper
             if let wallpaperId = store.backgroundImage {
-                GeometryReader { geo in
-                    wallpaperImage(for: wallpaperId)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .scaleEffect(1.1)
-                        .blur(radius: store.backgroundBlur)
-                        .clipped()
-                }
+                wallpaperImage(for: wallpaperId)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .containerRelativeFrame([.horizontal, .vertical])
+                    .scaleEffect(1.1)
+                    .blur(radius: store.backgroundBlur)
+                    .clipped()
             }
 
-            // Main layout — two columns with a single full-height divider
-            HStack(spacing: 0) {
-                // LEFT COLUMN: logo header + sidebar
-                VStack(spacing: 0) {
+            // Layer 2: Layout — each panel owns its background surface
+            VStack(spacing: 0) {
+
+                // ── TOP BAR ──────────────────────────────────────
+                HStack(spacing: 0) {
                     TabBarLogoArea()
+                        .frame(width: topBarLeadingWidth, alignment: .leading)
                         .frame(height: Layout.tabBarHeight)
 
-                    theme.border.frame(height: 1)
+                    theme.border.frame(width: 1, height: Layout.tabBarHeight)
 
-                    SidebarView()
+                    if store.activeView != .settings {
+                        TabBarTabsArea(
+                            ghosttyApp: ghosttyApp,
+                            surfaceManager: surfaceManager
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: Layout.tabBarHeight)
+                    } else {
+                        Spacer()
+                            .frame(height: Layout.tabBarHeight)
+                    }
                 }
-                .frame(width: sidebarWidth)
-                .background(
-                    store.hasWallpaper
-                        ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-                        : AnyShapeStyle(theme.bg)
-                )
+                .background(chromeBackground)
+                .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
 
-                // Full-height divider
-                theme.border.frame(width: 1)
+                theme.border.frame(height: 1)
 
-                // RIGHT COLUMN: tab bar + content + status line
-                VStack(spacing: 0) {
-                    TabBarTabsArea(
-                        ghosttyApp: ghosttyApp,
-                        surfaceManager: surfaceManager
-                    )
-                    .frame(height: Layout.tabBarHeight)
+                // ── MIDDLE ───────────────────────────────────────
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(chromeBackground)
 
-                    theme.border.frame(height: 1)
-
-                    // Content area
-                    ZStack {
+                    Group {
                         if store.activeView == .settings {
-                            if store.hasWallpaper {
-                                theme.bg.opacity(store.backgroundOpacity)
-                            } else {
-                                theme.bg
-                            }
                             SettingsPage(ghosttyApp: ghosttyApp)
                         } else if store.activeProjectId == nil {
-                            if store.hasWallpaper {
-                                theme.bg.opacity(store.backgroundOpacity)
-                            } else {
-                                theme.bg
-                            }
                             StartScreen()
                         } else if let tabId = store.activeTabId,
                                   let projectId = store.activeProjectId,
                                   let project = store.projects.first(where: { $0.id == projectId }) {
-                            // SwiftUI handles the background — terminal is fully transparent.
-                            // This layer is always present so there's no flash during Metal init.
-                            if store.hasWallpaper {
-                                theme.bg.opacity(store.backgroundOpacity)
-                            } else {
-                                theme.bg
-                            }
                             TerminalView(
                                 tabId: tabId,
                                 ghosttyApp: ghosttyApp,
@@ -91,12 +89,6 @@ struct Shell: View {
                                 workingDirectory: project.path
                             )
                         } else {
-                            // Project selected but no tabs yet
-                            if store.hasWallpaper {
-                                theme.bg.opacity(store.backgroundOpacity)
-                            } else {
-                                theme.bg
-                            }
                             VStack(spacing: 12) {
                                 Text("No terminals open")
                                     .font(Fonts.primary(size: 16))
@@ -108,24 +100,81 @@ struct Shell: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.leading, store.sidebarVisible ? Layout.sidebarWidth + 1 : 0)
+                    .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
 
-                    theme.border.frame(height: 1)
+                    HStack(spacing: 0) {
+                        SidebarView()
+                            .frame(width: Layout.sidebarWidth)
+                            .frame(maxHeight: .infinity)
+
+                        theme.border.frame(width: 1)
+                    }
+                    .offset(x: store.sidebarVisible ? 0 : -(Layout.sidebarWidth + 1))
+                    .allowsHitTesting(store.sidebarVisible)
+                    .accessibilityHidden(!store.sidebarVisible)
+                    .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
+                }
+                .clipped()
+
+                theme.border.frame(height: 1)
+
+                // ── FOOTER ───────────────────────────────────────
+                HStack(spacing: 0) {
+                    Button(action: { store.setActiveView(.settings) }) {
+                        HStack(spacing: store.sidebarVisible ? 10 : 0) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 14, weight: .light))
+                            if store.sidebarVisible {
+                                Text("Settings")
+                                    .font(Fonts.primary(size: 12.5).leading(.tight))
+                            }
+                        }
+                        .foregroundStyle((isSettingsHovered || isSettingsActive) ? theme.text : theme.textDim)
+                        .frame(maxWidth: .infinity, alignment: store.sidebarVisible ? .leading : .center)
+                        .frame(height: Layout.statusLineHeight)
+                        .padding(.horizontal, store.sidebarVisible ? 16 : 0)
+                        .background(
+                            (isSettingsHovered || isSettingsActive)
+                                ? theme.accent.opacity(0.05)
+                                : Color.clear
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isSettingsHovered = $0 }
+                    .pointerCursor()
+                    .frame(width: footerLeadingWidth)
+
+                    theme.border.frame(width: 1, height: Layout.statusLineHeight)
 
                     StatusLine()
+                        .frame(maxWidth: .infinity)
                         .frame(height: Layout.statusLineHeight)
                 }
+                .background(chromeBackground)
+                .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
             }
-            .background(store.hasWallpaper ? Color.clear : theme.bg)
             .font(Fonts.primary(size: 13))
+
+            // Theme picker — top level so backdrop covers entire window
+            if store.showThemePicker {
+                ThemePicker(
+                    ghosttyApp: ghosttyApp,
+                    onDismiss: { store.showThemePicker = false }
+                )
+            }
         }
     }
 
     private func wallpaperImage(for id: String) -> Image {
-        if let preset = WallpaperPreset.find(id),
-           let url = Bundle.main.url(forResource: preset.filename.replacingOccurrences(of: ".\(preset.filename.split(separator: ".").last ?? "")", with: ""),
-                                     withExtension: String(preset.filename.split(separator: ".").last ?? "")),
-           let nsImage = NSImage(contentsOf: url) {
-            return Image(nsImage: nsImage)
+        if let preset = WallpaperPreset.find(id) {
+            let parts = preset.filename.split(separator: ".")
+            if parts.count == 2,
+               let url = Bundle.main.url(forResource: String(parts[0]), withExtension: String(parts[1])),
+               let nsImage = NSImage(contentsOf: url) {
+                return Image(nsImage: nsImage)
+            }
         } else if !id.hasPrefix("preset:"), let nsImage = NSImage(contentsOfFile: id) {
             return Image(nsImage: nsImage)
         }

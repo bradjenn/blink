@@ -29,5 +29,13 @@ struct BApp: App {
             width: Layout.windowDefaultWidth,
             height: Layout.windowDefaultHeight
         )
+        .commands {
+            CommandGroup(after: .toolbar) {
+                Button(store.sidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                    store.toggleSidebar()
+                }
+                .keyboardShortcut("b", modifiers: .command)
+            }
+        }
     }
 }

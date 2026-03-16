@@ -14,7 +14,7 @@ private enum StorageKeys {
     static let projects = "blink.projects"
 }
 
-@Observable
+@MainActor @Observable
 final class AppStore {
     // Projects
     var projects: [Project] {
@@ -36,6 +36,7 @@ final class AppStore {
 
     // View
     var activeView: ActiveView = .projects
+    var showThemePicker = false
 
     // Background
     var backgroundImage: String? {
@@ -79,6 +80,10 @@ final class AppStore {
 
     func setActiveView(_ view: ActiveView) {
         activeView = view
+    }
+
+    func toggleSidebar() {
+        sidebarVisible.toggle()
     }
 
     // MARK: - Background Actions
@@ -224,7 +229,7 @@ final class AppStore {
             name: name,
             path: path,
             color: "#7aa2f7",
-            createdAt: Date()
+            createdAt: .now
         )
         projects.append(project)
     }

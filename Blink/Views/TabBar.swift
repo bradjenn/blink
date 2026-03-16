@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Logo area — sits in the left sidebar column header.
+/// Logo area — sits in the top bar left section.
 struct TabBarLogoArea: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
@@ -9,34 +9,33 @@ struct TabBarLogoArea: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    store.sidebarVisible.toggle()
-                }
-            }) {
+            Button {
+                store.toggleSidebar()
+            } label: {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(isToggleHovered ? theme.text : theme.textDim)
-                    .frame(width: Layout.sidebarCollapsedWidth, height: Layout.tabBarHeight)
+                    .frame(width: 44, height: Layout.tabBarHeight)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Toggle Sidebar")
             .buttonStyle(.plain)
             .onHover { isToggleHovered = $0 }
+            .pointerCursor()
 
-            if store.sidebarVisible {
-                Text("BLINK")
-                    .font(Fonts.primary(size: 11, weight: .bold).leading(.tight))
-                    .tracking(1.65)
-                    .textCase(.uppercase)
-                    .foregroundStyle(theme.textDim)
-                    .lineLimit(1)
-                    .padding(.leading, 4)
-            }
+            Text("BLINK")
+                .font(Fonts.primary(size: 11, weight: .bold).leading(.tight))
+                .tracking(1.65)
+                .textCase(.uppercase)
+                .foregroundStyle(theme.textDim)
+                .lineLimit(1)
+                .padding(.leading, 4)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .leading)
     }
 }
 
-/// Tabs area — sits in the right content column header.
+/// Tabs area — sits in the top bar right section.
 struct TabBarTabsArea: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
@@ -68,34 +67,34 @@ struct TabBarTabsArea: View {
                     }
                 }
 
-                Button(action: {
+                Button {
                     guard let projectId = store.activeProjectId else { return }
                     store.openTab(projectId: projectId)
-                }) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(isPlusHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(isPlusHovered ? theme.text : theme.textDim)
-                    }
-                    .frame(width: 22, height: 22)
-                    .scaleEffect(isPlusHovered ? 1.08 : 1.0)
-                    .animation(.easeInOut(duration: 0.15), value: isPlusHovered)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(isPlusHovered ? theme.text : theme.textDim)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("New Terminal")
                 .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isPlusHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
+                )
+                .scaleEffect(isPlusHovered ? 1.08 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isPlusHovered)
                 .padding(.leading, 6)
-                .onHover { isPlusHovered = $0 }
+                .onHover { hovering in
+                    isPlusHovered = hovering
+                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                }
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            store.hasWallpaper
-                ? AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-                : AnyShapeStyle(theme.bg)
-        )
     }
 }
 
@@ -122,15 +121,17 @@ struct TabPill: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(isCloseHovered ? theme.danger : theme.textDim)
-                        .padding(2)
-                        .background(
-                            isCloseHovered
-                                ? theme.danger.opacity(0.15)
-                                : Color.clear
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .padding(4)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Close Tab")
                 .buttonStyle(.plain)
+                .background(
+                    isCloseHovered
+                        ? theme.danger.opacity(0.15)
+                        : Color.clear
+                )
+                .clipShape(.rect(cornerRadius: 3))
                 .opacity(isHovered ? 1 : 0)
                 .animation(.easeInOut(duration: 0.1), value: isHovered)
                 .onHover { isCloseHovered = $0 }
