@@ -59,10 +59,27 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.scale_factor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
 
+        // Set environment variables — xterm-ghostty terminfo isn't installed,
+        // so use xterm-256color which is universally available.
+        var envVars: [ghostty_env_var_s] = [
+            ghostty_env_var_s(key: strdup("TERM"), value: strdup("xterm-256color")),
+            ghostty_env_var_s(key: strdup("COLORTERM"), value: strdup("truecolor")),
+        ]
+
         // Set working directory — withCString ensures the C string lives through ghostty_surface_new
         workingDirectory.withCString { cPath in
             cfg.working_directory = cPath
-            surface = ghostty_surface_new(app, &cfg)
+            envVars.withUnsafeMutableBufferPointer { buf in
+                cfg.env_vars = buf.baseAddress
+                cfg.env_var_count = buf.count
+                surface = ghostty_surface_new(app, &cfg)
+            }
+        }
+
+        // Free strdup'd strings
+        for ev in envVars {
+            free(UnsafeMutablePointer(mutating: ev.key))
+            free(UnsafeMutablePointer(mutating: ev.value))
         }
         if surface == nil {
             print("[TerminalSurfaceView] Failed to create surface")
@@ -73,7 +90,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let fbSize = convertToBacking(frame.size)
         ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
 
-        // Auto-focus after surface creation
+        // Auto-focus after surface creation — use DispatchQueue (not Task)
+        // so the focus call lands at a deterministic point in the run loop,
+        // before SwiftUI's cooperative scheduler can interleave focus-cleanup.
         DispatchQueue.main.async { [weak self] in
             self?.focus()
         }
@@ -301,6 +320,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func mouseDown(with event: NSEvent) {
         guard let surface else { return }
+        focus()
         let mods = Self.translateMods(event.modifierFlags)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods)
     }
@@ -379,6 +399,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     /// Grab keyboard focus for this terminal.
     func focus() {
         guard let window else { return }
+        window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(self)
     }
 

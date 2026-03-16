@@ -14,55 +14,61 @@ struct SidebarProjectItem: View {
     @State private var isRemoveHovered = false
 
     var body: some View {
-        HStack(spacing: Layout.sidebarItemGap) {
-            // Project avatar
-            ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
-                .scaleEffect(isHovered ? 1.1 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isHovered)
+        Button(action: onSelect) {
+            HStack(spacing: Layout.sidebarItemGap) {
+                // Project avatar
+                ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
+                    .scaleEffect(isHovered ? 1.1 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isHovered)
 
-            // Name + path
-            VStack(alignment: .leading, spacing: 3) {
-                Text(project.name)
-                    .font(Fonts.primary(size: 15, weight: .medium))
-                    .foregroundStyle(isActive ? theme.text : theme.textMuted)
-                    .lineLimit(1)
+                // Name + path
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(project.name)
+                        .font(Fonts.primary(size: 15, weight: .medium))
+                        .foregroundStyle(isActive ? theme.text : theme.textMuted)
+                        .lineLimit(1)
 
-                Text(project.displayPath)
-                    .font(Fonts.primary(size: 13))
-                    .foregroundStyle(theme.textDim)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(project.displayPath)
+                        .font(Fonts.primary(size: 13))
+                        .foregroundStyle(theme.textDim)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Terminal count + pulse dot (pulses when unread activity)
-            if terminalCount > 0 {
-                HStack(spacing: 4) {
-                    if hasUnread {
-                        PulseDot(color: theme.accent, glowColor: theme.accentGlow)
-                    } else {
-                        Circle()
-                            .fill(theme.accent)
-                            .frame(width: 6, height: 6)
-                    }
-                    if terminalCount > 1 {
-                        Text("\(terminalCount)")
-                            .font(Fonts.primary(size: 12))
-                            .foregroundStyle(theme.accent)
+                // Terminal count + pulse dot (pulses when unread activity)
+                if terminalCount > 0 {
+                    HStack(spacing: 4) {
+                        if hasUnread {
+                            PulseDot(color: theme.accent, glowColor: theme.accentGlow)
+                        } else {
+                            Circle()
+                                .fill(theme.accent)
+                                .frame(width: 6, height: 6)
+                        }
+                        if terminalCount > 1 {
+                            Text("\(terminalCount)")
+                                .font(Fonts.primary(size: 12))
+                                .foregroundStyle(theme.accent)
+                        }
                     }
                 }
-            }
 
-            // Remove button — only visible on hover
-            Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isRemoveHovered ? theme.danger : theme.textDim)
+                // Remove button — only visible on hover
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textDim)
+                        .padding(4)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Remove Project")
+                .buttonStyle(.plain)
+                .opacity(isHovered ? 1 : 0)
+                .animation(.easeInOut(duration: 0.1), value: isHovered)
+                .onHover { isRemoveHovered = $0 }
             }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .animation(.easeInOut(duration: 0.1), value: isHovered)
-            .onHover { isRemoveHovered = $0 }
         }
+        .buttonStyle(.plain)
         .padding(Layout.sidebarItemPadding)
         .background(
             isActive
@@ -76,8 +82,6 @@ struct SidebarProjectItem: View {
                 .opacity(isActive ? 1 : 0)
         }
         .animation(.easeInOut(duration: 0.1), value: isHovered)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
         .onHover { isHovered = $0 }
         .pointerCursor()
     }

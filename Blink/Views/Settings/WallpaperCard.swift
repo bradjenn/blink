@@ -34,12 +34,13 @@ struct WallpaperCard: View {
                     .background(.black.opacity(0.5))
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? theme.accent : theme.border, lineWidth: isSelected ? 2 : 1)
-            )
+            }
         }
         .buttonStyle(.plain)
+        .pointerCursor()
     }
 
     /// Load an image from the app bundle by filename (e.g. "ship-at-sea.jpg").

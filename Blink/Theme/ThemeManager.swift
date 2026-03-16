@@ -1,6 +1,6 @@
 import SwiftUI
 
-@Observable
+@MainActor @Observable
 final class ThemeManager {
     /// The currently active UI theme (derived from the terminal theme).
     var activeTheme: Theme
@@ -81,14 +81,6 @@ final class ThemeManager {
     }
 }
 
-// SwiftUI Environment key for the active theme
-private struct ThemeEnvironmentKey: EnvironmentKey {
-    static let defaultValue: Theme = ThemeManager.fallbackTheme
-}
-
 extension EnvironmentValues {
-    var theme: Theme {
-        get { self[ThemeEnvironmentKey.self] }
-        set { self[ThemeEnvironmentKey.self] = newValue }
-    }
+    @Entry var theme: Theme = ThemeManager.fallbackTheme
 }

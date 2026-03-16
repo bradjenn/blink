@@ -12,20 +12,43 @@ struct ThemePicker: View {
     @State private var selectedIndex = 0
     @FocusState private var searchFocused: Bool
 
-    private var filteredFavorites: [String] {
-        let favs = ThemeManager.favorites.filter { themeManager.availableThemes.contains($0) }
-        if searchText.isEmpty { return favs }
-        return favs.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    /// Perceived brightness of a hex color (0 = black, 1 = white).
+    private func isLightTheme(_ name: String) -> Bool {
+        guard let parsed = themeManager.previewTheme(name: name),
+              let c = Color.hexComponents(parsed.background) else {
+            return false
+        }
+        // Relative luminance approximation
+        let luminance = 0.299 * c.red + 0.587 * c.green + 0.114 * c.blue
+        return luminance > 0.5
     }
 
-    private var filteredAll: [String] {
-        let nonFavs = themeManager.availableThemes.filter { !ThemeManager.favorites.contains($0) }
-        if searchText.isEmpty { return nonFavs }
-        return nonFavs.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    private func applySearch(_ names: [String]) -> [String] {
+        if searchText.isEmpty { return names }
+        return names.filter { $0.localizedStandardContains(searchText) }
+    }
+
+    private var filteredFavorites: [String] {
+        let favs = ThemeManager.favorites.filter { themeManager.availableThemes.contains($0) }
+        return applySearch(favs)
+    }
+
+    private var filteredDark: [String] {
+        let nonFavs = themeManager.availableThemes.filter {
+            !ThemeManager.favorites.contains($0) && !isLightTheme($0)
+        }
+        return applySearch(nonFavs)
+    }
+
+    private var filteredLight: [String] {
+        let nonFavs = themeManager.availableThemes.filter {
+            !ThemeManager.favorites.contains($0) && isLightTheme($0)
+        }
+        return applySearch(nonFavs)
     }
 
     private var allItems: [String] {
-        filteredFavorites + filteredAll
+        filteredFavorites + filteredDark + filteredLight
     }
 
     var body: some View {
@@ -34,6 +57,8 @@ struct ThemePicker: View {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Dismiss")
 
             // Panel
             VStack(spacing: 0) {
@@ -65,10 +90,18 @@ struct ThemePicker: View {
                                 }
                             }
 
-                            if !filteredAll.isEmpty {
-                                sectionHeader("ALL")
-                                ForEach(Array(filteredAll.enumerated()), id: \.element) { idx, name in
+                            if !filteredDark.isEmpty {
+                                sectionHeader("DARK")
+                                ForEach(Array(filteredDark.enumerated()), id: \.element) { idx, name in
                                     let globalIdx = filteredFavorites.count + idx
+                                    themeRow(name: name, globalIndex: globalIdx)
+                                }
+                            }
+
+                            if !filteredLight.isEmpty {
+                                sectionHeader("LIGHT")
+                                ForEach(Array(filteredLight.enumerated()), id: \.element) { idx, name in
+                                    let globalIdx = filteredFavorites.count + filteredDark.count + idx
                                     themeRow(name: name, globalIndex: globalIdx)
                                 }
                             }
@@ -80,10 +113,10 @@ struct ThemePicker: View {
             .frame(width: 500, height: 450)
             .background(theme.bg)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(theme.border, lineWidth: 1)
-            )
+            }
             .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
             .onKeyPress(.upArrow) {
                 selectedIndex = max(0, selectedIndex - 1)
@@ -152,7 +185,7 @@ struct ThemePicker: View {
                 if let parsed = themeManager.previewTheme(name: name) {
                     HStack(spacing: 4) {
                         Circle().fill(Color(hex: parsed.background)).frame(width: 10, height: 10)
-                            .overlay(Circle().stroke(theme.border, lineWidth: 0.5))
+                            .overlay { Circle().stroke(theme.border, lineWidth: 0.5) }
                         Circle().fill(Color(hex: parsed.foreground)).frame(width: 10, height: 10)
                         Circle().fill(Color(hex: parsed.palette[1])).frame(width: 10, height: 10)
                         Circle().fill(Color(hex: parsed.palette[2])).frame(width: 10, height: 10)

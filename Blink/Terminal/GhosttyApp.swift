@@ -3,6 +3,7 @@ import GhosttyKit
 
 /// Wraps the ghostty_app_t lifecycle. One instance per app.
 /// Blink controls all terminal settings — no Ghostty config files are loaded.
+@MainActor
 final class GhosttyApp {
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?

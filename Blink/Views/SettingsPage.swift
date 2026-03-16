@@ -29,6 +29,7 @@ struct SettingsPage: View {
             }
             .buttonStyle(.plain)
             .onHover { isBackHovered = $0 }
+            .pointerCursor()
             .padding(.leading, 32)
             .padding(.top, 24)
             .padding(.bottom, 16)
@@ -58,6 +59,7 @@ struct SettingsPage: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(isDisabled)
+                        .pointerCursor()
                     }
                 }
                 .frame(width: 200)

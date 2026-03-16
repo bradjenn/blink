@@ -2,6 +2,7 @@ import SwiftUI
 import GhosttyKit
 
 struct Shell: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
@@ -28,6 +29,14 @@ struct Shell: View {
             : AnyShapeStyle(theme.bg)
     }
 
+    private var settingsPageTransition: AnyTransition {
+        .opacity
+    }
+
+    private var topBarContentTransition: AnyTransition {
+        .opacity
+    }
+
     var body: some View {
         ZStack {
             // Layer 1: Wallpaper
@@ -52,20 +61,21 @@ struct Shell: View {
 
                     theme.border.frame(width: 1, height: Layout.tabBarHeight)
 
-                    if store.activeView != .settings {
-                        TabBarTabsArea(
-                            ghosttyApp: ghosttyApp,
-                            surfaceManager: surfaceManager
-                        )
-                        .frame(maxWidth: .infinity)
-                        .frame(height: Layout.tabBarHeight)
-                    } else {
-                        Spacer()
-                            .frame(height: Layout.tabBarHeight)
+                    ZStack {
+                        if !isSettingsActive {
+                            TabBarTabsArea(
+                                ghosttyApp: ghosttyApp,
+                                surfaceManager: surfaceManager
+                            )
+                            .transition(topBarContentTransition)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Layout.tabBarHeight)
                 }
                 .background(chromeBackground)
                 .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
+                .animation(.snappy(duration: 0.25), value: isSettingsActive)
 
                 theme.border.frame(height: 1)
 
@@ -75,9 +85,7 @@ struct Shell: View {
                         .fill(chromeBackground)
 
                     Group {
-                        if store.activeView == .settings {
-                            SettingsPage(ghosttyApp: ghosttyApp)
-                        } else if store.activeProjectId == nil {
+                        if store.activeProjectId == nil {
                             StartScreen()
                         } else if let tabId = store.activeTabId,
                                   let projectId = store.activeProjectId,
@@ -116,6 +124,7 @@ struct Shell: View {
                     .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
                 }
                 .clipped()
+                .animation(.snappy(duration: 0.25), value: isSettingsActive)
 
                 theme.border.frame(height: 1)
 
@@ -157,14 +166,36 @@ struct Shell: View {
             }
             .font(Fonts.primary(size: 13))
 
+            // Settings — full window overlay covering header, content, and footer
+            if isSettingsActive {
+                SettingsPage(ghosttyApp: ghosttyApp)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Rectangle().fill(chromeBackground))
+                    .transition(settingsPageTransition)
+                    .zIndex(1)
+            }
+
             // Theme picker — top level so backdrop covers entire window
+            if store.showProjectSwitcher {
+                StartScreenProjectPicker(
+                    onDismiss: { store.dismissProjectSwitcher() },
+                    onSelect: { projectId in
+                        store.openProjectSession(projectId)
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(1)
+            }
+
             if store.showThemePicker {
                 ThemePicker(
                     ghosttyApp: ghosttyApp,
                     onDismiss: { store.showThemePicker = false }
                 )
+                .zIndex(2)
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     private func wallpaperImage(for id: String) -> Image {

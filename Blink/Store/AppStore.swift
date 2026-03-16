@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 enum ActiveView {
     case projects
@@ -10,8 +11,10 @@ private enum StorageKeys {
     static let backgroundImage = "blink.backgroundImage"
     static let backgroundOpacity = "blink.backgroundOpacity"
     static let backgroundBlur = "blink.backgroundBlur"
+    static let hideTitleBar = "blink.hideTitleBar"
     static let sidebarVisible = "blink.sidebarVisible"
     static let projects = "blink.projects"
+    static let lastSelectedProjectId = "blink.lastSelectedProjectId"
 }
 
 @MainActor @Observable
@@ -21,6 +24,9 @@ final class AppStore {
         didSet { Self.saveProjects(projects) }
     }
     var activeProjectId: String?
+    var lastSelectedProjectId: String? {
+        didSet { UserDefaults.standard.set(lastSelectedProjectId, forKey: StorageKeys.lastSelectedProjectId) }
+    }
 
     // Tabs
     var tabs: [AppTab] = []
@@ -37,6 +43,7 @@ final class AppStore {
     // View
     var activeView: ActiveView = .projects
     var showThemePicker = false
+    var showProjectSwitcher = false
 
     // Background
     var backgroundImage: String? {
@@ -48,6 +55,9 @@ final class AppStore {
     var backgroundBlur: Double {
         didSet { UserDefaults.standard.set(backgroundBlur, forKey: StorageKeys.backgroundBlur) }
     }
+    var hideTitleBar: Bool {
+        didSet { UserDefaults.standard.set(hideTitleBar, forKey: StorageKeys.hideTitleBar) }
+    }
 
     // Sidebar
     var sidebarVisible: Bool {
@@ -56,11 +66,20 @@ final class AppStore {
 
     init() {
         let defaults = UserDefaults.standard
+        let loadedProjects = Self.loadProjects()
+        let storedLastProjectId = defaults.string(forKey: StorageKeys.lastSelectedProjectId)
 
-        self.projects = Self.loadProjects()
+        self.projects = loadedProjects
         self.theme = defaults.string(forKey: StorageKeys.theme) ?? "Josean"
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
+        self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
+        if let storedLastProjectId,
+           loadedProjects.contains(where: { $0.id == storedLastProjectId }) {
+            self.lastSelectedProjectId = storedLastProjectId
+        } else {
+            self.lastSelectedProjectId = nil
+        }
 
         // Double defaults to 0.0 if unset, so check for existence
         if defaults.object(forKey: StorageKeys.backgroundOpacity) != nil {
@@ -86,6 +105,15 @@ final class AppStore {
         sidebarVisible.toggle()
     }
 
+    func presentProjectSwitcher() {
+        guard !projects.isEmpty else { return }
+        showProjectSwitcher = true
+    }
+
+    func dismissProjectSwitcher() {
+        showProjectSwitcher = false
+    }
+
     // MARK: - Background Actions
 
     func setBackgroundImage(_ image: String?) {
@@ -98,6 +126,10 @@ final class AppStore {
 
     func setBackgroundBlur(_ blur: Double) {
         backgroundBlur = max(0, min(32, blur))
+    }
+
+    func setHideTitleBar(_ hidden: Bool) {
+        hideTitleBar = hidden
     }
 
     var hasWallpaper: Bool {
@@ -116,6 +148,9 @@ final class AppStore {
         }
 
         activeProjectId = id
+        if let id {
+            lastSelectedProjectId = id
+        }
         activeView = .projects
         if let id {
             // Restore last active tab, or fall back to first tab
@@ -131,6 +166,23 @@ final class AppStore {
         } else {
             activeTabId = nil
         }
+    }
+
+    var lastSelectedProject: Project? {
+        guard let id = lastSelectedProjectId else { return nil }
+        return projects.first { $0.id == id }
+    }
+
+    func openProjectSession(_ id: String) {
+        setActiveProject(id)
+        if activeTabId == nil {
+            _ = openTab(projectId: id)
+        }
+    }
+
+    func resumeLastProjectSession() {
+        guard let project = lastSelectedProject else { return }
+        openProjectSession(project.id)
     }
 
     func setActiveTab(_ id: String) {
@@ -205,6 +257,9 @@ final class AppStore {
             activeProjectId = nil
             activeTabId = nil
         }
+        if lastSelectedProjectId == id {
+            lastSelectedProjectId = nil
+        }
     }
 
     func closeTab(_ id: String) {
@@ -219,9 +274,14 @@ final class AppStore {
     // MARK: - Project Management
 
     /// Add a project from a directory path.
-    func addProject(path: String) {
-        // Don't add duplicates
-        guard !projects.contains(where: { $0.path == path }) else { return }
+    @discardableResult
+    func addProject(path: String, activating: Bool = false) -> Project {
+        if let existing = projects.first(where: { $0.path == path }) {
+            if activating {
+                openProjectSession(existing.id)
+            }
+            return existing
+        }
 
         let name = (path as NSString).lastPathComponent
         let project = Project(
@@ -232,6 +292,25 @@ final class AppStore {
             createdAt: .now
         )
         projects.append(project)
+        if activating {
+            openProjectSession(project.id)
+        }
+        return project
+    }
+
+    @discardableResult
+    func pickProjectFolder(activating: Bool = false) -> Project? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a project folder"
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return nil
+        }
+
+        return addProject(path: url.path, activating: activating)
     }
 
     // MARK: - Project Persistence

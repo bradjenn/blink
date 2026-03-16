@@ -1,7 +1,7 @@
 import SwiftUI
 import GhosttyKit
 
-@Observable
+@MainActor @Observable
 final class SurfaceManager {
     /// Tab ID → live terminal view
     var surfaces: [String: TerminalSurfaceView] = [:]

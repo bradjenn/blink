@@ -9,6 +9,7 @@ class TerminalContainerView: NSView {
     private weak var currentSurface: TerminalSurfaceView?
 
     override var isOpaque: Bool { false }
+    override var acceptsFirstResponder: Bool { true }
 
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String) {
         guard tabId != currentTabId else {

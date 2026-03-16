@@ -67,7 +67,7 @@ struct ProjectFavicon: View {
     ]
 
     /// Cached favicon lookups to avoid repeated file system checks.
-    private static var cache: [String: NSImage?] = [:]
+    @MainActor private static var cache: [String: NSImage?] = [:]
 
     /// Try to load a favicon from common project locations.
     private static func loadFavicon(projectPath: String, size: CGFloat) -> NSImage? {

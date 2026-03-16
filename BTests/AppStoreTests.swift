@@ -1,6 +1,7 @@
 import XCTest
 @testable import Blink
 
+@MainActor
 final class AppStoreTests: XCTestCase {
     func testInitialState() {
         let store = AppStore()
@@ -76,5 +77,27 @@ final class AppStoreTests: XCTestCase {
         // Should activate last remaining tab in same project
         XCTAssertEqual(store.activeTabId, "t2")
         XCTAssertEqual(store.tabs.count, 2)
+    }
+
+    func testHideTitleBarPersists() {
+        let defaults = UserDefaults.standard
+        let key = "blink.hideTitleBar"
+        let previousValue = defaults.object(forKey: key)
+
+        defer {
+            if let previousValue {
+                defaults.set(previousValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        defaults.removeObject(forKey: key)
+        XCTAssertFalse(AppStore().hideTitleBar)
+
+        let store = AppStore()
+        store.hideTitleBar = true
+
+        XCTAssertTrue(AppStore().hideTitleBar)
     }
 }

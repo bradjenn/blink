@@ -28,7 +28,8 @@ struct StatusLine: View {
                     .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 16)
             } else {
                 Spacer()
             }

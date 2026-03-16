@@ -9,9 +9,6 @@ struct Project: Identifiable, Equatable, Hashable, Codable {
 
     /// Home directory path prefix replacement for display.
     var displayPath: String {
-        path.replacingOccurrences(
-            of: "/Users/\(NSUserName())",
-            with: "~"
-        )
+        path.replacing("/Users/\(NSUserName())", with: "~")
     }
 }
