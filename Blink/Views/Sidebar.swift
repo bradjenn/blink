@@ -7,6 +7,7 @@ struct SidebarView: View {
     @Environment(AppStore.self) private var store
 
     @State private var isAddHovered = false
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,7 +66,7 @@ struct SidebarView: View {
                                 isActive: store.activeProjectId == project.id,
                                 terminalCount: store.terminalCount(for: project.id),
                                 hasUnread: store.hasUnread(projectId: project.id),
-                                onSelect: { store.setActiveProject(project.id) },
+                                onSelect: { store.openProjectSession(project.id) },
                                 onRemove: { store.removeProject(project.id) }
                             )
                         }
@@ -76,9 +77,47 @@ struct SidebarView: View {
                 .frame(maxHeight: .infinity)
             }
         }
+        .background(theme.accent.opacity(store.sidebarFocused ? 0.02 : 0))
+        .animation(.easeInOut(duration: 0.15), value: store.sidebarFocused)
+        .onAppear { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
     }
 
     private func pickProjectFolder() {
         store.pickProjectFolder()
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard store.sidebarFocused else { return event }
+
+            switch event.charactersIgnoringModifiers {
+            case "j":
+                store.selectNextProject()
+                return nil
+            case "k":
+                store.selectPreviousProject()
+                return nil
+            case _ where event.keyCode == 53: // Escape
+                store.focusTerminal()
+                return nil
+            case _ where event.keyCode == 36: // Return
+                if let projectId = store.activeProjectId {
+                    store.openProjectSession(projectId)
+                }
+                store.focusTerminal()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
     }
 }

@@ -27,6 +27,7 @@ struct BApp: App {
                     // Wire GhosttyApp to store and surface manager for callbacks
                     ghosttyApp.store = store
                     ghosttyApp.surfaceManager = surfaceManager
+                    store.surfaceManager = surfaceManager
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -55,6 +56,16 @@ struct BApp: App {
                     store.toggleSidebar()
                 }
                 .keyboardShortcut("b", modifiers: .command)
+
+                Button(store.sidebarFocused ? "Focus Terminal" : "Focus Sidebar") {
+                    store.toggleSidebarFocus()
+                }
+                .keyboardShortcut("h", modifiers: .control)
+
+                Button("Focus Terminal") {
+                    store.focusTerminal()
+                }
+                .keyboardShortcut("l", modifiers: .control)
             }
 
             CommandGroup(replacing: .newItem) {

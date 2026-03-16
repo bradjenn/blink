@@ -63,6 +63,15 @@ final class AppStore {
     var sidebarVisible: Bool {
         didSet { UserDefaults.standard.set(sidebarVisible, forKey: StorageKeys.sidebarVisible) }
     }
+    var sidebarFocused: Bool = false
+    var surfaceManager: SurfaceManager?
+
+    func focusTerminal() {
+        sidebarFocused = false
+        if let tabId = activeTabId {
+            surfaceManager?.surface(for: tabId)?.focus()
+        }
+    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -103,6 +112,41 @@ final class AppStore {
 
     func toggleSidebar() {
         sidebarVisible.toggle()
+        if !sidebarVisible { sidebarFocused = false }
+    }
+
+    func toggleSidebarFocus() {
+        if sidebarFocused {
+            focusTerminal()
+        } else {
+            if !sidebarVisible { sidebarVisible = true }
+            sidebarFocused = true
+        }
+    }
+
+    func selectNextProject() {
+        guard !projects.isEmpty else { return }
+        guard let currentId = activeProjectId,
+              let idx = projects.firstIndex(where: { $0.id == currentId }) else {
+            setActiveProject(projects.first?.id)
+            return
+        }
+        let next = projects.index(after: idx)
+        if next < projects.endIndex {
+            setActiveProject(projects[next].id)
+        }
+    }
+
+    func selectPreviousProject() {
+        guard !projects.isEmpty else { return }
+        guard let currentId = activeProjectId,
+              let idx = projects.firstIndex(where: { $0.id == currentId }) else {
+            setActiveProject(projects.last?.id)
+            return
+        }
+        if idx > projects.startIndex {
+            setActiveProject(projects[projects.index(before: idx)].id)
+        }
     }
 
     func presentProjectSwitcher() {
