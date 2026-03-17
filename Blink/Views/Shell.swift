@@ -195,6 +195,7 @@ struct Shell: View {
                 )
                 .zIndex(2)
             }
+
         }
         .ignoresSafeArea(.container, edges: .top)
     }

@@ -30,26 +30,12 @@ struct StartScreenActionRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(keyHint)
-                    .font(Fonts.primary(size: 12))
-                    .foregroundStyle(theme.textDim)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(theme.border.opacity(isEnabled ? 0.65 : 0.3))
-                    )
+                    .font(Fonts.primary(size: 14))
+                    .foregroundStyle(isEnabled ? theme.accent : theme.textDim.opacity(0.4))
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isHovered && isEnabled ? Color.white.opacity(0.045) : Color.clear)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(theme.border.opacity(isHovered && isEnabled ? 0.75 : 0.0), lineWidth: 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)

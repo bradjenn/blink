@@ -84,7 +84,7 @@ struct StartScreen: View {
         ZStack {
             backgroundGlow
 
-            VStack(spacing: 22) {
+            VStack(spacing: 40) {
                 StartScreenLogo()
 
                 VStack(spacing: 14) {
@@ -106,15 +106,6 @@ struct StartScreen: View {
                         .foregroundStyle(theme.textDim)
                         .padding(.top, 8)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 18)
-                .background(panelBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(theme.border.opacity(0.8), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.28), radius: 24, y: 16)
             }
 
         }
@@ -160,7 +151,4 @@ struct StartScreen: View {
         .allowsHitTesting(false)
     }
 
-    private var panelBackground: some ShapeStyle {
-        AnyShapeStyle(theme.bg.opacity(store.hasWallpaper ? 0.78 : 0.92))
-    }
 }

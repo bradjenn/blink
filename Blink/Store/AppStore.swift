@@ -44,6 +44,7 @@ final class AppStore {
     var activeView: ActiveView = .projects
     var showThemePicker = false
     var showProjectSwitcher = false
+    var showNewTabMenu = false
 
     // Background
     var backgroundImage: String? {

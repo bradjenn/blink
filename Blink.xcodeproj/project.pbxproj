@@ -12,6 +12,7 @@
 		0D0CF9645DB57CFE7E2A99CC /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D522965A18450240E8B1B57 /* CoreText.framework */; };
 		0EDDE37BF54C746A6850E4BD /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 733316E4538EF5998654016C /* Carbon.framework */; };
 		0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */; };
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* BackgroundPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */; };
 		19F2F8B9416F42F451D3A428 /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */; };
 		2479CF78716744EBA0FC8244 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762E93713BEF3B6BAE6DB7CC /* Theme.swift */; };
 		282F00EE6FB8510C403EC953 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C747FAD7B2FD821BC48474F /* Metal.framework */; };
@@ -55,6 +56,9 @@
 		DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
 		DA7A141D6EEC41ED5B03E7BB /* StartScreenProjectPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B24EB0AEA9E3EBBA512711C /* StartScreenProjectPicker.swift */; };
 		E450C1435DC3BD45011D4969 /* ship-at-sea.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 4D827DCB9D74780EBED3851F /* ship-at-sea.jpg */; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* claude-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */; };
+		A2B3C4D5E6F7A8B9C0D1E2F3 /* codex-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */; };
+		C4D5E6F7A8B9C0D1E2F3A4B5 /* opencode-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */; };
 		E767E51D6BDE0737F2665C24 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */; };
 		E9EB070FE40F8B8A43A5F6A6 /* Themes in Resources */ = {isa = PBXBuildFile; fileRef = 1EDE19D0FBE88E948C87BF23 /* Themes */; };
 		EC0AF83FC7C2722793015744 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED9F4FAD326C2510EE7917 /* Project.swift */; };
@@ -84,8 +88,12 @@
 		15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		1EDE19D0FBE88E948C87BF23 /* Themes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Themes; path = Blink/Resources/Themes; sourceTree = SOURCE_ROOT; };
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "claude-icon.svg"; sourceTree = "<group>"; };
+		B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "codex-icon.svg"; sourceTree = "<group>"; };
+		D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "opencode-icon.svg"; sourceTree = "<group>"; };
 		2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreset.swift; sourceTree = "<group>"; };
 		25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointerCursor.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPopover.swift; sourceTree = "<group>"; };
 		2918567AE906E413040E51F2 /* Shell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shell.swift; sourceTree = "<group>"; };
 		2D522965A18450240E8B1B57 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		2F051F6B723C8DC22255A384 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
@@ -178,6 +186,7 @@
 		3B91DA57998D47F4B2D99296 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */,
 				09D47A5C0A44933E63A3104C /* Constants.swift */,
 				25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */,
 				7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */,
@@ -197,6 +206,9 @@
 		6B4DFF2978746EEAAA0E3700 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */,
+				B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */,
+				D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */,
 				D7424EF33D43F3F399A45970 /* Wallpapers */,
 			);
 			path = Resources;
@@ -401,6 +413,9 @@
 				B45E26D8D5C3A594A913DC78 /* gruvbox-ferns.jpg in Resources */,
 				324134D47FCF4719C7416A98 /* pink-lakeside.png in Resources */,
 				E450C1435DC3BD45011D4969 /* ship-at-sea.jpg in Resources */,
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* claude-icon.svg in Resources */,
+				A2B3C4D5E6F7A8B9C0D1E2F3 /* codex-icon.svg in Resources */,
+				C4D5E6F7A8B9C0D1E2F3A4B5 /* opencode-icon.svg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -419,6 +434,7 @@
 				6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */,
 				30803CC48C90EFDF88A7C8D2 /* GhosttyApp.swift in Sources */,
 				0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */,
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* BackgroundPopover.swift in Sources */,
 				EC0AF83FC7C2722793015744 /* Project.swift in Sources */,
 				D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */,
 				829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */,
