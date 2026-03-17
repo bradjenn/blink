@@ -22,7 +22,7 @@ struct WindowTitleBarConfigurator: NSViewRepresentable {
         window.standardWindowButton(.closeButton)?.isHidden = true
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
     }
 
     final class WindowObserverView: NSView {

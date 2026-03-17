@@ -1,5 +1,16 @@
 import SwiftUI
 
+private let fallbackTheme = Theme(
+    id: "fallback", name: "Fallback",
+    bg: Color(hex: "#1a1b26"), bg2: Color(hex: "#16161e"),
+    border: Color(hex: "#292e42"), accent: Color(hex: "#7aa2f7"),
+    accent2: Color(hex: "#2ac3de"), text: Color(hex: "#c0caf5"),
+    textMuted: Color(hex: "#c0caf5").opacity(0.6),
+    textDim: Color(hex: "#c0caf5").opacity(0.4),
+    danger: Color(hex: "#f7768e"), green: Color(hex: "#9ece6a"),
+    yellow: Color(hex: "#e0af68"), magenta: Color(hex: "#bb9af7")
+)
+
 @MainActor @Observable
 final class ThemeManager {
     /// The currently active UI theme (derived from the terminal theme).
@@ -28,18 +39,6 @@ final class ThemeManager {
         "Kanagawa Wave",
     ]
 
-    /// Fallback theme used when no theme file can be loaded.
-    static let fallbackTheme = Theme(
-        id: "fallback", name: "Fallback",
-        bg: Color(hex: "#1a1b26"), bg2: Color(hex: "#16161e"),
-        border: Color(hex: "#292e42"), accent: Color(hex: "#7aa2f7"),
-        accent2: Color(hex: "#2ac3de"), text: Color(hex: "#c0caf5"),
-        textMuted: Color(hex: "#c0caf5").opacity(0.6),
-        textDim: Color(hex: "#c0caf5").opacity(0.4),
-        danger: Color(hex: "#f7768e"), green: Color(hex: "#9ece6a"),
-        yellow: Color(hex: "#e0af68"), magenta: Color(hex: "#bb9af7")
-    )
-
     init() {
         availableThemes = TerminalTheme.availableThemes()
 
@@ -50,7 +49,7 @@ final class ThemeManager {
             activeTheme = theme.deriveUITheme()
             parsedCache[defaultName] = theme
         } else {
-            activeTheme = Self.fallbackTheme
+            activeTheme = fallbackTheme
         }
     }
 
@@ -82,5 +81,5 @@ final class ThemeManager {
 }
 
 extension EnvironmentValues {
-    @Entry var theme: Theme = ThemeManager.fallbackTheme
+    @Entry var theme: Theme = fallbackTheme
 }

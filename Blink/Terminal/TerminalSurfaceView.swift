@@ -82,7 +82,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             }
         }
         if let command {
-            command.withCString { createWithConfig($0) }
+            // Wrap in a login shell so the user's PATH is available
+            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+            let wrapped = "\(shell) -l -c '\(command)'"
+            wrapped.withCString { createWithConfig($0) }
         } else {
             createWithConfig(nil)
         }
@@ -190,7 +193,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                     _ = ghostty_surface_key(surface, key_ev)
                 }
             } else {
-                var key_ev = Self.buildKeyEvent(action: action, event: event)
+                let key_ev = Self.buildKeyEvent(action: action, event: event)
                 _ = ghostty_surface_key(surface, key_ev)
             }
         } else {

@@ -12,10 +12,11 @@
 		0D0CF9645DB57CFE7E2A99CC /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D522965A18450240E8B1B57 /* CoreText.framework */; };
 		0EDDE37BF54C746A6850E4BD /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 733316E4538EF5998654016C /* Carbon.framework */; };
 		0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */; };
-		B1C2D3E4F5A6B7C8D9E0F1A2 /* BackgroundPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */; };
 		19F2F8B9416F42F451D3A428 /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */; };
+		229424BAFD9587AB72CAFF66 /* codex-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 24588121A0A9DB5D03163B12 /* codex-icon.svg */; };
 		2479CF78716744EBA0FC8244 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762E93713BEF3B6BAE6DB7CC /* Theme.swift */; };
 		282F00EE6FB8510C403EC953 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C747FAD7B2FD821BC48474F /* Metal.framework */; };
+		284AC534C6E9F0B755C4AC34 /* GitStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */; };
 		2DCA080F86B7E5A194C8F14A /* StatusLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 495E310460549B685EDCF6C4 /* StatusLine.swift */; };
 		30803CC48C90EFDF88A7C8D2 /* GhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */; };
 		324134D47FCF4719C7416A98 /* pink-lakeside.png in Resources */ = {isa = PBXBuildFile; fileRef = 6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */; };
@@ -27,13 +28,14 @@
 		3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */; };
 		41326086246AF35521615246 /* Shell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2918567AE906E413040E51F2 /* Shell.swift */; };
 		4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1448D063BC06561A433B9DEC /* AppStore.swift */; };
-		F1E2D3C4B5A6978869012345 /* GitStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */; };
 		495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */; };
 		4C153E196C842764C6E58F0D /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */; };
 		4D9587506D4B00FC3A51C90E /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */; };
+		5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7784244D94B53A844D2AE256 /* BackgroundPopover.swift */; };
 		672462DEE17013E27F473A1D /* akane-pagoda.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */; };
 		6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D47A5C0A44933E63A3104C /* Constants.swift */; };
 		72715E9F6026FC71B127E9C8 /* akane-mist.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F9A82625A455F5E823649549 /* akane-mist.jpg */; };
+		746A4B976AF287EEEC32E397 /* claude-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 36A28D3024E66E791B9C5C7B /* claude-icon.svg */; };
 		747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */; };
 		79BDDFFBAAE362E7E39DAC8A /* WallpaperCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE79A9F7347C5201472A699 /* WallpaperCard.swift */; };
 		7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
@@ -55,10 +57,9 @@
 		D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
 		DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
 		DA7A141D6EEC41ED5B03E7BB /* StartScreenProjectPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B24EB0AEA9E3EBBA512711C /* StartScreenProjectPicker.swift */; };
+		E2C7CF53477F3E8E337009BE /* WindowDragRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20C1BBFABD047814FC91A331 /* WindowDragRegion.swift */; };
 		E450C1435DC3BD45011D4969 /* ship-at-sea.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 4D827DCB9D74780EBED3851F /* ship-at-sea.jpg */; };
-		D1E2F3A4B5C6D7E8F9A0B1C2 /* claude-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */; };
-		A2B3C4D5E6F7A8B9C0D1E2F3 /* codex-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */; };
-		C4D5E6F7A8B9C0D1E2F3A4B5 /* opencode-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */; };
+		E4F404DBECE0715B2B0A1FF8 /* opencode-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 9171B8B51379166A5ACB405E /* opencode-icon.svg */; };
 		E767E51D6BDE0737F2665C24 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */; };
 		E9EB070FE40F8B8A43A5F6A6 /* Themes in Resources */ = {isa = PBXBuildFile; fileRef = 1EDE19D0FBE88E948C87BF23 /* Themes */; };
 		EC0AF83FC7C2722793015744 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED9F4FAD326C2510EE7917 /* Project.swift */; };
@@ -79,25 +80,24 @@
 /* Begin PBXFileReference section */
 		0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		09D47A5C0A44933E63A3104C /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 		104F7EE9EE6F91C459A8CC7C /* BApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BApp.swift; sourceTree = "<group>"; };
 		12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-bridge.jpg"; sourceTree = "<group>"; };
 		1448D063BC06561A433B9DEC /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-pagoda.jpg"; sourceTree = "<group>"; };
 		15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		1EDE19D0FBE88E948C87BF23 /* Themes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Themes; path = Blink/Resources/Themes; sourceTree = SOURCE_ROOT; };
-		E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "claude-icon.svg"; sourceTree = "<group>"; };
-		B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "codex-icon.svg"; sourceTree = "<group>"; };
-		D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = "opencode-icon.svg"; sourceTree = "<group>"; };
+		20C1BBFABD047814FC91A331 /* WindowDragRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDragRegion.swift; sourceTree = "<group>"; };
 		2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreset.swift; sourceTree = "<group>"; };
+		24588121A0A9DB5D03163B12 /* codex-icon.svg */ = {isa = PBXFileReference; path = "codex-icon.svg"; sourceTree = "<group>"; };
 		25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointerCursor.swift; sourceTree = "<group>"; };
-		C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPopover.swift; sourceTree = "<group>"; };
 		2918567AE906E413040E51F2 /* Shell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shell.swift; sourceTree = "<group>"; };
 		2D522965A18450240E8B1B57 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		2F051F6B723C8DC22255A384 /* SettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPage.swift; sourceTree = "<group>"; };
 		34A3DE79377AAA27E649D315 /* SurfaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceManager.swift; sourceTree = "<group>"; };
+		36A28D3024E66E791B9C5C7B /* claude-icon.svg */ = {isa = PBXFileReference; path = "claude-icon.svg"; sourceTree = "<group>"; };
 		4234ACA0B32348BB0F264CA9 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		454E601831980C64BDA0BDD1 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		47B2C73311A57D7F5BD1F356 /* akane-cliff.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-cliff.jpg"; sourceTree = "<group>"; };
@@ -115,6 +115,7 @@
 		728190F85A1AE0DB60BD39AB /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		733316E4538EF5998654016C /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		762E93713BEF3B6BAE6DB7CC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		7784244D94B53A844D2AE256 /* BackgroundPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPopover.swift; sourceTree = "<group>"; };
 		7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHexTests.swift; sourceTree = "<group>"; };
 		7B24EB0AEA9E3EBBA512711C /* StartScreenProjectPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreenProjectPicker.swift; sourceTree = "<group>"; };
 		7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowTitleBarConfigurator.swift; sourceTree = "<group>"; };
@@ -122,6 +123,7 @@
 		8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
 		8C747FAD7B2FD821BC48474F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		912BF0925C71AED8B1C12E74 /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
+		9171B8B51379166A5ACB405E /* opencode-icon.svg */ = {isa = PBXFileReference; path = "opencode-icon.svg"; sourceTree = "<group>"; };
 		A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreenLogo.swift; sourceTree = "<group>"; };
 		A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFavicon.swift; sourceTree = "<group>"; };
 		B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
@@ -162,7 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				1448D063BC06561A433B9DEC /* AppStore.swift */,
-				A1B2C3D4E5F6A7B8C9D0E1F2 /* GitStatus.swift */,
+				0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -186,9 +188,10 @@
 		3B91DA57998D47F4B2D99296 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
-				C1D2E3F4A5B6C7D8E9F0A1B2 /* BackgroundPopover.swift */,
+				7784244D94B53A844D2AE256 /* BackgroundPopover.swift */,
 				09D47A5C0A44933E63A3104C /* Constants.swift */,
 				25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */,
+				20C1BBFABD047814FC91A331 /* WindowDragRegion.swift */,
 				7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */,
 			);
 			path = Utilities;
@@ -206,9 +209,9 @@
 		6B4DFF2978746EEAAA0E3700 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				E2F3A4B5C6D7E8F9A0B1C2D3 /* claude-icon.svg */,
-				B3C4D5E6F7A8B9C0D1E2F3A4 /* codex-icon.svg */,
-				D5E6F7A8B9C0D1E2F3A4B5C6 /* opencode-icon.svg */,
+				36A28D3024E66E791B9C5C7B /* claude-icon.svg */,
+				24588121A0A9DB5D03163B12 /* codex-icon.svg */,
+				9171B8B51379166A5ACB405E /* opencode-icon.svg */,
 				D7424EF33D43F3F399A45970 /* Wallpapers */,
 			);
 			path = Resources;
@@ -409,13 +412,13 @@
 				3896092C306A1F2211524895 /* akane-cliff.jpg in Resources */,
 				72715E9F6026FC71B127E9C8 /* akane-mist.jpg in Resources */,
 				672462DEE17013E27F473A1D /* akane-pagoda.jpg in Resources */,
+				746A4B976AF287EEEC32E397 /* claude-icon.svg in Resources */,
+				229424BAFD9587AB72CAFF66 /* codex-icon.svg in Resources */,
 				92A3D8F325ED0F5B9007ABC3 /* everforest.jpg in Resources */,
 				B45E26D8D5C3A594A913DC78 /* gruvbox-ferns.jpg in Resources */,
+				E4F404DBECE0715B2B0A1FF8 /* opencode-icon.svg in Resources */,
 				324134D47FCF4719C7416A98 /* pink-lakeside.png in Resources */,
 				E450C1435DC3BD45011D4969 /* ship-at-sea.jpg in Resources */,
-				D1E2F3A4B5C6D7E8F9A0B1C2 /* claude-icon.svg in Resources */,
-				A2B3C4D5E6F7A8B9C0D1E2F3 /* codex-icon.svg in Resources */,
-				C4D5E6F7A8B9C0D1E2F3A4B5 /* opencode-icon.svg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -427,14 +430,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */,
-				F1E2D3C4B5A6978869012345 /* GitStatus.swift in Sources */,
 				747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */,
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
+				5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */,
 				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,
 				6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */,
 				30803CC48C90EFDF88A7C8D2 /* GhosttyApp.swift in Sources */,
+				284AC534C6E9F0B755C4AC34 /* GitStatus.swift in Sources */,
 				0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */,
-				B1C2D3E4F5A6B7C8D9E0F1A2 /* BackgroundPopover.swift in Sources */,
 				EC0AF83FC7C2722793015744 /* Project.swift in Sources */,
 				D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */,
 				829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */,
@@ -456,9 +459,10 @@
 				2479CF78716744EBA0FC8244 /* Theme.swift in Sources */,
 				CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */,
 				19F2F8B9416F42F451D3A428 /* ThemePicker.swift in Sources */,
-				495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */,
 				79BDDFFBAAE362E7E39DAC8A /* WallpaperCard.swift in Sources */,
 				A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */,
+				E2C7CF53477F3E8E337009BE /* WindowDragRegion.swift in Sources */,
+				495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -74,6 +74,7 @@ struct Shell: View {
                     .frame(height: Layout.tabBarHeight)
                 }
                 .background(chromeBackground)
+                .background(WindowDragRegion())
                 .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
                 .animation(.snappy(duration: 0.25), value: isSettingsActive)
 
