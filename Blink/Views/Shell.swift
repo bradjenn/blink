@@ -37,20 +37,25 @@ struct Shell: View {
         .opacity
     }
 
+    @ViewBuilder
+    private var windowBackground: some View {
+        Rectangle()
+            .fill(chromeBackground)
+
+        if let wallpaperId = store.backgroundImage {
+            wallpaperImage(for: wallpaperId)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scaleEffect(1.1)
+                .blur(radius: store.backgroundBlur)
+                .clipped()
+        }
+    }
+
     var body: some View {
         ZStack {
-            // Layer 1: Wallpaper
-            if let wallpaperId = store.backgroundImage {
-                wallpaperImage(for: wallpaperId)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .containerRelativeFrame([.horizontal, .vertical])
-                    .scaleEffect(1.1)
-                    .blur(radius: store.backgroundBlur)
-                    .clipped()
-            }
-
-            // Layer 2: Layout — each panel owns its background surface
+            // Layout — each panel owns its background surface
             VStack(spacing: 0) {
 
                 // ── TOP BAR ──────────────────────────────────────
@@ -167,6 +172,7 @@ struct Shell: View {
                 .animation(.snappy(duration: 0.25), value: store.sidebarVisible)
             }
             .font(Fonts.primary(size: 13))
+            .ignoresSafeArea(.container, edges: .top)
 
             // Settings — full window overlay covering header, content, and footer
             if isSettingsActive {
@@ -192,13 +198,17 @@ struct Shell: View {
             if store.showThemePicker {
                 ThemePicker(
                     ghosttyApp: ghosttyApp,
-                    onDismiss: { store.showThemePicker = false }
+                    onDismiss: { store.dismissThemePicker() }
                 )
                 .zIndex(2)
             }
 
         }
-        .ignoresSafeArea(.container, edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            windowBackground
+                .ignoresSafeArea()
+        }
     }
 
     private func wallpaperImage(for id: String) -> Image {

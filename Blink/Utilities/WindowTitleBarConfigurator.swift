@@ -22,6 +22,9 @@ struct WindowTitleBarConfigurator: NSViewRepresentable {
         window.standardWindowButton(.closeButton)?.isHidden = true
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
         window.isMovableByWindowBackground = false
     }
 

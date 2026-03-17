@@ -159,6 +159,14 @@ final class AppStore {
         showProjectSwitcher = false
     }
 
+    func presentThemePicker() {
+        showThemePicker = true
+    }
+
+    func dismissThemePicker() {
+        showThemePicker = false
+    }
+
     // MARK: - Background Actions
 
     func setBackgroundImage(_ image: String?) {

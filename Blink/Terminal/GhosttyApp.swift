@@ -1,5 +1,41 @@
 import Foundation
+import AppKit
 import GhosttyKit
+import UniformTypeIdentifiers
+
+private extension NSPasteboard.PasteboardType {
+    init?(ghosttyMIMEType mimeType: String) {
+        switch mimeType {
+        case "text/plain":
+            self = .string
+        default:
+            if let utType = UTType(mimeType: mimeType) {
+                self.init(utType.identifier)
+            } else {
+                self.init(mimeType)
+            }
+        }
+    }
+}
+
+private extension NSPasteboard {
+    static let blinkSelection = NSPasteboard(name: .init("com.blink.app.selection"))
+
+    static func blink(_ clipboard: ghostty_clipboard_e) -> NSPasteboard? {
+        switch clipboard {
+        case GHOSTTY_CLIPBOARD_STANDARD:
+            return .general
+        case GHOSTTY_CLIPBOARD_SELECTION:
+            return .blinkSelection
+        default:
+            return nil
+        }
+    }
+
+    func blinkStringContents() -> String? {
+        string(forType: .string)
+    }
+}
 
 /// Wraps the ghostty_app_t lifecycle. One instance per app.
 /// Blink controls all terminal settings — no Ghostty config files are loaded.
@@ -7,6 +43,8 @@ import GhosttyKit
 final class GhosttyApp {
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
+    private var configTemplateCache: [String: ghostty_config_t] = [:]
+    private var activeConfigKey: String?
 
     /// Weak refs for routing callbacks back to Swift objects.
     weak var store: AppStore?
@@ -27,12 +65,6 @@ final class GhosttyApp {
             Self.initialized = true
         }
 
-        // Create config — Blink owns all settings, no Ghostty config files loaded
-        guard let cfg = ghostty_config_new() else {
-            print("[GhosttyApp] Failed to create config")
-            return
-        }
-
         // Load persisted theme and wallpaper state for initial config
         let defaults = UserDefaults.standard
         let themeName = defaults.string(forKey: "blink.theme") ?? "Josean"
@@ -50,26 +82,17 @@ final class GhosttyApp {
         } else {
             configString = "background-opacity = \(opacity)\n"
         }
-
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
-            .appendingPathExtension("conf")
-
-        do {
-            try configString.write(to: tempURL, atomically: true, encoding: .utf8)
-            ghostty_config_load_file(cfg, tempURL.path)
-            try? FileManager.default.removeItem(at: tempURL)
-        } catch {
-            print("[GhosttyApp] Failed to write temp config: \(error)")
+        guard let cfg = clonedConfig(for: configString) ?? buildConfig(from: configString) else {
+            print("[GhosttyApp] Failed to create config")
+            return
         }
-
-        ghostty_config_finalize(cfg)
         self.config = cfg
+        self.activeConfigKey = configString
 
         // Build runtime callbacks
         var runtime = ghostty_runtime_config_s()
         runtime.userdata = Unmanaged.passUnretained(self).toOpaque()
-        runtime.supports_selection_clipboard = false
+        runtime.supports_selection_clipboard = true
 
         // Wakeup callback — the sole driver of the render loop.
         // Called from any thread, must dispatch tick to main thread.
@@ -131,9 +154,45 @@ final class GhosttyApp {
             }
         }
 
-        runtime.read_clipboard_cb = { _, _, _ in return false }
-        runtime.confirm_read_clipboard_cb = { _, _, _, _ in }
-        runtime.write_clipboard_cb = { _, _, _, _, _ in }
+        runtime.read_clipboard_cb = { userdata, clipboard, state in
+            guard let userdata, let state else { return false }
+            let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+            guard let pasteboard = NSPasteboard.blink(clipboard),
+                  let value = pasteboard.blinkStringContents() else {
+                return false
+            }
+
+            view.completeClipboardRequest(value, state: state)
+            return true
+        }
+        runtime.confirm_read_clipboard_cb = { userdata, string, state, _ in
+            guard let userdata, let string, let state else { return }
+            let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+            view.completeClipboardRequest(String(cString: string), state: state, confirmed: true)
+        }
+        runtime.write_clipboard_cb = { _, clipboard, content, len, _ in
+            guard let pasteboard = NSPasteboard.blink(clipboard),
+                  let content,
+                  len > 0 else {
+                return
+            }
+
+            let items = (0..<len).compactMap { index -> (type: NSPasteboard.PasteboardType, value: String)? in
+                let entry = content[index]
+                guard let mime = String(validatingUTF8: entry.mime),
+                      let value = String(validatingUTF8: entry.data),
+                      let type = NSPasteboard.PasteboardType(ghosttyMIMEType: mime) else {
+                    return nil
+                }
+                return (type, value)
+            }
+            guard !items.isEmpty else { return }
+
+            pasteboard.declareTypes(items.map(\.type), owner: nil)
+            for item in items {
+                pasteboard.setString(item.value, forType: item.type)
+            }
+        }
 
         // Create the app
         self.app = ghostty_app_new(&runtime, cfg)
@@ -147,24 +206,11 @@ final class GhosttyApp {
         guard let app else { return }
 
         let configString = terminalTheme.toConfigString(backgroundOpacity: backgroundOpacity)
+        guard activeConfigKey != configString else { return }
 
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
-            .appendingPathExtension("conf")
-
-        guard let _ = try? configString.write(to: tempURL, atomically: true, encoding: .utf8) else {
-            print("[GhosttyApp] Failed to write temp config for update")
+        guard let newCfg = clonedConfig(for: configString) ?? buildConfig(from: configString) else {
             return
         }
-
-        guard let newCfg = ghostty_config_new() else {
-            try? FileManager.default.removeItem(at: tempURL)
-            return
-        }
-
-        ghostty_config_load_file(newCfg, tempURL.path)
-        try? FileManager.default.removeItem(at: tempURL)
-        ghostty_config_finalize(newCfg)
 
         ghostty_app_update_config(app, newCfg)
 
@@ -173,10 +219,49 @@ final class GhosttyApp {
             ghostty_config_free(oldConfig)
         }
         config = newCfg
+        activeConfigKey = configString
+    }
+
+    private func clonedConfig(for configString: String) -> ghostty_config_t? {
+        guard let template = configTemplateCache[configString] else { return nil }
+        return ghostty_config_clone(template)
+    }
+
+    private func buildConfig(from configString: String) -> ghostty_config_t? {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-ghostty-\(UUID().uuidString)")
+            .appendingPathExtension("conf")
+
+        guard let cfg = ghostty_config_new() else {
+            return nil
+        }
+
+        do {
+            try configString.write(to: tempURL, atomically: true, encoding: .utf8)
+            ghostty_config_load_file(cfg, tempURL.path)
+            try? FileManager.default.removeItem(at: tempURL)
+        } catch {
+            print("[GhosttyApp] Failed to write temp config: \(error)")
+            ghostty_config_free(cfg)
+            try? FileManager.default.removeItem(at: tempURL)
+            return nil
+        }
+
+        ghostty_config_finalize(cfg)
+
+        if configTemplateCache[configString] == nil,
+           let template = ghostty_config_clone(cfg) {
+            configTemplateCache[configString] = template
+        }
+
+        return cfg
     }
 
     deinit {
         if let app { ghostty_app_free(app) }
         if let config { ghostty_config_free(config) }
+        for (_, template) in configTemplateCache {
+            ghostty_config_free(template)
+        }
     }
 }

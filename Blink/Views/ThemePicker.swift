@@ -10,6 +10,9 @@ struct ThemePicker: View {
 
     @State private var searchText = ""
     @State private var selectedIndex = 0
+    @State private var committedThemeName = ""
+    @State private var didCommitSelection = false
+    @State private var terminalPreviewTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
 
     /// Perceived brightness of a hex color (0 = black, 1 = white).
@@ -51,12 +54,16 @@ struct ThemePicker: View {
         filteredFavorites + filteredDark + filteredLight
     }
 
+    private var effectiveBackgroundOpacity: Double {
+        store.hasWallpaper ? store.backgroundOpacity : 1.0
+    }
+
     var body: some View {
         ZStack {
             // Backdrop
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+                .onTapGesture { dismissPicker() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Dismiss")
 
@@ -108,6 +115,12 @@ struct ThemePicker: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    .onAppear {
+                        scrollSelection(in: proxy, animated: false)
+                    }
+                    .onChange(of: selectedIndex) {
+                        scrollSelection(in: proxy)
+                    }
                 }
             }
             .frame(width: 500, height: 450)
@@ -119,32 +132,66 @@ struct ThemePicker: View {
             }
             .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
             .onKeyPress(.upArrow) {
+                guard !allItems.isEmpty else { return .ignored }
                 selectedIndex = max(0, selectedIndex - 1)
                 return .handled
             }
             .onKeyPress(.downArrow) {
+                guard !allItems.isEmpty else { return .ignored }
                 selectedIndex = min(allItems.count - 1, selectedIndex + 1)
                 return .handled
             }
-            .onKeyPress(.return) {
-                if selectedIndex < allItems.count {
-                    applyTheme(allItems[selectedIndex])
+            .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
+                guard !allItems.isEmpty else { return .ignored }
+
+                switch keyPress.characters.lowercased() {
+                case "j":
+                    selectedIndex = min(allItems.count - 1, selectedIndex + 1)
+                    return .handled
+                case "k":
+                    selectedIndex = max(0, selectedIndex - 1)
+                    return .handled
+                default:
+                    return .ignored
                 }
+            }
+            .onKeyPress(.return) {
+                guard allItems.indices.contains(selectedIndex) else { return .ignored }
+                commitTheme(allItems[selectedIndex])
                 return .handled
             }
             .onKeyPress(.escape) {
-                onDismiss()
+                dismissPicker()
                 return .handled
             }
         }
         .onAppear {
+            didCommitSelection = false
+            committedThemeName = store.theme
             searchFocused = true
             if let idx = allItems.firstIndex(of: store.theme) {
                 selectedIndex = idx
             }
+            previewSelectedTheme()
         }
         .onChange(of: searchText) {
             selectedIndex = 0
+        }
+        .onChange(of: allItems.map(\.self)) {
+            if allItems.isEmpty {
+                selectedIndex = 0
+            } else {
+                selectedIndex = min(selectedIndex, allItems.count - 1)
+            }
+            previewSelectedTheme()
+        }
+        .onChange(of: selectedIndex) {
+            previewSelectedTheme()
+        }
+        .onDisappear {
+            terminalPreviewTask?.cancel()
+            guard !didCommitSelection else { return }
+            restoreCommittedTheme()
         }
     }
 
@@ -162,7 +209,7 @@ struct ThemePicker: View {
         let isCurrent = name == store.theme
 
         return Button {
-            applyTheme(name)
+            commitTheme(name)
         } label: {
             HStack {
                 if isCurrent {
@@ -202,13 +249,72 @@ struct ThemePicker: View {
         .id(name)
     }
 
-    private func applyTheme(_ name: String) {
-        store.theme = name
-        themeManager.setTheme(name: name)
-        if let termTheme = themeManager.activeTerminalTheme {
-            let effectiveOpacity = store.hasWallpaper ? store.backgroundOpacity : 1.0
-            ghosttyApp.updateConfig(terminalTheme: termTheme, backgroundOpacity: effectiveOpacity)
+    private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {
+        guard allItems.indices.contains(selectedIndex) else { return }
+        let themeName = allItems[selectedIndex]
+
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.snappy(duration: 0.18)) {
+                    proxy.scrollTo(themeName, anchor: .center)
+                }
+            } else {
+                proxy.scrollTo(themeName, anchor: .center)
+            }
         }
+    }
+
+    private func previewSelectedTheme() {
+        guard allItems.indices.contains(selectedIndex) else { return }
+        previewTheme(allItems[selectedIndex])
+    }
+
+    private func previewTheme(_ name: String) {
+        themeManager.setTheme(name: name)
+        scheduleTerminalPreview(name)
+    }
+
+    private func restoreCommittedTheme() {
+        applyThemeImmediately(committedThemeName)
+    }
+
+    private func dismissPicker() {
+        restoreCommittedTheme()
         onDismiss()
+    }
+
+    private func commitTheme(_ name: String) {
+        didCommitSelection = true
+        store.theme = name
+        committedThemeName = name
+        applyThemeImmediately(name)
+        onDismiss()
+    }
+
+    private func scheduleTerminalPreview(_ name: String) {
+        terminalPreviewTask?.cancel()
+        terminalPreviewTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            guard !Task.isCancelled,
+                  let termTheme = themeManager.previewTheme(name: name) else {
+                return
+            }
+
+            ghosttyApp.updateConfig(
+                terminalTheme: termTheme,
+                backgroundOpacity: effectiveBackgroundOpacity
+            )
+        }
+    }
+
+    private func applyThemeImmediately(_ name: String) {
+        terminalPreviewTask?.cancel()
+        terminalPreviewTask = nil
+        themeManager.setTheme(name: name)
+        guard let termTheme = themeManager.previewTheme(name: name) else { return }
+        ghosttyApp.updateConfig(
+            terminalTheme: termTheme,
+            backgroundOpacity: effectiveBackgroundOpacity
+        )
     }
 }

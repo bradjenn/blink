@@ -58,6 +58,12 @@ struct BApp: App {
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(store.projects.isEmpty)
+
+                Button("Switch Theme...") {
+                    store.presentThemePicker()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .disabled(themeManager.availableThemes.isEmpty)
             }
 
             CommandGroup(after: .toolbar) {

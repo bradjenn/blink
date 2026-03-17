@@ -27,7 +27,7 @@ struct AppearanceSettings: View {
                         .foregroundStyle(theme.textMuted)
 
                     Button {
-                        store.showThemePicker = true
+                        store.presentThemePicker()
                     } label: {
                         HStack(spacing: 10) {
                             Text(store.theme)

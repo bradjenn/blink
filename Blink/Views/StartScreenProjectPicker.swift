@@ -52,21 +52,33 @@ struct StartScreenProjectPicker: View {
 
                 theme.border.frame(height: 1)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        if filteredProjects.isEmpty {
-                            Text("No matching projects")
-                                .font(Fonts.primary(size: 13))
-                                .foregroundStyle(theme.textDim)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 28)
-                        } else {
-                            ForEach(Array(filteredProjects.enumerated()), id: \.element.id) { index, project in
-                                projectRow(project, isSelected: index == selectedIndex)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            if filteredProjects.isEmpty {
+                                Text("No matching projects")
+                                    .font(Fonts.primary(size: 13))
+                                    .foregroundStyle(theme.textDim)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 28)
+                            } else {
+                                ForEach(Array(filteredProjects.enumerated()), id: \.element.id) { index, project in
+                                    projectRow(project, isSelected: index == selectedIndex)
+                                        .id(project.id)
+                                }
                             }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
+                    .onAppear {
+                        scrollSelection(in: proxy, animated: false)
+                    }
+                    .onChange(of: selectedIndex) {
+                        scrollSelection(in: proxy)
+                    }
+                    .onChange(of: filteredProjects.map(\.id)) {
+                        scrollSelection(in: proxy, animated: false)
+                    }
                 }
                 .frame(maxHeight: 320)
 
@@ -169,6 +181,21 @@ struct StartScreenProjectPicker: View {
     private func selectProject(_ id: String) {
         onSelect(id)
         onDismiss()
+    }
+
+    private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {
+        guard filteredProjects.indices.contains(selectedIndex) else { return }
+        let projectId = filteredProjects[selectedIndex].id
+
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.snappy(duration: 0.18)) {
+                    proxy.scrollTo(projectId, anchor: .center)
+                }
+            } else {
+                proxy.scrollTo(projectId, anchor: .center)
+            }
+        }
     }
 
     private func hint(_ key: String, label: String) -> some View {

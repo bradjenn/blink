@@ -20,6 +20,22 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
 
+    private static let defaultShellPATHEntries = [
+        ".local/bin",
+        "bin",
+    ]
+
+    private static let systemPATHEntries = [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+    ]
+
     // MARK: - Init
 
     init(app: GhosttyApp, tabId: String, workingDirectory: String, command: String? = nil) {
@@ -67,6 +83,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         var envVars: [ghostty_env_var_s] = [
             ghostty_env_var_s(key: strdup("TERM"), value: strdup("xterm-256color")),
             ghostty_env_var_s(key: strdup("COLORTERM"), value: strdup("truecolor")),
+            ghostty_env_var_s(key: strdup("PATH"), value: strdup(Self.shellPATH())),
         ]
 
         // Set working directory and optional command
@@ -112,6 +129,36 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
     }
 
+    private static func shellPATH() -> String {
+        var entries: [String] = []
+        var seen = Set<String>()
+
+        func append(_ entry: String?) {
+            guard let raw = entry?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty,
+                  !seen.contains(raw) else { return }
+            seen.insert(raw)
+            entries.append(raw)
+        }
+
+        let home = NSHomeDirectory()
+        for relativePath in defaultShellPATHEntries {
+            append((home as NSString).appendingPathComponent(relativePath))
+        }
+
+        if let inheritedPATH = ProcessInfo.processInfo.environment["PATH"] {
+            for entry in inheritedPATH.split(separator: ":") {
+                append(String(entry))
+            }
+        }
+
+        for entry in systemPATHEntries {
+            append(entry)
+        }
+
+        return entries.joined(separator: ":")
+    }
+
     // MARK: - View Properties
 
     override var isOpaque: Bool { false }
@@ -132,6 +179,18 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             ghostty_surface_set_focus(surface, false)
         }
         return result
+    }
+
+    @IBAction func copy(_ sender: Any?) {
+        _ = performBindingAction("copy_to_clipboard")
+    }
+
+    @IBAction func paste(_ sender: Any?) {
+        _ = performBindingAction("paste_from_clipboard")
+    }
+
+    @IBAction func pasteAsPlainText(_ sender: Any?) {
+        paste(sender)
     }
 
     // MARK: - Resize
@@ -427,6 +486,24 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         window.makeFirstResponder(self)
     }
 
+    func completeClipboardRequest(
+        _ string: String,
+        state: UnsafeMutableRawPointer,
+        confirmed: Bool = false
+    ) {
+        guard let surface else { return }
+        string.withCString { ptr in
+            ghostty_surface_complete_clipboard_request(surface, ptr, state, confirmed)
+        }
+    }
+
+    private func performBindingAction(_ action: String) -> Bool {
+        guard let surface else { return false }
+        return action.withCString { ptr in
+            ghostty_surface_binding_action(surface, ptr, UInt(action.utf8.count))
+        }
+    }
+
     // MARK: - Cleanup
 
     /// Free the ghostty surface. Called by SurfaceManager on tab close.
@@ -439,5 +516,20 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     deinit {
         teardown()
+    }
+}
+
+extension TerminalSurfaceView: NSUserInterfaceValidations {
+    func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        guard let surface else { return false }
+
+        switch item.action {
+        case #selector(copy(_:)):
+            return ghostty_surface_has_selection(surface)
+        case #selector(paste(_:)), #selector(pasteAsPlainText(_:)):
+            return NSPasteboard.general.string(forType: .string) != nil
+        default:
+            return true
+        }
     }
 }

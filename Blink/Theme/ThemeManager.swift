@@ -55,6 +55,10 @@ final class ThemeManager {
 
     /// Switch to a theme by name. Parses the file and derives UI colors.
     func setTheme(name: String) {
+        if activeTerminalTheme?.name == name {
+            return
+        }
+
         let theme: TerminalTheme
         if let cached = parsedCache[name] {
             theme = cached
