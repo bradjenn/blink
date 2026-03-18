@@ -235,52 +235,73 @@ private struct WorkspaceColumnsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let layout = stripLayout(viewportWidth: geometry.size.width)
-
-                ZStack(alignment: .topLeading) {
-                    ForEach(tabs) { tab in
-                        if let frame = layout.frames[tab.id] {
-                            WorkspaceColumnView(
-                                tab: tab,
-                                project: project,
-                                isFocused: store.activeTabId == tab.id,
-                                ghosttyApp: ghosttyApp,
-                                surfaceManager: surfaceManager
-                            )
-                            .frame(width: frame.width)
-                            .frame(height: geometry.size.height)
-                            .offset(x: frame.minX)
-                            .zIndex(store.activeTabId == tab.id ? 1 : 0)
-                            .transition(workspaceColumnTransition)
+                columnStrip(viewportWidth: geometry.size.width, viewportHeight: geometry.size.height)
+                    .onChange(of: tabs.map(\.id), initial: true) { _, _ in
+                        syncTabs(viewportWidth: geometry.size.width)
+                        restoreViewport(viewportWidth: geometry.size.width)
+                    }
+                    .onChange(of: store.activeTabId, initial: false) {
+                        alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
+                    }
+                    .onChange(of: geometry.size.width, initial: true) { _, _ in
+                        handleViewportChange(viewportWidth: geometry.size.width)
+                    }
+                    .onKeyPress(characters: CharacterSet(charactersIn: "rf")) { keyPress in
+                        guard keyPress.modifiers == .control else { return .ignored }
+                        guard let tabId = store.activeTabId else { return .ignored }
+                        switch keyPress.characters {
+                        case "r":
+                            let _ = layoutState.cyclePreset(for: tabId, projectId: project.id, viewportWidth: geometry.size.width)
+                            alignActiveTab(viewportWidth: geometry.size.width, animated: true)
+                            return .handled
+                        case "f":
+                            let _ = layoutState.toggleMaximize(for: tabId, projectId: project.id, viewportWidth: geometry.size.width)
+                            alignActiveTab(viewportWidth: geometry.size.width, animated: true)
+                            return .handled
+                        default:
+                            return .ignored
                         }
                     }
-                }
-                .frame(width: max(layout.contentWidth, geometry.size.width), height: geometry.size.height, alignment: .topLeading)
-                .offset(x: -layout.viewportOffset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .clipped()
-                .contentShape(Rectangle())
-                .animation(workspaceAnimation, value: tabs.map(\.id))
-                .animation(workspaceAnimation, value: store.activeTabId)
-                .onChange(of: tabs.map(\.id), initial: true) { _, _ in
-                    syncTabs(viewportWidth: geometry.size.width)
-                    restoreViewport(viewportWidth: geometry.size.width)
-                }
-                .onChange(of: store.activeTabId, initial: false) {
-                    alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
-                }
-                .onChange(of: geometry.size.width, initial: true) { _, _ in
-                    handleViewportChange(viewportWidth: geometry.size.width)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func columnStrip(viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
+        let layout = stripLayout(viewportWidth: viewportWidth)
+
+        ZStack(alignment: .topLeading) {
+            ForEach(tabs) { tab in
+                if let frame = layout.frames[tab.id] {
+                    WorkspaceColumnView(
+                        tab: tab,
+                        project: project,
+                        isFocused: store.activeTabId == tab.id,
+                        ghosttyApp: ghosttyApp,
+                        surfaceManager: surfaceManager
+                    )
+                    .frame(width: frame.width)
+                    .frame(height: viewportHeight)
+                    .offset(x: frame.minX)
+                    .zIndex(store.activeTabId == tab.id ? 1 : 0)
+                    .transition(workspaceColumnTransition)
                 }
             }
         }
+        .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
+        .offset(x: -layout.viewportOffset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .clipped()
+        .contentShape(Rectangle())
+        .animation(workspaceAnimation, value: tabs.map(\.id))
+        .animation(workspaceAnimation, value: store.activeTabId)
     }
 
     private func syncTabs(viewportWidth: CGFloat) {
         layoutState.sync(
             projectId: project.id,
             tabIds: tabs.map(\.id),
-            defaultWidth: Layout.workspaceColumnMinWidth
+            defaultWidth: viewportWidth * Layout.workspaceColumnDefaultFraction
         )
     }
 
@@ -358,28 +379,23 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func columnWidth(for tabId: String, viewportWidth: CGFloat) -> CGFloat {
-        // Keep every workspace column at a stable width so switching tabs only
-        // moves the viewport. If the focused tab widens while the others stay
-        // narrow, the destination column appears to "grow" during navigation.
-        focusedColumnWidth(for: viewportWidth)
-    }
-
-    private func focusedColumnWidth(for viewportWidth: CGFloat) -> CGFloat {
-        min(
-            max(
-                viewportWidth,
-                Layout.workspaceColumnMinWidth
-            ),
-            Layout.workspaceColumnMaxWidth
+        let width = layoutState.width(
+            for: tabId,
+            projectId: project.id,
+            default: viewportWidth * Layout.workspaceColumnDefaultFraction
         )
+        return min(max(width, Layout.workspaceColumnMinWidth), Layout.workspaceColumnMaxWidth)
     }
 
     private func focusedViewportOffset(viewportWidth: CGFloat) -> CGFloat {
         guard let activeTabId = store.activeTabId else { return 0 }
         let layout = stripLayout(viewportWidth: viewportWidth)
         guard let frame = layout.frames[activeTabId] else { return 0 }
+
+        // Center the active column in the viewport
+        let centeredOffset = frame.minX - (viewportWidth - frame.width) / 2
         return clampedViewportOffset(
-            frame.minX,
+            centeredOffset,
             contentWidth: layout.contentWidth,
             viewportWidth: viewportWidth
         )
