@@ -149,12 +149,12 @@ struct BApp: App {
                 Button("Absorb from Left") {
                     store.absorbFromLeft()
                 }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .keyboardShortcut("j", modifiers: [.command, .shift])
 
                 Button("Absorb from Right") {
                     store.absorbFromRight()
                 }
-                .keyboardShortcut("j", modifiers: [.command, .shift])
+                .keyboardShortcut("k", modifiers: [.command, .shift])
 
                 Button("Expel Pane") {
                     store.expelActiveTab()

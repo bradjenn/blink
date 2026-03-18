@@ -382,30 +382,33 @@ private struct WorkspaceColumnsView: View {
             store.tabs.first { $0.id == tabId }
         }
 
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(theme.bg.opacity(0.6))
-            .overlay {
-                VStack(spacing: 4) {
-                    ForEach(columnTabs) { tab in
+        VStack(spacing: Layout.workspaceColumnSpacing) {
+            ForEach(columnTabs) { tab in
+                let isActive = store.activeTabId == tab.id
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(theme.bg.opacity(isHighlighted ? 0.85 : 0.7))
+                    .overlay(alignment: .bottomLeading) {
                         Text(tab.label)
                             .font(Fonts.primary(size: 13))
                             .foregroundStyle(isHighlighted ? theme.text : theme.textDim)
                             .lineLimit(1)
-                        if tab.id != columnTabs.last?.id {
-                            theme.border.opacity(0.3).frame(height: 1)
-                        }
+                            .padding(8)
                     }
-                }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(
+                                isActive ? theme.accent.opacity(0.85) : theme.border,
+                                lineWidth: isActive ? 2 : 1
+                            )
+                    )
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(isHighlighted ? theme.accent.opacity(0.85) : theme.border.opacity(0.5), lineWidth: isHighlighted ? 2 : 1)
-            )
-            .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
-            .animation(.easeInOut(duration: 0.15), value: isHighlighted)
-            .onTapGesture {
-                exitOverviewAnimated(selecting: column.id)
-            }
+        }
+        .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
+        .animation(.easeInOut(duration: 0.15), value: isHighlighted)
+        .onTapGesture {
+            exitOverviewAnimated(selecting: column.id)
+        }
     }
 
     private func exitOverviewAnimated(selecting columnId: String?) {
@@ -592,13 +595,13 @@ private struct WorkspaceColumnView: View {
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(windowPanelBackground)
+        VStack(spacing: Layout.workspaceColumnSpacing) {
+            ForEach(columnTabs) { tab in
+                let isFocused = activeTabId == tab.id
 
-            VStack(spacing: 0) {
-                ForEach(Array(columnTabs.enumerated()), id: \.element.id) { index, tab in
-                    let isFocused = activeTabId == tab.id
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.clear)
 
                     TerminalView(
                         tabId: tab.id,
@@ -608,35 +611,13 @@ private struct WorkspaceColumnView: View {
                         isFocused: isFocused,
                         command: tab.command
                     )
-                    .overlay(
-                        Group {
-                            if columnTabs.count > 1 {
-                                RoundedRectangle(cornerRadius: 0, style: .continuous)
-                                    .strokeBorder(isFocused ? theme.accent.opacity(0.85) : .clear, lineWidth: 1)
-                            }
-                        }
-                    )
-
-                    if index < columnTabs.count - 1 {
-                        theme.border.frame(height: Layout.columnPaneDividerHeight)
-                    }
                 }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(isFocused ? theme.accent.opacity(0.85) : theme.border, lineWidth: 1)
+                )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(
-                    column.tabIds.contains(activeTabId ?? "")
-                        ? theme.accent.opacity(0.85)
-                        : theme.border,
-                    lineWidth: 1
-                )
-        )
         .animation(.easeInOut(duration: 0.18), value: activeTabId)
-    }
-
-    private var windowPanelBackground: some ShapeStyle {
-        AnyShapeStyle(Color.clear)
     }
 }

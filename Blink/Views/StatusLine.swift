@@ -54,8 +54,17 @@ struct FooterBar: View {
 
             Spacer(minLength: 8)
 
-            if !activeProjectTabs.isEmpty {
-                WindowDots(tabs: activeProjectTabs, activeTabId: store.activeTabId)
+            if let projectId = store.activeProjectId {
+                let cols = store.projectColumns(for: projectId)
+                if !cols.isEmpty {
+                    WindowDots(columns: cols, activeTabId: store.activeTabId)
+                } else if !activeProjectTabs.isEmpty {
+                    // Fallback before columns are initialized
+                    WindowDots(
+                        columns: activeProjectTabs.map { Column(id: $0.id, tabIds: [$0.id]) },
+                        activeTabId: store.activeTabId
+                    )
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -144,21 +153,28 @@ private struct WindowDots: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
-    let tabs: [AppTab]
+    let columns: [Column]
     let activeTabId: String?
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(tabs) { tab in
-                Button(action: { store.setActiveTab(tab.id) }) {
-                    Capsule()
-                        .fill(tab.id == activeTabId ? theme.accent : theme.textMuted.opacity(0.28))
-                        .frame(width: tab.id == activeTabId ? 18 : 6, height: 6)
-                        .animation(.easeInOut(duration: 0.16), value: activeTabId)
+            ForEach(columns) { col in
+                let isActive = col.tabIds.contains(activeTabId ?? "")
+                Button(action: {
+                    if let tabId = store.columnFocusedTab[col.id] ?? col.tabIds.first {
+                        store.setActiveTab(tabId)
+                    }
+                }) {
+                    HStack(spacing: 2) {
+                        ForEach(col.tabIds, id: \.self) { tabId in
+                            Capsule()
+                                .fill(tabId == activeTabId ? theme.accent : isActive ? theme.accent.opacity(0.4) : theme.textMuted.opacity(0.28))
+                                .frame(width: tabId == activeTabId ? 14 : 6, height: 6)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.16), value: activeTabId)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(tab.label)
-                .accessibilityValue(tab.id == activeTabId ? "Current window" : "Window")
             }
         }
     }
