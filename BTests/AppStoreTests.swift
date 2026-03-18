@@ -370,6 +370,50 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNil(store.overviewHighlightedColumnId)
     }
 
+    // MARK: - Column Migration Tests
+
+    func testOpenTabCreatesColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let tab = store.openTab(projectId: "1")
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 3) // 2 existing + 1 new
+        XCTAssertEqual(cols.last?.tabIds, [tab.id])
+    }
+
+    func testCloseTabInMultiPaneColumnFocusesNext() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        // Stack t1 and t2 in same column
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t1")
+
+        store.closeTab("t1")
+
+        XCTAssertEqual(store.activeTabId, "t2")
+        XCTAssertEqual(store.projectColumns(for: "1").count, 1)
+        XCTAssertEqual(store.projectColumns(for: "1")[0].tabIds, ["t2"])
+    }
+
+    func testCloseLastTabInColumnRemovesColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.closeTab("t1")
+
+        XCTAssertEqual(store.projectColumns(for: "1").count, 1)
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testRemoveProjectCleansUpColumns() {
+        let store = makeStore()
+        store.columnFocusedTab["c1"] = "t1"
+        store.removeProject("1")
+        XCTAssertNil(store.columns["1"])
+        XCTAssertNil(store.columnFocusedTab["c1"])
+    }
+
     // MARK: - Column Helper Tests
 
     func testProjectColumns() {

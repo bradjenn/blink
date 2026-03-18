@@ -253,6 +253,21 @@ final class AppStore {
             lastSelectedProjectId = id
         }
         activeView = .projects
+
+        // Ensure columns exist for all tabs (migration from pre-column model)
+        if let id {
+            let projectCols = projectColumns(for: id)
+            let columnedTabIds = Set(projectCols.flatMap(\.tabIds))
+            let uncolumnedTabs = projectTabs(for: id).filter { !columnedTabIds.contains($0.id) }
+            if !uncolumnedTabs.isEmpty {
+                var cols = projectCols
+                for tab in uncolumnedTabs {
+                    cols.append(Column(id: UUID().uuidString, tabIds: [tab.id]))
+                }
+                columns[id] = cols
+            }
+        }
+
         if let id {
             // Restore last active tab, or fall back to first tab
             if let remembered = lastActiveTab[id],
@@ -458,6 +473,13 @@ final class AppStore {
             command: command
         )
         tabs.append(tab)
+
+        // Create a new single-tab column
+        let column = Column(id: UUID().uuidString, tabIds: [tab.id])
+        var projectCols = columns[projectId] ?? []
+        projectCols.append(column)
+        columns[projectId] = projectCols
+
         setActiveTab(tab.id)
         return tab
     }
@@ -530,6 +552,14 @@ final class AppStore {
         }
         workspaceViewportOffsets[id] = nil
 
+        // Clean up column state
+        if let projectCols = columns[id] {
+            for col in projectCols {
+                columnFocusedTab[col.id] = nil
+            }
+        }
+        columns[id] = nil
+
         let surfaceManager = surfaceManager
         DispatchQueue.main.async {
             surfaceManager?.destroySurfaces(tabIds: tabIds)
@@ -538,21 +568,69 @@ final class AppStore {
 
     func closeTab(_ id: String) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
-        tabs.removeAll { $0.id == id }
-        unreadTabs.remove(id)
-        if lastActiveTab[tab.projectId] == id {
-            lastActiveTab[tab.projectId] = nil
-        }
+        let projectId = tab.projectId
+
+        // Find the column and position of this tab
+        var projectCols = columns[projectId] ?? []
+        guard let colIdx = projectCols.firstIndex(where: { $0.tabIds.contains(id) }) else { return }
+        let paneIdx = projectCols[colIdx].tabIds.firstIndex(of: id)!
+
+        // Remove tab from column
+        projectCols[colIdx].tabIds.removeAll { $0 == id }
+
+        // Determine next focus before removing empty column
+        var nextFocusTabId: String? = nil
         if activeTabId == id {
-            let remaining = projectTabs(for: tab.projectId)
-            if let nextActiveTabId = remaining.last?.id {
-                setActiveTab(nextActiveTabId)
-            } else {
-                activeTabId = nil
-                workspaceViewportOffsets[tab.projectId] = nil
+            if !projectCols[colIdx].tabIds.isEmpty {
+                // Prefer next pane down, then previous pane up
+                let newPaneIdx = min(paneIdx, projectCols[colIdx].tabIds.count - 1)
+                nextFocusTabId = projectCols[colIdx].tabIds[newPaneIdx]
             }
         }
-        reindexTabs(for: tab.projectId)
+
+        // Remove column if empty
+        if projectCols[colIdx].tabIds.isEmpty {
+            let removedColId = projectCols[colIdx].id
+            columnFocusedTab[removedColId] = nil
+            projectCols.remove(at: colIdx)
+        }
+
+        columns[projectId] = projectCols
+
+        // Remove tab data
+        tabs.removeAll { $0.id == id }
+        unreadTabs.remove(id)
+        if lastActiveTab[projectId] == id {
+            lastActiveTab[projectId] = nil
+        }
+
+        // Set next focus
+        if activeTabId == id {
+            if let next = nextFocusTabId {
+                setActiveTab(next)
+            } else {
+                // Fall back to adjacent column (prefer right, then left)
+                let updatedCols = projectColumns(for: projectId)
+                let adjacentCol: Column? = {
+                    // colIdx now points to what was the right neighbor (since we removed the empty column)
+                    if colIdx < updatedCols.count {
+                        return updatedCols[colIdx]
+                    } else if colIdx > 0 {
+                        return updatedCols[colIdx - 1]
+                    }
+                    return nil
+                }()
+                if let adjCol = adjacentCol,
+                   let fallback = columnFocusedTab[adjCol.id] ?? adjCol.tabIds.first {
+                    setActiveTab(fallback)
+                } else {
+                    activeTabId = nil
+                    workspaceViewportOffsets[projectId] = nil
+                }
+            }
+        }
+
+        reindexTabs(for: projectId)
 
         let surfaceManager = surfaceManager
         DispatchQueue.main.async {
