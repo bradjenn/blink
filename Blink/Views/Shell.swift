@@ -209,6 +209,10 @@ private struct WorkspaceColumnsView: View {
         store.projectTabs(for: project.id)
     }
 
+    private var columns: [Column] {
+        store.projectColumns(for: project.id)
+    }
+
     private var workspaceAnimation: Animation {
         reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.18)
     }
@@ -235,7 +239,7 @@ private struct WorkspaceColumnsView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if tabs.isEmpty {
+            if columns.isEmpty {
                 VStack(spacing: 12) {
                     Text("No windows in this workspace")
                         .font(Fonts.primary(size: 16))
@@ -247,8 +251,8 @@ private struct WorkspaceColumnsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 columnStrip(viewportWidth: geometry.size.width, viewportHeight: geometry.size.height)
-                    .onChange(of: tabs.map(\.id), initial: true) { _, _ in
-                        syncTabs(viewportWidth: geometry.size.width)
+                    .onChange(of: columns.map(\.id), initial: true) { _, _ in
+                        syncColumns(viewportWidth: geometry.size.width)
                         restoreViewport(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: store.activeTabId, initial: false) {
@@ -261,21 +265,21 @@ private struct WorkspaceColumnsView: View {
                     .onKeyPress(characters: CharacterSet(charactersIn: "rf")) { keyPress in
                         guard keyPress.modifiers == .command else { return .ignored }
                         guard !store.isOverviewMode else { return .ignored }
-                        guard let tabId = store.activeTabId else { return .ignored }
+                        guard let colId = store.activeColumn?.id else { return .ignored }
                         switch keyPress.characters {
                         case "r":
-                            let _ = layoutState.cyclePreset(for: tabId, projectId: project.id, viewportWidth: geometry.size.width)
+                            let _ = layoutState.cyclePreset(for: colId, projectId: project.id, viewportWidth: geometry.size.width)
                             alignActiveTab(viewportWidth: geometry.size.width, animated: true)
                             return .handled
                         case "f":
-                            let _ = layoutState.toggleMaximize(for: tabId, projectId: project.id, viewportWidth: geometry.size.width)
+                            let _ = layoutState.toggleMaximize(for: colId, projectId: project.id, viewportWidth: geometry.size.width)
                             alignActiveTab(viewportWidth: geometry.size.width, animated: true)
                             return .handled
                         default:
                             return .ignored
                         }
                     }
-                    .onChange(of: tabs.count) {
+                    .onChange(of: columns.count) {
                         if store.isOverviewMode {
                             let cols = store.projectColumns(for: project.id)
                             if cols.isEmpty {
@@ -332,27 +336,27 @@ private struct WorkspaceColumnsView: View {
         }()
 
         ZStack(alignment: .topLeading) {
-            ForEach(tabs) { tab in
-                if let frame = layout.frames[tab.id] {
+            ForEach(columns) { col in
+                if let frame = layout.frames[col.id] {
                     if isOverview {
-                        overviewThumbnail(tab: tab, frame: frame, viewportHeight: viewportHeight)
+                        overviewThumbnail(column: col, frame: frame, viewportHeight: viewportHeight)
                             .frame(width: frame.width)
                             .frame(height: viewportHeight)
                             .offset(x: frame.minX)
-                            .zIndex(store.overviewHighlightedColumnId == tab.id ? 1 : 0)
+                            .zIndex(store.overviewHighlightedColumnId == col.id ? 1 : 0)
                             .transition(workspaceColumnTransition)
                     } else {
                         WorkspaceColumnView(
-                            tab: tab,
+                            column: col,
                             project: project,
-                            isFocused: store.activeTabId == tab.id,
+                            activeTabId: store.activeTabId,
                             ghosttyApp: ghosttyApp,
                             surfaceManager: surfaceManager
                         )
                         .frame(width: frame.width)
                         .frame(height: viewportHeight)
                         .offset(x: frame.minX)
-                        .zIndex(store.activeTabId == tab.id ? 1 : 0)
+                        .zIndex(col.tabIds.contains(store.activeTabId ?? "") ? 1 : 0)
                         .transition(workspaceColumnTransition)
                     }
                 }
@@ -367,21 +371,31 @@ private struct WorkspaceColumnsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
-        .animation(workspaceAnimation, value: tabs.map(\.id))
+        .animation(workspaceAnimation, value: columns.map(\.id))
         .animation(overviewAnimation, value: isOverview)
     }
 
     @ViewBuilder
-    private func overviewThumbnail(tab: AppTab, frame: CGRect, viewportHeight: CGFloat) -> some View {
-        let isHighlighted = store.overviewHighlightedColumnId == tab.id
+    private func overviewThumbnail(column: Column, frame: CGRect, viewportHeight: CGFloat) -> some View {
+        let isHighlighted = store.overviewHighlightedColumnId == column.id
+        let columnTabs = column.tabIds.compactMap { tabId in
+            store.tabs.first { $0.id == tabId }
+        }
 
         RoundedRectangle(cornerRadius: 6, style: .continuous)
             .fill(theme.bg.opacity(0.6))
             .overlay {
-                Text(tab.label)
-                    .font(Fonts.primary(size: 13))
-                    .foregroundStyle(isHighlighted ? theme.text : theme.textDim)
-                    .lineLimit(1)
+                VStack(spacing: 4) {
+                    ForEach(columnTabs) { tab in
+                        Text(tab.label)
+                            .font(Fonts.primary(size: 13))
+                            .foregroundStyle(isHighlighted ? theme.text : theme.textDim)
+                            .lineLimit(1)
+                        if tab.id != columnTabs.last?.id {
+                            theme.border.opacity(0.3).frame(height: 1)
+                        }
+                    }
+                }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -390,7 +404,7 @@ private struct WorkspaceColumnsView: View {
             .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
             .animation(.easeInOut(duration: 0.15), value: isHighlighted)
             .onTapGesture {
-                exitOverviewAnimated(selecting: tab.id)
+                exitOverviewAnimated(selecting: column.id)
             }
     }
 
@@ -443,10 +457,10 @@ private struct WorkspaceColumnsView: View {
         }
     }
 
-    private func syncTabs(viewportWidth: CGFloat) {
+    private func syncColumns(viewportWidth: CGFloat) {
         layoutState.sync(
             projectId: project.id,
-            tabIds: tabs.map(\.id),
+            columnIds: columns.map(\.id),
             defaultFraction: Layout.workspaceColumnDefaultFraction
         )
     }
@@ -504,9 +518,9 @@ private struct WorkspaceColumnsView: View {
         var frames: [String: CGRect] = [:]
         var leadingX: CGFloat = 0
 
-        for tab in tabs {
-            let width = columnWidth(for: tab.id, viewportWidth: viewportWidth)
-            frames[tab.id] = CGRect(x: leadingX, y: 0, width: width, height: 0)
+        for col in columns {
+            let width = columnWidth(for: col.id, viewportWidth: viewportWidth)
+            frames[col.id] = CGRect(x: leadingX, y: 0, width: width, height: 0)
             leadingX += width + Layout.workspaceColumnSpacing
         }
 
@@ -524,9 +538,9 @@ private struct WorkspaceColumnsView: View {
         )
     }
 
-    private func columnWidth(for tabId: String, viewportWidth: CGFloat) -> CGFloat {
+    private func columnWidth(for columnId: String, viewportWidth: CGFloat) -> CGFloat {
         let width = layoutState.width(
-            for: tabId,
+            for: columnId,
             projectId: project.id,
             viewportWidth: viewportWidth
         )
@@ -534,15 +548,12 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func focusedViewportOffset(viewportWidth: CGFloat) -> CGFloat {
-        guard let activeTabId = store.activeTabId else { return 0 }
+        guard let colId = store.activeColumn?.id else { return 0 }
         let layout = stripLayout(viewportWidth: viewportWidth)
 
-        // If everything fits on screen, no scrolling needed
         guard layout.contentWidth > viewportWidth else { return 0 }
+        guard let frame = layout.frames[colId] else { return 0 }
 
-        guard let frame = layout.frames[activeTabId] else { return 0 }
-
-        // Center the active column in the viewport
         let centeredOffset = frame.minX - (viewportWidth - frame.width) / 2
         return clampedViewportOffset(
             centeredOffset,
@@ -568,34 +579,61 @@ private struct WorkspaceColumnView: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
-    let tab: AppTab
+    let column: Column
     let project: Project
-    let isFocused: Bool
+    let activeTabId: String?
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
+
+    private var columnTabs: [AppTab] {
+        column.tabIds.compactMap { tabId in
+            store.tabs.first { $0.id == tabId }
+        }
+    }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(windowPanelBackground)
 
-            // Keep SwiftUI masks and gesture overlays off the Metal-backed
-            // terminal surface. Ghostty handles input directly, and applying
-            // clip/opacity effects here can break faint text rendering.
-            TerminalView(
-                tabId: tab.id,
-                ghosttyApp: ghosttyApp,
-                surfaceManager: surfaceManager,
-                workingDirectory: project.path,
-                isFocused: isFocused,
-                command: tab.command
-            )
+            VStack(spacing: 0) {
+                ForEach(Array(columnTabs.enumerated()), id: \.element.id) { index, tab in
+                    let isFocused = activeTabId == tab.id
+
+                    TerminalView(
+                        tabId: tab.id,
+                        ghosttyApp: ghosttyApp,
+                        surfaceManager: surfaceManager,
+                        workingDirectory: project.path,
+                        isFocused: isFocused,
+                        command: tab.command
+                    )
+                    .overlay(
+                        Group {
+                            if columnTabs.count > 1 {
+                                RoundedRectangle(cornerRadius: 0, style: .continuous)
+                                    .strokeBorder(isFocused ? theme.accent.opacity(0.85) : .clear, lineWidth: 1)
+                            }
+                        }
+                    )
+
+                    if index < columnTabs.count - 1 {
+                        theme.border.frame(height: Layout.columnPaneDividerHeight)
+                    }
+                }
+            }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(isFocused ? theme.accent.opacity(0.85) : theme.border, lineWidth: 1)
+                .strokeBorder(
+                    column.tabIds.contains(activeTabId ?? "")
+                        ? theme.accent.opacity(0.85)
+                        : theme.border,
+                    lineWidth: 1
+                )
         )
-        .animation(.easeInOut(duration: 0.18), value: isFocused)
+        .animation(.easeInOut(duration: 0.18), value: activeTabId)
     }
 
     private var windowPanelBackground: some ShapeStyle {
