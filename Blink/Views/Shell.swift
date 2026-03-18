@@ -202,6 +202,8 @@ private struct WorkspaceColumnsView: View {
     let surfaceManager: SurfaceManager
 
     @State private var layoutState = WorkspaceLayoutState()
+    @State private var overviewMonitor: Any?
+    @State private var currentViewportWidth: CGFloat = 0
 
     private var tabs: [AppTab] {
         store.projectTabs(for: project.id)
@@ -209,6 +211,16 @@ private struct WorkspaceColumnsView: View {
 
     private var workspaceAnimation: Animation {
         reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.18)
+    }
+
+    private var overviewAnimation: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.25)
+    }
+
+    private func overviewScale(contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
+        guard store.isOverviewMode else { return 1.0 }
+        let padded = viewportWidth - Layout.overviewPadding * 2
+        return min(1.0, max(Layout.overviewMinScale, padded / max(contentWidth, 1)))
     }
 
     private var workspaceColumnTransition: AnyTransition {
@@ -243,10 +255,12 @@ private struct WorkspaceColumnsView: View {
                         alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
                     }
                     .onChange(of: geometry.size.width, initial: true) { _, _ in
+                        currentViewportWidth = geometry.size.width
                         handleViewportChange(viewportWidth: geometry.size.width)
                     }
                     .onKeyPress(characters: CharacterSet(charactersIn: "rf")) { keyPress in
                         guard keyPress.modifiers == .command else { return .ignored }
+                        guard !store.isOverviewMode else { return .ignored }
                         guard let tabId = store.activeTabId else { return .ignored }
                         switch keyPress.characters {
                         case "r":
@@ -261,6 +275,38 @@ private struct WorkspaceColumnsView: View {
                             return .ignored
                         }
                     }
+                    .onChange(of: tabs.count) {
+                        if store.isOverviewMode {
+                            if tabs.isEmpty {
+                                store.exitOverview(selecting: nil)
+                            } else if let highlightId = store.overviewHighlightedTabId,
+                                      !tabs.contains(where: { $0.id == highlightId }) {
+                                store.overviewHighlightedTabId = tabs.first?.id
+                            }
+                        }
+                    }
+                    .onChange(of: store.showProjectSwitcher) {
+                        if store.showProjectSwitcher && store.isOverviewMode {
+                            store.exitOverview(selecting: nil)
+                        }
+                    }
+                    .onChange(of: store.showThemePicker) {
+                        if store.showThemePicker && store.isOverviewMode {
+                            store.exitOverview(selecting: nil)
+                        }
+                    }
+                    .onChange(of: store.isOverviewMode) {
+                        if store.isOverviewMode {
+                            installOverviewMonitor()
+                        } else {
+                            // Align viewport to active tab so exit doesn't slide
+                            alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
+                            removeOverviewMonitor()
+                        }
+                    }
+                    .onDisappear {
+                        removeOverviewMonitor()
+                    }
             }
         }
     }
@@ -268,31 +314,130 @@ private struct WorkspaceColumnsView: View {
     @ViewBuilder
     private func columnStrip(viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         let layout = stripLayout(viewportWidth: viewportWidth)
+        let scale = overviewScale(contentWidth: layout.contentWidth, viewportWidth: viewportWidth)
+        let isOverview = store.isOverviewMode
+
+        let overviewOffsetX: CGFloat = {
+            guard isOverview else { return 0 }
+            let scaledContent = layout.contentWidth * scale
+            let centered = (viewportWidth - scaledContent) / 2
+            return max(centered, Layout.overviewPadding)
+        }()
+
+        let overviewOffsetY: CGFloat = {
+            guard isOverview else { return 0 }
+            let scaledHeight = viewportHeight * scale
+            return (viewportHeight - scaledHeight) / 2
+        }()
 
         ZStack(alignment: .topLeading) {
             ForEach(tabs) { tab in
                 if let frame = layout.frames[tab.id] {
-                    WorkspaceColumnView(
-                        tab: tab,
-                        project: project,
-                        isFocused: store.activeTabId == tab.id,
-                        ghosttyApp: ghosttyApp,
-                        surfaceManager: surfaceManager
-                    )
-                    .frame(width: frame.width)
-                    .frame(height: viewportHeight)
-                    .offset(x: frame.minX)
-                    .zIndex(store.activeTabId == tab.id ? 1 : 0)
-                    .transition(workspaceColumnTransition)
+                    if isOverview {
+                        overviewThumbnail(tab: tab, frame: frame, viewportHeight: viewportHeight)
+                            .frame(width: frame.width)
+                            .frame(height: viewportHeight)
+                            .offset(x: frame.minX)
+                            .zIndex(store.overviewHighlightedTabId == tab.id ? 1 : 0)
+                            .transition(workspaceColumnTransition)
+                    } else {
+                        WorkspaceColumnView(
+                            tab: tab,
+                            project: project,
+                            isFocused: store.activeTabId == tab.id,
+                            ghosttyApp: ghosttyApp,
+                            surfaceManager: surfaceManager
+                        )
+                        .frame(width: frame.width)
+                        .frame(height: viewportHeight)
+                        .offset(x: frame.minX)
+                        .zIndex(store.activeTabId == tab.id ? 1 : 0)
+                        .transition(workspaceColumnTransition)
+                    }
                 }
             }
         }
         .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
-        .offset(x: -layout.viewportOffset)
+        .scaleEffect(scale, anchor: .topLeading)
+        .offset(
+            x: isOverview ? overviewOffsetX : -layout.viewportOffset,
+            y: isOverview ? overviewOffsetY : 0
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
         .animation(workspaceAnimation, value: tabs.map(\.id))
+        .animation(overviewAnimation, value: isOverview)
+    }
+
+    @ViewBuilder
+    private func overviewThumbnail(tab: AppTab, frame: CGRect, viewportHeight: CGFloat) -> some View {
+        let isHighlighted = store.overviewHighlightedTabId == tab.id
+
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(theme.bg.opacity(0.6))
+            .overlay {
+                Text(tab.label)
+                    .font(Fonts.primary(size: 13))
+                    .foregroundStyle(isHighlighted ? theme.text : theme.textDim)
+                    .lineLimit(1)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(isHighlighted ? theme.accent.opacity(0.85) : theme.border.opacity(0.5), lineWidth: isHighlighted ? 2 : 1)
+            )
+            .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
+            .animation(.easeInOut(duration: 0.15), value: isHighlighted)
+            .onTapGesture {
+                exitOverviewAnimated(selecting: tab.id)
+            }
+    }
+
+    private func exitOverviewAnimated(selecting tabId: String?) {
+        // Pre-align viewport to the target column so the scale
+        // animation zooms in place rather than sliding laterally.
+        if let targetId = tabId ?? store.activeTabId {
+            store.setActiveTab(targetId)
+            alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
+        }
+        withAnimation(overviewAnimation) {
+            store.isOverviewMode = false
+            store.overviewHighlightedTabId = nil
+        }
+        removeOverviewMonitor()
+    }
+
+    private func installOverviewMonitor() {
+        removeOverviewMonitor()
+        overviewMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
+            guard store.isOverviewMode else { return event }
+            // Let Cmd-modified keys pass through to menu shortcuts
+            if event.modifierFlags.contains(.command) { return event }
+
+            switch event.keyCode {
+            case 123, 4: // left arrow, H
+                store.overviewHighlightLeft()
+                return nil
+            case 124, 37: // right arrow, L
+                store.overviewHighlightRight()
+                return nil
+            case 36: // return
+                self.exitOverviewAnimated(selecting: store.overviewHighlightedTabId)
+                return nil
+            case 53: // escape
+                self.exitOverviewAnimated(selecting: nil)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeOverviewMonitor() {
+        if let monitor = overviewMonitor {
+            NSEvent.removeMonitor(monitor)
+            overviewMonitor = nil
+        }
     }
 
     private func syncTabs(viewportWidth: CGFloat) {

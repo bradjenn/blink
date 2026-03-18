@@ -21,7 +21,11 @@ enum Layout {
     static let workspaceColumnMinWidth: CGFloat = 420
     static let workspaceColumnMaxWidth: CGFloat = 4000
     static let workspaceColumnDefaultFraction: CGFloat = 0.5
-    static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0]
+    static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0]
+
+    // Overview
+    static let overviewPadding: CGFloat = 40
+    static let overviewMinScale: CGFloat = 0.15
 
     // Status line
     static let statusLineHeight: CGFloat = 30

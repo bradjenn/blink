@@ -37,6 +37,10 @@ final class AppStore {
     // Unread activity tracking
     var unreadTabs: Set<String> = []
 
+    // Overview
+    var isOverviewMode = false
+    var overviewHighlightedTabId: String?
+
     // Theme
     var theme: String {
         didSet { UserDefaults.standard.set(theme, forKey: StorageKeys.theme) }
@@ -364,6 +368,48 @@ final class AppStore {
               let globalNext = tabs.firstIndex(where: { $0.id == nextTabId }) else { return }
 
         tabs.swapAt(globalCurrent, globalNext)
+    }
+
+    // MARK: - Overview Actions
+
+    func toggleOverview() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+        guard !tabs.isEmpty else { return }
+
+        if isOverviewMode {
+            exitOverview(selecting: overviewHighlightedTabId)
+        } else {
+            isOverviewMode = true
+            overviewHighlightedTabId = activeTabId
+        }
+    }
+
+    func exitOverview(selecting tabId: String?) {
+        if let tabId {
+            setActiveTab(tabId)
+        }
+        isOverviewMode = false
+        overviewHighlightedTabId = nil
+    }
+
+    func overviewHighlightLeft() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+        guard let highlightId = overviewHighlightedTabId,
+              let idx = tabs.firstIndex(where: { $0.id == highlightId }),
+              idx > tabs.startIndex else { return }
+        overviewHighlightedTabId = tabs[tabs.index(before: idx)].id
+    }
+
+    func overviewHighlightRight() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+        guard let highlightId = overviewHighlightedTabId,
+              let idx = tabs.firstIndex(where: { $0.id == highlightId }) else { return }
+        let next = tabs.index(after: idx)
+        guard next < tabs.endIndex else { return }
+        overviewHighlightedTabId = tabs[next].id
     }
 
     // MARK: - Tab Actions

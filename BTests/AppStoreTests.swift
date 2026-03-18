@@ -279,6 +279,97 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(tabs[1].id, "t2")
     }
 
+    // MARK: - Overview Tests
+
+    func testToggleOverviewEntersAndExits() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.toggleOverview()
+
+        XCTAssertTrue(store.isOverviewMode)
+        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+
+        store.toggleOverview()
+
+        XCTAssertFalse(store.isOverviewMode)
+        XCTAssertNil(store.overviewHighlightedTabId)
+    }
+
+    func testEnterOverviewSetsHighlight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.toggleOverview()
+
+        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+    }
+
+    func testOverviewHighlightLeftRight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.toggleOverview()
+
+        store.overviewHighlightRight()
+        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+
+        store.overviewHighlightLeft()
+        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+    }
+
+    func testOverviewHighlightStopsAtEdges() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.toggleOverview()
+
+        store.overviewHighlightLeft()
+        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+
+        store.overviewHighlightRight()
+        store.overviewHighlightRight()
+        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+    }
+
+    func testExitOverviewWithSelection() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.toggleOverview()
+
+        store.exitOverview(selecting: "t2")
+
+        XCTAssertFalse(store.isOverviewMode)
+        XCTAssertNil(store.overviewHighlightedTabId)
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testExitOverviewCancelKeepsOriginal() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.toggleOverview()
+
+        store.overviewHighlightRight()
+        store.exitOverview(selecting: nil)
+
+        XCTAssertFalse(store.isOverviewMode)
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testOverviewNoOpWithNoTabs() {
+        let store = makeStore()
+        store.setActiveProject("4")
+
+        store.toggleOverview()
+
+        XCTAssertFalse(store.isOverviewMode)
+        XCTAssertNil(store.overviewHighlightedTabId)
+    }
+
     private func makeStore() -> AppStore {
         let store = AppStore()
         store.projects = [

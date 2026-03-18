@@ -136,6 +136,11 @@ struct BApp: App {
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
 
+                Button("Overview") {
+                    store.toggleOverview()
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
                 Divider()
 
                 Button("Open Git") {
