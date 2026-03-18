@@ -367,7 +367,7 @@ private struct WorkspaceColumnsView: View {
     private func focusedColumnWidth(for viewportWidth: CGFloat) -> CGFloat {
         min(
             max(
-                viewportWidth - (tabs.count > 1 ? Layout.workspaceFocusedColumnPeek : 0),
+                viewportWidth,
                 Layout.workspaceColumnMinWidth
             ),
             Layout.workspaceColumnMaxWidth

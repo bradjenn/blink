@@ -20,7 +20,8 @@ enum Layout {
     static let workspaceColumnSpacing: CGFloat = 10
     static let workspaceColumnMinWidth: CGFloat = 420
     static let workspaceColumnMaxWidth: CGFloat = 4000
-    static let workspaceFocusedColumnPeek: CGFloat = 0
+    static let workspaceColumnDefaultFraction: CGFloat = 0.5
+    static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0]
 
     // Status line
     static let statusLineHeight: CGFloat = 30
