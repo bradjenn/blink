@@ -11,6 +11,14 @@ class TerminalContainerView: NSView {
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
 
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        // Ensure the terminal surface gets an explicit size update when
+        // SwiftUI animates the column width. autoresizingMask handles
+        // most cases, but animated frame changes can skip setFrameSize.
+        currentSurface?.frame = bounds
+    }
+
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
         guard tabId != currentTabId else {
             if shouldFocus {

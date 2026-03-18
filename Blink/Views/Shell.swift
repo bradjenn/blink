@@ -390,6 +390,10 @@ private struct WorkspaceColumnsView: View {
     private func focusedViewportOffset(viewportWidth: CGFloat) -> CGFloat {
         guard let activeTabId = store.activeTabId else { return 0 }
         let layout = stripLayout(viewportWidth: viewportWidth)
+
+        // If everything fits on screen, no scrolling needed
+        guard layout.contentWidth > viewportWidth else { return 0 }
+
         guard let frame = layout.frames[activeTabId] else { return 0 }
 
         // Center the active column in the viewport
@@ -402,7 +406,8 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func clampedViewportOffset(_ offset: CGFloat, contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
-        let maxOffset = max(0, contentWidth - viewportWidth)
+        guard contentWidth > viewportWidth else { return 0 }
+        let maxOffset = contentWidth - viewportWidth
         return min(max(offset, 0), maxOffset)
     }
 }
