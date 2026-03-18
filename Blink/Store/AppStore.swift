@@ -293,6 +293,79 @@ final class AppStore {
         setActiveTab(tab.id)
     }
 
+    func focusLeft() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+
+        if sidebarFocused {
+            return
+        }
+
+        guard let activeTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
+
+        if currentIndex > tabs.startIndex {
+            setActiveTab(tabs[tabs.index(before: currentIndex)].id)
+        } else if sidebarVisible {
+            sidebarFocused = true
+        }
+    }
+
+    func focusRight() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+
+        if sidebarFocused {
+            sidebarFocused = false
+            if let tabId = activeTabId {
+                surfaceManager?.surface(for: tabId)?.focus()
+            }
+            return
+        }
+
+        guard let activeTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
+
+        let nextIndex = tabs.index(after: currentIndex)
+        if nextIndex < tabs.endIndex {
+            setActiveTab(tabs[nextIndex].id)
+        }
+    }
+
+    func moveActiveTabLeft() {
+        guard let projectId = activeProjectId,
+              let activeTabId else { return }
+
+        let projectTabIds = projectTabs(for: projectId).map(\.id)
+        guard let localIndex = projectTabIds.firstIndex(of: activeTabId),
+              localIndex > projectTabIds.startIndex else { return }
+
+        let prevTabId = projectTabIds[projectTabIds.index(before: localIndex)]
+
+        guard let globalCurrent = tabs.firstIndex(where: { $0.id == activeTabId }),
+              let globalPrev = tabs.firstIndex(where: { $0.id == prevTabId }) else { return }
+
+        tabs.swapAt(globalCurrent, globalPrev)
+    }
+
+    func moveActiveTabRight() {
+        guard let projectId = activeProjectId,
+              let activeTabId else { return }
+
+        let projectTabIds = projectTabs(for: projectId).map(\.id)
+        guard let localIndex = projectTabIds.firstIndex(of: activeTabId) else { return }
+
+        let nextLocalIndex = projectTabIds.index(after: localIndex)
+        guard nextLocalIndex < projectTabIds.endIndex else { return }
+
+        let nextTabId = projectTabIds[nextLocalIndex]
+
+        guard let globalCurrent = tabs.firstIndex(where: { $0.id == activeTabId }),
+              let globalNext = tabs.firstIndex(where: { $0.id == nextTabId }) else { return }
+
+        tabs.swapAt(globalCurrent, globalNext)
+    }
+
     // MARK: - Tab Actions
 
     /// Create a new shell tab for a project.

@@ -162,6 +162,123 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(AppStore().workspaceViewportOffset(for: "1"), 184, accuracy: 0.001)
     }
 
+    func testFocusLeftFromFirstColumnGoesToSidebar() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.sidebarVisible = true
+        store.sidebarFocused = false
+
+        store.focusLeft()
+
+        XCTAssertTrue(store.sidebarFocused)
+    }
+
+    func testFocusLeftFromFirstColumnNoOpWhenSidebarClosed() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.sidebarVisible = false
+
+        store.focusLeft()
+
+        XCTAssertEqual(store.activeTabId, "t1")
+        XCTAssertFalse(store.sidebarFocused)
+    }
+
+    func testFocusRightFromSidebarGoesToTerminal() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+        store.sidebarFocused = true
+
+        store.focusRight()
+
+        XCTAssertFalse(store.sidebarFocused)
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusRightNoOpAtLastColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.focusRight()
+
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testFocusLeftBetweenColumns() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+        store.sidebarVisible = false
+
+        store.focusLeft()
+
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusRightBetweenColumns() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.focusRight()
+
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testMoveTabRight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.moveActiveTabRight()
+
+        let tabs = store.projectTabs(for: "1")
+        XCTAssertEqual(tabs[0].id, "t2")
+        XCTAssertEqual(tabs[1].id, "t1")
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testMoveTabLeft() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.moveActiveTabLeft()
+
+        let tabs = store.projectTabs(for: "1")
+        XCTAssertEqual(tabs[0].id, "t2")
+        XCTAssertEqual(tabs[1].id, "t1")
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testMoveTabRightNoOpAtEnd() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.moveActiveTabRight()
+
+        let tabs = store.projectTabs(for: "1")
+        XCTAssertEqual(tabs[0].id, "t1")
+        XCTAssertEqual(tabs[1].id, "t2")
+    }
+
+    func testMoveTabLeftNoOpAtStart() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.moveActiveTabLeft()
+
+        let tabs = store.projectTabs(for: "1")
+        XCTAssertEqual(tabs[0].id, "t1")
+        XCTAssertEqual(tabs[1].id, "t2")
+    }
+
     private func makeStore() -> AppStore {
         let store = AppStore()
         store.projects = [
