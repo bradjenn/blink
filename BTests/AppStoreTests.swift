@@ -289,12 +289,12 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         XCTAssertTrue(store.isOverviewMode)
-        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
 
         store.toggleOverview()
 
         XCTAssertFalse(store.isOverviewMode)
-        XCTAssertNil(store.overviewHighlightedTabId)
+        XCTAssertNil(store.overviewHighlightedColumnId)
     }
 
     func testEnterOverviewSetsHighlight() {
@@ -304,7 +304,7 @@ final class AppStoreTests: XCTestCase {
 
         store.toggleOverview()
 
-        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
     }
 
     func testOverviewHighlightLeftRight() {
@@ -314,10 +314,10 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         store.overviewHighlightRight()
-        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
 
         store.overviewHighlightLeft()
-        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
     }
 
     func testOverviewHighlightStopsAtEdges() {
@@ -327,11 +327,11 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         store.overviewHighlightLeft()
-        XCTAssertEqual(store.overviewHighlightedTabId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
 
         store.overviewHighlightRight()
         store.overviewHighlightRight()
-        XCTAssertEqual(store.overviewHighlightedTabId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
     }
 
     func testExitOverviewWithSelection() {
@@ -343,7 +343,7 @@ final class AppStoreTests: XCTestCase {
         store.exitOverview(selecting: "t2")
 
         XCTAssertFalse(store.isOverviewMode)
-        XCTAssertNil(store.overviewHighlightedTabId)
+        XCTAssertNil(store.overviewHighlightedColumnId)
         XCTAssertEqual(store.activeTabId, "t2")
     }
 
@@ -367,7 +367,51 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         XCTAssertFalse(store.isOverviewMode)
-        XCTAssertNil(store.overviewHighlightedTabId)
+        XCTAssertNil(store.overviewHighlightedColumnId)
+    }
+
+    // MARK: - Column Helper Tests
+
+    func testProjectColumns() {
+        let store = makeStore()
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 2)
+        XCTAssertEqual(cols[0].tabIds, ["t1"])
+        XCTAssertEqual(cols[1].tabIds, ["t2"])
+    }
+
+    func testProjectColumnsEmpty() {
+        let store = makeStore()
+        let cols = store.projectColumns(for: "4")
+        XCTAssertEqual(cols.count, 0)
+    }
+
+    func testColumnForTabId() {
+        let store = makeStore()
+        let col = store.columnFor(tabId: "t1")
+        XCTAssertEqual(col?.id, "c1")
+    }
+
+    func testActiveColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+        XCTAssertEqual(store.activeColumn?.id, "c2")
+    }
+
+    func testOrderedTabs() {
+        let store = makeStore()
+        store.columns["1"] = [
+            Column(id: "c1", tabIds: ["t1", "t2"]),
+        ]
+        let ordered = store.orderedTabs(for: "1")
+        XCTAssertEqual(ordered.map(\.id), ["t1", "t2"])
+    }
+
+    func testOrderedTabsAcrossColumns() {
+        let store = makeStore()
+        let ordered = store.orderedTabs(for: "1")
+        XCTAssertEqual(ordered.map(\.id), ["t1", "t2"])
     }
 
     private func makeStore() -> AppStore {
@@ -382,6 +426,15 @@ final class AppStoreTests: XCTestCase {
             AppTab(id: "t1", type: "shell", label: "Terminal 1", defaultLabel: "Terminal 1", projectId: "1"),
             AppTab(id: "t2", type: "shell", label: "Terminal 2", defaultLabel: "Terminal 2", projectId: "1"),
             AppTab(id: "t3", type: "shell", label: "Terminal 1", defaultLabel: "Terminal 1", projectId: "2"),
+        ]
+        store.columns = [
+            "1": [
+                Column(id: "c1", tabIds: ["t1"]),
+                Column(id: "c2", tabIds: ["t2"]),
+            ],
+            "2": [
+                Column(id: "c3", tabIds: ["t3"]),
+            ],
         ]
         store.activeProjectId = nil
         store.activeTabId = nil

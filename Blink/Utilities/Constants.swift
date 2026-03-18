@@ -27,6 +27,9 @@ enum Layout {
     static let overviewPadding: CGFloat = 40
     static let overviewMinScale: CGFloat = 0.15
 
+    // Column panes
+    static let columnPaneDividerHeight: CGFloat = 1
+
     // Status line
     static let statusLineHeight: CGFloat = 30
 

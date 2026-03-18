@@ -39,7 +39,11 @@ final class AppStore {
 
     // Overview
     var isOverviewMode = false
-    var overviewHighlightedTabId: String?
+    var overviewHighlightedColumnId: String?
+
+    // Columns — source of truth for spatial layout (left-to-right order)
+    var columns: [String: [Column]] = [:]
+    var columnFocusedTab: [String: String] = [:]
 
     // Theme
     var theme: String {
@@ -210,6 +214,32 @@ final class AppStore {
         backgroundImage != nil
     }
 
+    // MARK: - Column Helpers
+
+    func projectColumns(for projectId: String) -> [Column] {
+        columns[projectId] ?? []
+    }
+
+    func columnFor(tabId: String) -> Column? {
+        guard let tab = tabs.first(where: { $0.id == tabId }) else { return nil }
+        return projectColumns(for: tab.projectId).first { $0.tabIds.contains(tabId) }
+    }
+
+    var activeColumn: Column? {
+        guard let tabId = activeTabId else { return nil }
+        return columnFor(tabId: tabId)
+    }
+
+    /// Returns tabs in column-major order: left-to-right columns, top-to-bottom within each.
+    func orderedTabs(for projectId: String) -> [AppTab] {
+        let cols = projectColumns(for: projectId)
+        return cols.flatMap { col in
+            col.tabIds.compactMap { tabId in
+                tabs.first { $0.id == tabId }
+            }
+        }
+    }
+
     // MARK: - Actions
 
     func setActiveProject(_ id: String?) {
@@ -378,10 +408,10 @@ final class AppStore {
         guard !tabs.isEmpty else { return }
 
         if isOverviewMode {
-            exitOverview(selecting: overviewHighlightedTabId)
+            exitOverview(selecting: overviewHighlightedColumnId)
         } else {
             isOverviewMode = true
-            overviewHighlightedTabId = activeTabId
+            overviewHighlightedColumnId = activeTabId
         }
     }
 
@@ -390,26 +420,26 @@ final class AppStore {
             setActiveTab(tabId)
         }
         isOverviewMode = false
-        overviewHighlightedTabId = nil
+        overviewHighlightedColumnId = nil
     }
 
     func overviewHighlightLeft() {
         guard let projectId = activeProjectId else { return }
         let tabs = projectTabs(for: projectId)
-        guard let highlightId = overviewHighlightedTabId,
+        guard let highlightId = overviewHighlightedColumnId,
               let idx = tabs.firstIndex(where: { $0.id == highlightId }),
               idx > tabs.startIndex else { return }
-        overviewHighlightedTabId = tabs[tabs.index(before: idx)].id
+        overviewHighlightedColumnId = tabs[tabs.index(before: idx)].id
     }
 
     func overviewHighlightRight() {
         guard let projectId = activeProjectId else { return }
         let tabs = projectTabs(for: projectId)
-        guard let highlightId = overviewHighlightedTabId,
+        guard let highlightId = overviewHighlightedColumnId,
               let idx = tabs.firstIndex(where: { $0.id == highlightId }) else { return }
         let next = tabs.index(after: idx)
         guard next < tabs.endIndex else { return }
-        overviewHighlightedTabId = tabs[next].id
+        overviewHighlightedColumnId = tabs[next].id
     }
 
     // MARK: - Tab Actions

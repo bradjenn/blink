@@ -279,9 +279,9 @@ private struct WorkspaceColumnsView: View {
                         if store.isOverviewMode {
                             if tabs.isEmpty {
                                 store.exitOverview(selecting: nil)
-                            } else if let highlightId = store.overviewHighlightedTabId,
+                            } else if let highlightId = store.overviewHighlightedColumnId,
                                       !tabs.contains(where: { $0.id == highlightId }) {
-                                store.overviewHighlightedTabId = tabs.first?.id
+                                store.overviewHighlightedColumnId = tabs.first?.id
                             }
                         }
                     }
@@ -338,7 +338,7 @@ private struct WorkspaceColumnsView: View {
                             .frame(width: frame.width)
                             .frame(height: viewportHeight)
                             .offset(x: frame.minX)
-                            .zIndex(store.overviewHighlightedTabId == tab.id ? 1 : 0)
+                            .zIndex(store.overviewHighlightedColumnId == tab.id ? 1 : 0)
                             .transition(workspaceColumnTransition)
                     } else {
                         WorkspaceColumnView(
@@ -372,7 +372,7 @@ private struct WorkspaceColumnsView: View {
 
     @ViewBuilder
     private func overviewThumbnail(tab: AppTab, frame: CGRect, viewportHeight: CGFloat) -> some View {
-        let isHighlighted = store.overviewHighlightedTabId == tab.id
+        let isHighlighted = store.overviewHighlightedColumnId == tab.id
 
         RoundedRectangle(cornerRadius: 6, style: .continuous)
             .fill(theme.bg.opacity(0.6))
@@ -402,7 +402,7 @@ private struct WorkspaceColumnsView: View {
         }
         withAnimation(overviewAnimation) {
             store.isOverviewMode = false
-            store.overviewHighlightedTabId = nil
+            store.overviewHighlightedColumnId = nil
         }
         removeOverviewMonitor()
     }
@@ -422,7 +422,7 @@ private struct WorkspaceColumnsView: View {
                 store.overviewHighlightRight()
                 return nil
             case 36: // return
-                self.exitOverviewAnimated(selecting: store.overviewHighlightedTabId)
+                self.exitOverviewAnimated(selecting: store.overviewHighlightedColumnId)
                 return nil
             case 53: // escape
                 self.exitOverviewAnimated(selecting: nil)

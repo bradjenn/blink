@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */; };
 		0973322112C267606F0D23CC /* StartScreenLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */; };
+		A1B2C3D4E5F6071829304152 /* Column.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6970819203142 /* Column.swift */; };
 		0D0CF9645DB57CFE7E2A99CC /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D522965A18450240E8B1B57 /* CoreText.framework */; };
 		0EDDE37BF54C746A6850E4BD /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 733316E4538EF5998654016C /* Carbon.framework */; };
 		0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */; };
@@ -81,6 +82,7 @@
 /* Begin PBXFileReference section */
 		0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		09D47A5C0A44933E63A3104C /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		F1E2D3C4B5A6970819203142 /* Column.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Column.swift; sourceTree = "<group>"; };
 		0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 		104F7EE9EE6F91C459A8CC7C /* BApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BApp.swift; sourceTree = "<group>"; };
@@ -272,6 +274,7 @@
 		C9D3CC1439A512CB2F2EFA74 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				F1E2D3C4B5A6970819203142 /* Column.swift */,
 				55ED9F4FAD326C2510EE7917 /* Project.swift */,
 				912BF0925C71AED8B1C12E74 /* Tab.swift */,
 				2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */,
@@ -436,6 +439,7 @@
 				747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */,
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
 				5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */,
+				A1B2C3D4E5F6071829304152 /* Column.swift in Sources */,
 				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,
 				6974DCAA3C7954B535ECAF33 /* Constants.swift in Sources */,
 				30803CC48C90EFDF88A7C8D2 /* GhosttyApp.swift in Sources */,
