@@ -319,60 +319,69 @@ private struct WorkspaceColumnsView: View {
     @ViewBuilder
     private func columnStrip(viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         let layout = stripLayout(viewportWidth: viewportWidth)
-        let scale = overviewScale(contentWidth: layout.contentWidth, viewportWidth: viewportWidth)
         let isOverview = store.isOverviewMode
 
-        let overviewOffsetX: CGFloat = {
-            guard isOverview else { return 0 }
-            let scaledContent = layout.contentWidth * scale
-            let centered = (viewportWidth - scaledContent) / 2
-            return max(centered, Layout.overviewPadding)
-        }()
+        ZStack {
+            // Normal workspace view
+            if !isOverview {
+                ZStack(alignment: .topLeading) {
+                    ForEach(columns) { col in
+                        if let frame = layout.frames[col.id] {
+                            WorkspaceColumnView(
+                                column: col,
+                                project: project,
+                                activeTabId: store.activeTabId,
+                                ghosttyApp: ghosttyApp,
+                                surfaceManager: surfaceManager
+                            )
+                            .frame(width: frame.width)
+                            .frame(height: viewportHeight)
+                            .offset(x: frame.minX)
+                            .zIndex(col.tabIds.contains(store.activeTabId ?? "") ? 1 : 0)
+                            .transition(workspaceColumnTransition)
+                        }
+                    }
+                }
+                .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
+                .offset(x: -layout.viewportOffset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .clipped()
+                .transition(.opacity.combined(with: .scale(scale: 1.02)))
+            }
 
-        let overviewOffsetY: CGFloat = {
-            guard isOverview else { return 0 }
-            let scaledHeight = viewportHeight * scale
-            return (viewportHeight - scaledHeight) / 2
-        }()
+            // Overview grid
+            if isOverview {
+                overviewGrid(layout: layout, viewportWidth: viewportWidth, viewportHeight: viewportHeight)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(workspaceAnimation, value: columns.map(\.id))
+        .animation(overviewAnimation, value: isOverview)
+    }
+
+    @ViewBuilder
+    private func overviewGrid(layout: WorkspaceStripLayout, viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
+        let scale = overviewScale(contentWidth: layout.contentWidth, viewportWidth: viewportWidth)
+        let scaledContent = layout.contentWidth * scale
+        let scaledHeight = viewportHeight * scale
+        let offsetX = max((viewportWidth - scaledContent) / 2, Layout.overviewPadding)
+        let offsetY = (viewportHeight - scaledHeight) / 2
 
         ZStack(alignment: .topLeading) {
             ForEach(columns) { col in
                 if let frame = layout.frames[col.id] {
-                    if isOverview {
-                        overviewThumbnail(column: col, frame: frame, viewportHeight: viewportHeight)
-                            .frame(width: frame.width)
-                            .frame(height: viewportHeight)
-                            .offset(x: frame.minX)
-                            .zIndex(store.overviewHighlightedColumnId == col.id ? 1 : 0)
-                            .transition(workspaceColumnTransition)
-                    } else {
-                        WorkspaceColumnView(
-                            column: col,
-                            project: project,
-                            activeTabId: store.activeTabId,
-                            ghosttyApp: ghosttyApp,
-                            surfaceManager: surfaceManager
-                        )
-                        .frame(width: frame.width)
-                        .frame(height: viewportHeight)
+                    overviewThumbnail(column: col, frame: frame, viewportHeight: viewportHeight)
+                        .frame(width: frame.width, height: viewportHeight)
                         .offset(x: frame.minX)
-                        .zIndex(col.tabIds.contains(store.activeTabId ?? "") ? 1 : 0)
-                        .transition(workspaceColumnTransition)
-                    }
+                        .zIndex(store.overviewHighlightedColumnId == col.id ? 1 : 0)
                 }
             }
         }
         .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
         .scaleEffect(scale, anchor: .topLeading)
-        .offset(
-            x: isOverview ? overviewOffsetX : -layout.viewportOffset,
-            y: isOverview ? overviewOffsetY : 0
-        )
+        .offset(x: offsetX, y: offsetY)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .clipped()
-        .contentShape(Rectangle())
-        .animation(workspaceAnimation, value: columns.map(\.id))
-        .animation(overviewAnimation, value: isOverview)
     }
 
     @ViewBuilder
@@ -402,13 +411,15 @@ private struct WorkspaceColumnsView: View {
                                 lineWidth: isActive ? 2 : 1
                             )
                     )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        store.setActiveTab(tab.id)
+                        exitOverviewAnimated(selecting: column.id)
+                    }
             }
         }
         .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
         .animation(.easeInOut(duration: 0.15), value: isHighlighted)
-        .onTapGesture {
-            exitOverviewAnimated(selecting: column.id)
-        }
     }
 
     private func exitOverviewAnimated(selecting columnId: String?) {
@@ -425,6 +436,10 @@ private struct WorkspaceColumnsView: View {
             store.overviewHighlightedColumnId = nil
         }
         removeOverviewMonitor()
+        // Focus the terminal surface after the animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [store] in
+            store.focusTerminal()
+        }
     }
 
     private func installOverviewMonitor() {

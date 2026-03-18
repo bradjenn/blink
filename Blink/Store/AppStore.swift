@@ -17,6 +17,7 @@ private enum StorageKeys {
     static let lastSelectedProjectId = "blink.lastSelectedProjectId"
     static let lastActiveTabs = "blink.lastActiveTabs"
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
+    static let columns = "blink.columns"
 }
 
 @MainActor @Observable
@@ -42,7 +43,9 @@ final class AppStore {
     var overviewHighlightedColumnId: String?
 
     // Columns — source of truth for spatial layout (left-to-right order)
-    var columns: [String: [Column]] = [:]
+    var columns: [String: [Column]] = [:] {
+        didSet { Self.saveColumns(columns) }
+    }
     var columnFocusedTab: [String: String] = [:]
 
     // Theme
@@ -103,6 +106,7 @@ final class AppStore {
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
+        self.columns = Self.loadColumns()
         if let storedLastProjectId,
            loadedProjects.contains(where: { $0.id == storedLastProjectId }) {
             self.lastSelectedProjectId = storedLastProjectId
@@ -254,18 +258,26 @@ final class AppStore {
         }
         activeView = .projects
 
-        // Ensure columns exist for all tabs (migration from pre-column model)
+        // Sync columns with actual tabs — remove stale IDs, add uncolumned tabs
         if let id {
-            let projectCols = projectColumns(for: id)
-            let columnedTabIds = Set(projectCols.flatMap(\.tabIds))
-            let uncolumnedTabs = projectTabs(for: id).filter { !columnedTabIds.contains($0.id) }
-            if !uncolumnedTabs.isEmpty {
-                var cols = projectCols
-                for tab in uncolumnedTabs {
-                    cols.append(Column(id: UUID().uuidString, tabIds: [tab.id]))
-                }
-                columns[id] = cols
+            let existingTabIds = Set(projectTabs(for: id).map(\.id))
+
+            // Remove stale tab IDs from persisted columns, drop empty columns
+            var cols = projectColumns(for: id)
+            cols = cols.compactMap { col in
+                var cleaned = col
+                cleaned.tabIds = col.tabIds.filter { existingTabIds.contains($0) }
+                return cleaned.tabIds.isEmpty ? nil : cleaned
             }
+
+            // Add any tabs not in a column
+            let columnedTabIds = Set(cols.flatMap(\.tabIds))
+            let uncolumnedTabs = projectTabs(for: id).filter { !columnedTabIds.contains($0.id) }
+            for tab in uncolumnedTabs {
+                cols.append(Column(id: UUID().uuidString, tabIds: [tab.id]))
+            }
+
+            columns[id] = cols
         }
 
         if let id {
@@ -799,6 +811,20 @@ final class AppStore {
     private static func saveProjects(_ projects: [Project]) {
         if let data = try? JSONEncoder().encode(projects) {
             UserDefaults.standard.set(data, forKey: StorageKeys.projects)
+        }
+    }
+
+    private static func loadColumns() -> [String: [Column]] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKeys.columns),
+              let columns = try? JSONDecoder().decode([String: [Column]].self, from: data) else {
+            return [:]
+        }
+        return columns
+    }
+
+    private static func saveColumns(_ columns: [String: [Column]]) {
+        if let data = try? JSONEncoder().encode(columns) {
+            UserDefaults.standard.set(data, forKey: StorageKeys.columns)
         }
     }
 

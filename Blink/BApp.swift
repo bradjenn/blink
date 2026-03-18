@@ -2,8 +2,19 @@ import SwiftUI
 import GhosttyKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuObserver: Any?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
+            self?.clearReservedKeyboardShortcuts()
+        }
+        // SwiftUI rebuilds menus on state changes, re-adding system shortcuts.
+        // Observe menu updates to re-clear them.
+        menuObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.didAddItemNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             self?.clearReservedKeyboardShortcuts()
         }
     }

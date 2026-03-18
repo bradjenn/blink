@@ -15,6 +15,7 @@ final class AppStoreTests: XCTestCase {
         "blink.lastSelectedProjectId",
         "blink.lastActiveTabs",
         "blink.workspaceViewportOffsets",
+        "blink.columns",
     ]
 
     private var savedDefaults: [String: Any?] = [:]
