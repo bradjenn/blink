@@ -68,6 +68,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         wantsLayer = true
         layer?.isOpaque = false
 
+        // Accept file and text drops from Finder and other apps
+        registerForDraggedTypes([.fileURL, .string])
 
         updateTrackingAreas()
     }
@@ -545,6 +547,37 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         case 0x37, 0x36: return .command
         default: return []
         }
+    }
+
+    // MARK: - Drag and Drop
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pb = sender.draggingPasteboard
+        if pb.canReadObject(forClasses: [NSURL.self, NSString.self]) {
+            return .copy
+        }
+        return []
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pb = sender.draggingPasteboard
+
+        // File URLs → shell-escaped absolute paths
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [
+            .urlReadingFileURLsOnly: true
+        ]) as? [URL], !urls.isEmpty {
+            let escaped = urls.map { Self.shellQuote($0.path) }
+            sendText(escaped.joined(separator: " "))
+            return true
+        }
+
+        // Plain text fallback
+        if let text = pb.string(forType: .string), !text.isEmpty {
+            sendText(text)
+            return true
+        }
+
+        return false
     }
 
     // MARK: - Text Input
