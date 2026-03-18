@@ -344,17 +344,22 @@ final class AppStore {
 
     func focusLeft() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
+        let cols = projectColumns(for: projectId)
 
-        if sidebarFocused {
-            return
+        if sidebarFocused { return }
+
+        guard let currentCol = activeColumn,
+              let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
+
+        // Save focus memory for current column
+        if let tabId = activeTabId {
+            columnFocusedTab[currentCol.id] = tabId
         }
 
-        guard let activeTabId,
-              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
-
-        if currentIndex > tabs.startIndex {
-            setActiveTab(tabs[tabs.index(before: currentIndex)].id)
+        if colIdx > cols.startIndex {
+            let targetCol = cols[cols.index(before: colIdx)]
+            let targetTab = columnFocusedTab[targetCol.id] ?? targetCol.tabIds.first
+            if let targetTab { setActiveTab(targetTab) }
         } else if sidebarVisible {
             sidebarFocused = true
         }
@@ -362,7 +367,7 @@ final class AppStore {
 
     func focusRight() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
+        let cols = projectColumns(for: projectId)
 
         if sidebarFocused {
             sidebarFocused = false
@@ -372,12 +377,40 @@ final class AppStore {
             return
         }
 
-        guard let activeTabId,
-              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
+        guard let currentCol = activeColumn,
+              let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
 
-        let nextIndex = tabs.index(after: currentIndex)
-        if nextIndex < tabs.endIndex {
-            setActiveTab(tabs[nextIndex].id)
+        // Save focus memory for current column
+        if let tabId = activeTabId {
+            columnFocusedTab[currentCol.id] = tabId
+        }
+
+        let nextIdx = cols.index(after: colIdx)
+        if nextIdx < cols.endIndex {
+            let targetCol = cols[nextIdx]
+            let targetTab = columnFocusedTab[targetCol.id] ?? targetCol.tabIds.first
+            if let targetTab { setActiveTab(targetTab) }
+        }
+    }
+
+    func focusDown() {
+        guard let currentCol = activeColumn,
+              let activeTabId,
+              let paneIdx = currentCol.tabIds.firstIndex(of: activeTabId) else { return }
+
+        let nextIdx = currentCol.tabIds.index(after: paneIdx)
+        if nextIdx < currentCol.tabIds.endIndex {
+            setActiveTab(currentCol.tabIds[nextIdx])
+        }
+    }
+
+    func focusUp() {
+        guard let currentCol = activeColumn,
+              let activeTabId,
+              let paneIdx = currentCol.tabIds.firstIndex(of: activeTabId) else { return }
+
+        if paneIdx > currentCol.tabIds.startIndex {
+            setActiveTab(currentCol.tabIds[currentCol.tabIds.index(before: paneIdx)])
         }
     }
 

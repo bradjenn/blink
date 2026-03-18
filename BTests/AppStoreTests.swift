@@ -458,6 +458,69 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(ordered.map(\.id), ["t1", "t2"])
     }
 
+    // MARK: - Vertical Focus Tests
+
+    func testFocusDown() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t1")
+
+        store.focusDown()
+
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testFocusDownNoOpAtBottom() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t2")
+
+        store.focusDown()
+
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    func testFocusUp() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t2")
+
+        store.focusUp()
+
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusUpNoOpAtTop() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t1")
+
+        store.focusUp()
+
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusLeftRestoresColumnMemory() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [
+            Column(id: "c1", tabIds: ["t1"]),
+            Column(id: "c2", tabIds: ["t2"]),
+        ]
+        store.sidebarVisible = false
+        // Focus t2 in c2, then focus left to c1, then right back — should remember t2
+        store.setActiveTab("t2")
+        store.focusLeft()
+        XCTAssertEqual(store.activeTabId, "t1")
+
+        store.focusRight()
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
     private func makeStore() -> AppStore {
         let store = AppStore()
         store.projects = [
