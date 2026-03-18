@@ -277,11 +277,12 @@ private struct WorkspaceColumnsView: View {
                     }
                     .onChange(of: tabs.count) {
                         if store.isOverviewMode {
-                            if tabs.isEmpty {
+                            let cols = store.projectColumns(for: project.id)
+                            if cols.isEmpty {
                                 store.exitOverview(selecting: nil)
                             } else if let highlightId = store.overviewHighlightedColumnId,
-                                      !tabs.contains(where: { $0.id == highlightId }) {
-                                store.overviewHighlightedColumnId = tabs.first?.id
+                                      !cols.contains(where: { $0.id == highlightId }) {
+                                store.overviewHighlightedColumnId = cols.first?.id
                             }
                         }
                     }
@@ -393,13 +394,15 @@ private struct WorkspaceColumnsView: View {
             }
     }
 
-    private func exitOverviewAnimated(selecting tabId: String?) {
-        // Pre-align viewport to the target column so the scale
-        // animation zooms in place rather than sliding laterally.
-        if let targetId = tabId ?? store.activeTabId {
-            store.setActiveTab(targetId)
-            alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
+    private func exitOverviewAnimated(selecting columnId: String?) {
+        // Set active tab from selected column before animating exit
+        if let columnId,
+           let projectId = store.activeProjectId,
+           let col = store.projectColumns(for: projectId).first(where: { $0.id == columnId }),
+           let targetTab = store.columnFocusedTab[columnId] ?? col.tabIds.first {
+            store.setActiveTab(targetTab)
         }
+        alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
         withAnimation(overviewAnimation) {
             store.isOverviewMode = false
             store.overviewHighlightedColumnId = nil

@@ -239,7 +239,7 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         XCTAssertTrue(store.isOverviewMode)
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c1")
 
         store.toggleOverview()
 
@@ -254,7 +254,7 @@ final class AppStoreTests: XCTestCase {
 
         store.toggleOverview()
 
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c2")
     }
 
     func testOverviewHighlightLeftRight() {
@@ -264,10 +264,10 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         store.overviewHighlightRight()
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c2")
 
         store.overviewHighlightLeft()
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c1")
     }
 
     func testOverviewHighlightStopsAtEdges() {
@@ -277,11 +277,11 @@ final class AppStoreTests: XCTestCase {
         store.toggleOverview()
 
         store.overviewHighlightLeft()
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t1")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c1")
 
         store.overviewHighlightRight()
         store.overviewHighlightRight()
-        XCTAssertEqual(store.overviewHighlightedColumnId, "t2")
+        XCTAssertEqual(store.overviewHighlightedColumnId, "c2")
     }
 
     func testExitOverviewWithSelection() {
@@ -290,7 +290,7 @@ final class AppStoreTests: XCTestCase {
         store.setActiveTab("t1")
         store.toggleOverview()
 
-        store.exitOverview(selecting: "t2")
+        store.exitOverview(selecting: "c2")
 
         XCTAssertFalse(store.isOverviewMode)
         XCTAssertNil(store.overviewHighlightedColumnId)

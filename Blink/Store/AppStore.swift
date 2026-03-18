@@ -505,20 +505,22 @@ final class AppStore {
 
     func toggleOverview() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
-        guard !tabs.isEmpty else { return }
+        let cols = projectColumns(for: projectId)
+        guard !cols.isEmpty else { return }
 
         if isOverviewMode {
             exitOverview(selecting: overviewHighlightedColumnId)
         } else {
             isOverviewMode = true
-            overviewHighlightedColumnId = activeTabId
+            overviewHighlightedColumnId = activeColumn?.id
         }
     }
 
-    func exitOverview(selecting tabId: String?) {
-        if let tabId {
-            setActiveTab(tabId)
+    func exitOverview(selecting columnId: String?) {
+        if let columnId,
+           let col = projectColumns(for: activeProjectId ?? "").first(where: { $0.id == columnId }),
+           let targetTab = columnFocusedTab[columnId] ?? col.tabIds.first {
+            setActiveTab(targetTab)
         }
         isOverviewMode = false
         overviewHighlightedColumnId = nil
@@ -526,21 +528,21 @@ final class AppStore {
 
     func overviewHighlightLeft() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
+        let cols = projectColumns(for: projectId)
         guard let highlightId = overviewHighlightedColumnId,
-              let idx = tabs.firstIndex(where: { $0.id == highlightId }),
-              idx > tabs.startIndex else { return }
-        overviewHighlightedColumnId = tabs[tabs.index(before: idx)].id
+              let idx = cols.firstIndex(where: { $0.id == highlightId }),
+              idx > cols.startIndex else { return }
+        overviewHighlightedColumnId = cols[cols.index(before: idx)].id
     }
 
     func overviewHighlightRight() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
+        let cols = projectColumns(for: projectId)
         guard let highlightId = overviewHighlightedColumnId,
-              let idx = tabs.firstIndex(where: { $0.id == highlightId }) else { return }
-        let next = tabs.index(after: idx)
-        guard next < tabs.endIndex else { return }
-        overviewHighlightedColumnId = tabs[next].id
+              let idx = cols.firstIndex(where: { $0.id == highlightId }) else { return }
+        let next = cols.index(after: idx)
+        guard next < cols.endIndex else { return }
+        overviewHighlightedColumnId = cols[next].id
     }
 
     // MARK: - Tab Actions
