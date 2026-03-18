@@ -126,6 +126,16 @@ struct BApp: App {
                 }
                 .keyboardShortcut("l", modifiers: .command)
 
+                Button("Focus Down") {
+                    store.focusDown()
+                }
+                .keyboardShortcut("j", modifiers: .command)
+
+                Button("Focus Up") {
+                    store.focusUp()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
                 Button("Move Window Left") {
                     store.moveColumnLeft()
                 }
@@ -135,6 +145,21 @@ struct BApp: App {
                     store.moveColumnRight()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
+
+                Button("Absorb from Left") {
+                    store.absorbFromLeft()
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+
+                Button("Absorb from Right") {
+                    store.absorbFromRight()
+                }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+
+                Button("Expel Pane") {
+                    store.expelActiveTab()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
 
                 Button("Overview") {
                     store.toggleOverview()
@@ -167,9 +192,9 @@ struct BApp: App {
                 ForEach(1...9, id: \.self) { number in
                     Button("Window \(number)") {
                         if let projectId = store.activeProjectId {
-                            let projectTabs = store.projectTabs(for: projectId)
-                            if number <= projectTabs.count {
-                                store.setActiveTab(projectTabs[number - 1].id)
+                            let ordered = store.orderedTabs(for: projectId)
+                            if number <= ordered.count {
+                                store.setActiveTab(ordered[number - 1].id)
                             }
                         }
                     }
