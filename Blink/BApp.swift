@@ -75,15 +75,27 @@ struct BApp: App {
                 }
                 .keyboardShortcut("b", modifiers: .command)
 
-                Button(store.sidebarFocused ? "Focus Terminal" : "Focus Sidebar") {
-                    store.toggleSidebarFocus()
+                Button("Focus Left") {
+                    store.focusLeft()
                 }
                 .keyboardShortcut("h", modifiers: .control)
 
-                Button("Focus Terminal") {
-                    store.focusTerminal()
+                Button("Focus Right") {
+                    store.focusRight()
                 }
                 .keyboardShortcut("l", modifiers: .control)
+
+                Button("Move Window Left") {
+                    store.moveActiveTabLeft()
+                }
+                .keyboardShortcut("h", modifiers: [.control, .shift])
+
+                Button("Move Window Right") {
+                    store.moveActiveTabRight()
+                }
+                .keyboardShortcut("l", modifiers: [.control, .shift])
+
+                Divider()
 
                 Button("Open Git") {
                     store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
