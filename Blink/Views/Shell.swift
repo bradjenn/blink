@@ -301,7 +301,7 @@ private struct WorkspaceColumnsView: View {
         layoutState.sync(
             projectId: project.id,
             tabIds: tabs.map(\.id),
-            defaultWidth: viewportWidth * Layout.workspaceColumnDefaultFraction
+            defaultFraction: Layout.workspaceColumnDefaultFraction
         )
     }
 
@@ -382,7 +382,7 @@ private struct WorkspaceColumnsView: View {
         let width = layoutState.width(
             for: tabId,
             projectId: project.id,
-            default: viewportWidth * Layout.workspaceColumnDefaultFraction
+            viewportWidth: viewportWidth
         )
         return min(max(width, Layout.workspaceColumnMinWidth), Layout.workspaceColumnMaxWidth)
     }

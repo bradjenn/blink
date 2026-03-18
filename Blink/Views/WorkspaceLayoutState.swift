@@ -2,79 +2,79 @@ import SwiftUI
 
 @MainActor @Observable
 final class WorkspaceLayoutState {
-    private var columnWidths: [String: [String: CGFloat]] = [:]
-    private var preMaximizeWidths: [String: [String: CGFloat]] = [:]
+    /// Stores column width as a fraction of the viewport (e.g. 0.5 = half width).
+    /// Fractions adapt automatically when the viewport resizes or sidebar toggles.
+    private var columnFractions: [String: [String: CGFloat]] = [:]
+    private var preMaximizeFractions: [String: [String: CGFloat]] = [:]
     private var initializedProjects: Set<String> = []
 
-    func sync(projectId: String, tabIds: [String], defaultWidth: CGFloat) {
-        let existingWidths = columnWidths[projectId] ?? [:]
-        var nextWidths: [String: CGFloat] = [:]
+    func sync(projectId: String, tabIds: [String], defaultFraction: CGFloat) {
+        let existing = columnFractions[projectId] ?? [:]
+        var next: [String: CGFloat] = [:]
 
         for tabId in tabIds {
-            nextWidths[tabId] = existingWidths[tabId] ?? defaultWidth
+            next[tabId] = existing[tabId] ?? defaultFraction
         }
 
-        columnWidths[projectId] = nextWidths
+        columnFractions[projectId] = next
 
         if tabIds.isEmpty {
             initializedProjects.remove(projectId)
         }
     }
 
-    func width(for tabId: String, projectId: String, default defaultWidth: CGFloat) -> CGFloat {
-        columnWidths[projectId]?[tabId] ?? defaultWidth
+    /// Returns the absolute pixel width for a column given the current viewport.
+    func width(for tabId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
+        let fraction = columnFractions[projectId]?[tabId] ?? Layout.workspaceColumnDefaultFraction
+        return viewportWidth * fraction
     }
 
-    func setWidth(_ width: CGFloat, for tabId: String, projectId: String) {
-        var widths = columnWidths[projectId] ?? [:]
-        widths[tabId] = width
-        columnWidths[projectId] = widths
+    func setFraction(_ fraction: CGFloat, for tabId: String, projectId: String) {
+        var fractions = columnFractions[projectId] ?? [:]
+        fractions[tabId] = fraction
+        columnFractions[projectId] = fractions
     }
 
     /// Cycle through preset fractions. Returns the new absolute width.
     func cyclePreset(for tabId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
         let presets = Layout.workspaceColumnPresets
-        let currentWidth = width(for: tabId, projectId: projectId, default: viewportWidth * Layout.workspaceColumnDefaultFraction)
-        let tolerance: CGFloat = 8
+        let currentFraction = columnFractions[projectId]?[tabId] ?? Layout.workspaceColumnDefaultFraction
+        let tolerance: CGFloat = 0.02
 
         // Find which preset we're closest to, then advance to the next
         var nextPreset = presets[0]
-        for (i, fraction) in presets.enumerated() {
-            let presetWidth = viewportWidth * fraction
-            if abs(currentWidth - presetWidth) < tolerance {
+        for (i, preset) in presets.enumerated() {
+            if abs(currentFraction - preset) < tolerance {
                 nextPreset = presets[(i + 1) % presets.count]
                 break
             }
-            // If we didn't match any preset, default to first preset
             if i == presets.count - 1 {
                 nextPreset = presets[0]
             }
         }
 
-        let newWidth = viewportWidth * nextPreset
-        setWidth(newWidth, for: tabId, projectId: projectId)
-        // Clear maximize state since we're now on a preset
-        preMaximizeWidths[projectId]?.removeValue(forKey: tabId)
-        return newWidth
+        setFraction(nextPreset, for: tabId, projectId: projectId)
+        preMaximizeFractions[projectId]?.removeValue(forKey: tabId)
+        return viewportWidth * nextPreset
     }
 
-    /// Toggle maximize: full viewport width ↔ restore previous size.
+    /// Toggle maximize: fraction 1.0 ↔ restore previous fraction.
     func toggleMaximize(for tabId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
-        let currentWidth = width(for: tabId, projectId: projectId, default: viewportWidth * Layout.workspaceColumnDefaultFraction)
-        let tolerance: CGFloat = 8
+        let currentFraction = columnFractions[projectId]?[tabId] ?? Layout.workspaceColumnDefaultFraction
+        let tolerance: CGFloat = 0.02
 
-        if abs(currentWidth - viewportWidth) < tolerance {
-            // Currently maximized — restore previous width
-            let restored = preMaximizeWidths[projectId]?[tabId] ?? (viewportWidth * Layout.workspaceColumnDefaultFraction)
-            setWidth(restored, for: tabId, projectId: projectId)
-            preMaximizeWidths[projectId]?.removeValue(forKey: tabId)
-            return restored
+        if abs(currentFraction - 1.0) < tolerance {
+            // Currently maximized — restore previous fraction
+            let restored = preMaximizeFractions[projectId]?[tabId] ?? Layout.workspaceColumnDefaultFraction
+            setFraction(restored, for: tabId, projectId: projectId)
+            preMaximizeFractions[projectId]?.removeValue(forKey: tabId)
+            return viewportWidth * restored
         } else {
-            // Save current width and maximize
-            var saved = preMaximizeWidths[projectId] ?? [:]
-            saved[tabId] = currentWidth
-            preMaximizeWidths[projectId] = saved
-            setWidth(viewportWidth, for: tabId, projectId: projectId)
+            // Save current fraction and maximize
+            var saved = preMaximizeFractions[projectId] ?? [:]
+            saved[tabId] = currentFraction
+            preMaximizeFractions[projectId] = saved
+            setFraction(1.0, for: tabId, projectId: projectId)
             return viewportWidth
         }
     }
