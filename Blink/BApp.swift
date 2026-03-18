@@ -1,7 +1,48 @@
 import SwiftUI
 import GhosttyKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {}
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            self?.clearReservedKeyboardShortcuts()
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        clearReservedKeyboardShortcuts()
+    }
+
+    private func clearReservedKeyboardShortcuts() {
+        guard let mainMenu = NSApp.mainMenu else { return }
+
+        clearKeyEquivalent(
+            in: mainMenu,
+            action: #selector(NSApplication.hide(_:)),
+            key: "h",
+            modifiers: [.command]
+        )
+    }
+
+    private func clearKeyEquivalent(
+        in menu: NSMenu,
+        action: Selector,
+        key: String,
+        modifiers: NSEvent.ModifierFlags
+    ) {
+        for item in menu.items {
+            if item.action == action,
+               item.keyEquivalent.lowercased() == key,
+               item.keyEquivalentModifierMask.intersection(.deviceIndependentFlagsMask) == modifiers {
+                item.keyEquivalent = ""
+                item.keyEquivalentModifierMask = []
+            }
+
+            if let submenu = item.submenu {
+                clearKeyEquivalent(in: submenu, action: action, key: key, modifiers: modifiers)
+            }
+        }
+    }
+}
 
 @main
 struct BApp: App {
@@ -78,22 +119,22 @@ struct BApp: App {
                 Button("Focus Left") {
                     store.focusLeft()
                 }
-                .keyboardShortcut("h", modifiers: .control)
+                .keyboardShortcut("h", modifiers: .command)
 
                 Button("Focus Right") {
                     store.focusRight()
                 }
-                .keyboardShortcut("l", modifiers: .control)
+                .keyboardShortcut("l", modifiers: .command)
 
                 Button("Move Window Left") {
                     store.moveActiveTabLeft()
                 }
-                .keyboardShortcut("h", modifiers: [.control, .shift])
+                .keyboardShortcut("h", modifiers: [.command, .shift])
 
                 Button("Move Window Right") {
                     store.moveActiveTabRight()
                 }
-                .keyboardShortcut("l", modifiers: [.control, .shift])
+                .keyboardShortcut("l", modifiers: [.command, .shift])
 
                 Divider()
 

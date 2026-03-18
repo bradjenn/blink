@@ -216,9 +216,8 @@ private struct WorkspaceColumnsView: View {
             insertion: .move(edge: .trailing)
                 .combined(with: .opacity)
                 .combined(with: .scale(scale: 0.985, anchor: .trailing)),
-            removal: .move(edge: .leading)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.985, anchor: .leading))
+            removal: .opacity
+                .combined(with: .scale(scale: 0.96))
         )
     }
 
@@ -247,7 +246,7 @@ private struct WorkspaceColumnsView: View {
                         handleViewportChange(viewportWidth: geometry.size.width)
                     }
                     .onKeyPress(characters: CharacterSet(charactersIn: "rf")) { keyPress in
-                        guard keyPress.modifiers == .control else { return .ignored }
+                        guard keyPress.modifiers == .command else { return .ignored }
                         guard let tabId = store.activeTabId else { return .ignored }
                         switch keyPress.characters {
                         case "r":
@@ -294,7 +293,6 @@ private struct WorkspaceColumnsView: View {
         .clipped()
         .contentShape(Rectangle())
         .animation(workspaceAnimation, value: tabs.map(\.id))
-        .animation(workspaceAnimation, value: store.activeTabId)
     }
 
     private func syncTabs(viewportWidth: CGFloat) {
