@@ -45,6 +45,7 @@
 		9D7653F138E03F29AA3979D0 /* akane-bridge.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */; };
 		9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */; };
 		A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */; };
+		AB42C98139912D4E2C064CA3 /* WorkspaceLayoutState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */; };
 		B45E26D8D5C3A594A913DC78 /* gruvbox-ferns.jpg in Resources */ = {isa = PBXBuildFile; fileRef = C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */; };
 		B515CCF60006105913EE07AC /* StartScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBECED94726237307F2628C /* StartScreen.swift */; };
 		C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912BF0925C71AED8B1C12E74 /* Tab.swift */; };
@@ -134,6 +135,7 @@
 		DC454B9A44EB926A6C43A58B /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		DEE79A9F7347C5201472A699 /* WallpaperCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperCard.swift; sourceTree = "<group>"; };
 		E7511997BAA46E9D924A8619 /* everforest.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = everforest.jpg; sourceTree = "<group>"; };
+		ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutState.swift; sourceTree = "<group>"; };
 		F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettings.swift; sourceTree = "<group>"; };
 		F6E53B8CED8557F923515E7F /* TerminalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTheme.swift; sourceTree = "<group>"; };
 		F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyApp.swift; sourceTree = "<group>"; };
@@ -316,6 +318,7 @@
 				495E310460549B685EDCF6C4 /* StatusLine.swift */,
 				DC454B9A44EB926A6C43A58B /* TabBar.swift */,
 				6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */,
+				ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */,
 				F9FC872F5D91B5C423DD46FB /* Settings */,
 			);
 			path = Views;
@@ -463,6 +466,7 @@
 				A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */,
 				E2C7CF53477F3E8E337009BE /* WindowDragRegion.swift in Sources */,
 				495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */,
+				AB42C98139912D4E2C064CA3 /* WorkspaceLayoutState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

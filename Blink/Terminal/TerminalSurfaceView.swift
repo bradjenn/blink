@@ -2,12 +2,18 @@ import AppKit
 import SwiftUI
 import GhosttyKit
 
+enum SwipeNavigationDirection {
+    case previous
+    case next
+}
+
 /// NSView subclass that hosts a single ghostty terminal surface.
 /// Metal rendering, keyboard/mouse input, and transparency are handled here.
 class TerminalSurfaceView: NSView, NSTextInputClient {
 
     private let ghosttyApp: GhosttyApp
     private var surface: ghostty_surface_t?
+    private var isTearingDown = false
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
@@ -19,6 +25,14 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private let command: String?
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
+    /// Called when the user performs a window-switch gesture.
+    var onSwipeNavigation: ((SwipeNavigationDirection) -> Void)?
+    /// Called when the user interacts with the surface directly.
+    var onInteraction: (() -> Void)?
+
+    private var swipeNavigationAccumulatedX: CGFloat = 0
+    private var swipeNavigationDirection: SwipeNavigationDirection?
+    private var lastSwipeNavigationTimestamp: TimeInterval = 0
 
     private static let defaultShellPATHEntries = [
         ".local/bin",
@@ -35,6 +49,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         "/usr/sbin",
         "/sbin",
     ]
+
+    private static let swipeNavigationThreshold: CGFloat = 72
+    private static let swipeNavigationCooldown: TimeInterval = 0.25
+    private static let swipeNavigationHorizontalBias: CGFloat = 1.5
 
     // MARK: - Init
 
@@ -63,7 +81,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard surface == nil, let _ = window, let app = ghosttyApp.app else { return }
+        guard !isTearingDown, surface == nil, let _ = window, let app = ghosttyApp.app else { return }
         createSurface(app: app)
     }
 
@@ -78,8 +96,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.scale_factor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
 
-        // Set environment variables — xterm-ghostty terminfo isn't installed,
-        // so use xterm-256color which is universally available.
+        // Both command tabs and normal shells are wrapped with `env -u NO_COLOR`
+        // to strip the NO_COLOR variable that may be inherited from the parent
+        // process. Ghostty's env_vars API can only add/override — not unset —
+        // so we use `env -u` to guarantee NO_COLOR is absent.
         var envVars: [ghostty_env_var_s] = [
             ghostty_env_var_s(key: strdup("TERM"), value: strdup("xterm-256color")),
             ghostty_env_var_s(key: strdup("COLORTERM"), value: strdup("truecolor")),
@@ -98,14 +118,17 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 }
             }
         }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let wrapped: String
         if let command {
-            // Wrap in a login shell so the user's PATH is available
-            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-            let wrapped = "\(shell) -l -c '\(command)'"
-            wrapped.withCString { createWithConfig($0) }
+            // Command tabs: non-interactive login shell running a specific command
+            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell)) -l -c \(Self.shellQuote(command))"
         } else {
-            createWithConfig(nil)
+            // Normal tabs: interactive login shell (no -c flag, so the shell
+            // detects the PTY and enters interactive mode with full job control)
+            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell)) -l"
         }
+        wrapped.withCString { createWithConfig($0) }
 
         // Free strdup'd strings
         for ev in envVars {
@@ -157,6 +180,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
 
         return entries.joined(separator: ":")
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 
     // MARK: - View Properties
@@ -393,6 +420,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func mouseDown(with event: NSEvent) {
         guard let surface else { return }
+        onInteraction?()
         focus()
         let mods = Self.translateMods(event.modifierFlags)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods)
@@ -406,6 +434,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func rightMouseDown(with event: NSEvent) {
         guard let surface else { return }
+        onInteraction?()
         let mods = Self.translateMods(event.modifierFlags)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, mods)
     }
@@ -430,6 +459,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func scrollWheel(with event: NSEvent) {
         guard let surface else { return }
+        if handleSwipeNavigation(with: event) {
+            return
+        }
         // ghostty_input_scroll_mods_t is a plain int bitmask, not a struct.
         // Bit 0 = precision scrolling (trackpad vs mouse wheel).
         var scrollMods: ghostty_input_scroll_mods_t = 0
@@ -442,6 +474,54 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             event.scrollingDeltaY,
             scrollMods
         )
+    }
+
+    private func handleSwipeNavigation(with event: NSEvent) -> Bool {
+        if event.phase.contains(.began) {
+            resetSwipeNavigation()
+        }
+
+        let isCommandSwipe = event.hasPreciseScrollingDeltas
+            && event.modifierFlags.contains(.command)
+            && event.momentumPhase.isEmpty
+            && abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) * Self.swipeNavigationHorizontalBias
+
+        guard isCommandSwipe else {
+            if !event.modifierFlags.contains(.command)
+                || !event.hasPreciseScrollingDeltas
+                || !event.momentumPhase.isEmpty
+                || event.phase.contains(.ended)
+                || event.phase.contains(.cancelled) {
+                resetSwipeNavigation()
+            }
+            return false
+        }
+
+        let direction: SwipeNavigationDirection = event.scrollingDeltaX > 0 ? .previous : .next
+        if swipeNavigationDirection != direction {
+            swipeNavigationDirection = direction
+            swipeNavigationAccumulatedX = 0
+        }
+
+        swipeNavigationAccumulatedX += abs(event.scrollingDeltaX)
+
+        if event.timestamp - lastSwipeNavigationTimestamp >= Self.swipeNavigationCooldown,
+           swipeNavigationAccumulatedX >= Self.swipeNavigationThreshold {
+            lastSwipeNavigationTimestamp = event.timestamp
+            swipeNavigationAccumulatedX = 0
+            onSwipeNavigation?(direction)
+        }
+
+        if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            resetSwipeNavigation()
+        }
+
+        return true
+    }
+
+    private func resetSwipeNavigation() {
+        swipeNavigationAccumulatedX = 0
+        swipeNavigationDirection = nil
     }
 
     // MARK: - Modifier Translation
@@ -508,10 +588,28 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     /// Free the ghostty surface. Called by SurfaceManager on tab close.
     func teardown() {
-        if let surface {
-            ghostty_surface_free(surface)
+        guard !isTearingDown else { return }
+        isTearingDown = true
+
+        guard let surface else { return }
+
+        self.surface = nil
+        onClose = nil
+        onSwipeNavigation = nil
+        onInteraction = nil
+
+        if window?.firstResponder === self {
+            window?.makeFirstResponder(nil)
         }
-        surface = nil
+        removeFromSuperview()
+
+        // Free the surface on the next main-runloop turn so AppKit/Metal can
+        // finish the current frame commit before Ghostty tears renderer state down.
+        DispatchQueue.main.async { [surface] in
+            withExtendedLifetime(self) {
+                ghostty_surface_free(surface)
+            }
+        }
     }
 
     deinit {

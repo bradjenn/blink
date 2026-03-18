@@ -11,10 +11,11 @@ class TerminalContainerView: NSView {
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
 
-    func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String) {
+    func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
         guard tabId != currentTabId else {
-            // Same tab — just focus
-            surfaceView.focus()
+            if shouldFocus {
+                surfaceView.focus()
+            }
             return
         }
 
@@ -30,18 +31,22 @@ class TerminalContainerView: NSView {
         currentTabId = tabId
         currentSurface = surfaceView
 
-        surfaceView.focus()
+        if shouldFocus {
+            surfaceView.focus()
+        }
     }
 }
 
 /// SwiftUI wrapper that manages terminal surfaces via a container view.
 struct TerminalView: NSViewRepresentable {
+    @Environment(AppStore.self) private var store
+
     let tabId: String
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
     let workingDirectory: String
+    let isFocused: Bool
     var command: String? = nil
-    @Environment(\.theme) private var theme
 
     func makeNSView(context: Context) -> TerminalContainerView {
         TerminalContainerView()
@@ -59,6 +64,21 @@ struct TerminalView: NSViewRepresentable {
                 command: command
             )
         }
-        container.showSurface(surfaceView, tabId: tabId)
+
+        surfaceView.onSwipeNavigation = { [store] direction in
+            switch direction {
+            case .previous:
+                store.selectPreviousTab()
+            case .next:
+                store.selectNextTab()
+            }
+        }
+        surfaceView.onInteraction = { [store, tabId] in
+            if store.activeTabId != tabId {
+                store.setActiveTab(tabId)
+            }
+        }
+
+        container.showSurface(surfaceView, tabId: tabId, shouldFocus: isFocused)
     }
 }

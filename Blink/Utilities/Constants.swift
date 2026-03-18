@@ -2,13 +2,11 @@ import SwiftUI
 
 enum Layout {
     // Sidebar
-    static let sidebarWidth: CGFloat = 340
-    static let sidebarCollapsedWidth: CGFloat = 50
-    static let logoAreaCollapsedWidth: CGFloat = 120
-    static let sidebarItemPadding = EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 12)
+    static let sidebarWidth: CGFloat = 324
+    static let sidebarItemPadding = EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
     static let sidebarItemBorderWidth: CGFloat = 3
     static let sidebarItemGap: CGFloat = 10        // gap-2.5
-    static let sidebarHeaderPadding = EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16)
+    static let sidebarHeaderPadding = EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14)
     static let sidebarSettingsHeight: CGFloat = 32
 
     // Tab bar
@@ -16,9 +14,16 @@ enum Layout {
     static let tabBarLogoPaddingLeft: CGFloat = 78 // macOS traffic lights offset
     static let tabPillPaddingH: CGFloat = 14
 
+    // Workspace
+    static let workspacePaddingH: CGFloat = 10
+    static let workspacePaddingV: CGFloat = 8
+    static let workspaceColumnSpacing: CGFloat = 10
+    static let workspaceColumnMinWidth: CGFloat = 420
+    static let workspaceColumnMaxWidth: CGFloat = 4000
+    static let workspaceFocusedColumnPeek: CGFloat = 0
+
     // Status line
-    static let statusLineHeight: CGFloat = 32
-    static let statusLinePaddingH: CGFloat = 14
+    static let statusLineHeight: CGFloat = 30
 
     // Window
     static let windowMinWidth: CGFloat = 800

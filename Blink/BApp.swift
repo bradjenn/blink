@@ -15,7 +15,11 @@ struct BApp: App {
     var body: some Scene {
         WindowGroup {
             Shell(ghosttyApp: ghosttyApp, surfaceManager: surfaceManager)
-                .background(WindowTitleBarConfigurator())
+                .background(
+                    WindowTitleBarConfigurator(
+                        onCloseRequest: { store.closeActiveTab() }
+                    )
+                )
                 .environment(store)
                 .environment(themeManager)
                 .environment(gitMonitor)
@@ -33,7 +37,6 @@ struct BApp: App {
                     surfaceManager.onProcessExit = { tabId in
                         // Auto-close tabs that ran a command (e.g. lazygit)
                         if let tab = store.tabs.first(where: { $0.id == tabId }), tab.command != nil {
-                            surfaceManager.destroySurface(tabId: tabId)
                             store.closeTab(tabId)
                         }
                     }
@@ -83,36 +86,28 @@ struct BApp: App {
                 .keyboardShortcut("l", modifiers: .control)
 
                 Button("Open Git") {
-                    if let projectId = store.activeProjectId {
-                        if let existing = store.projectTabs(for: projectId).first(where: { $0.command == "lazygit" }) {
-                            store.setActiveTab(existing.id)
-                        } else {
-                            store.openTab(projectId: projectId, command: "lazygit", label: "lazygit")
-                        }
-                    }
+                    store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
                 }
                 .keyboardShortcut("g", modifiers: .command)
             }
 
             CommandGroup(replacing: .newItem) {
-                Button("New Tab") {
+                Button("New Window") {
                     if let projectId = store.activeProjectId {
                         store.openTab(projectId: projectId)
                     }
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
-                Button("Close Tab") {
-                    if let tabId = store.activeTabId {
-                        store.closeTab(tabId)
-                    }
+                Button("Close Window") {
+                    store.closeActiveTab()
                 }
                 .keyboardShortcut("w", modifiers: .command)
 
                 Divider()
 
                 ForEach(1...9, id: \.self) { number in
-                    Button("Tab \(number)") {
+                    Button("Window \(number)") {
                         if let projectId = store.activeProjectId {
                             let projectTabs = store.projectTabs(for: projectId)
                             if number <= projectTabs.count {

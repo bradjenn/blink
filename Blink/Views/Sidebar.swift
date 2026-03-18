@@ -7,11 +7,11 @@ struct SidebarView: View {
     @Environment(AppStore.self) private var store
 
     @State private var isAddHovered = false
+    @State private var isNewWindowHovered = false
     @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("PROJECTS")
                     .font(Fonts.primary(size: 11, weight: .medium).leading(.tight))
@@ -21,29 +21,61 @@ struct SidebarView: View {
 
                 Spacer()
 
-                Button(action: { pickProjectFolder() }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Add Project")
-                .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isAddHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
-                )
-                .scaleEffect(isAddHovered ? 1.08 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isAddHovered)
-                .onHover { hovering in
-                    isAddHovered = hovering
-                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                HStack(spacing: 6) {
+                    Button(action: toggleNewWindowMenu) {
+                        Image(systemName: "rectangle.on.rectangle")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(isNewWindowHovered ? theme.text : theme.textDim)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("New Window")
+                    .buttonStyle(.plain)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(isNewWindowHovered ? theme.accent.opacity(0.08) : theme.border.opacity(0.2))
+                    )
+                    .scaleEffect(isNewWindowHovered ? 1.04 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isNewWindowHovered)
+                    .onHover { hovering in
+                        isNewWindowHovered = hovering
+                        if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                    }
+                    .backgroundPopover(
+                        isPresented: Binding(
+                            get: { store.showNewTabMenu },
+                            set: { store.showNewTabMenu = $0 }
+                        )
+                    ) {
+                        NewTabMenu(onAction: handleNewWindowAction)
+                    }
+                    .disabled(store.activeProjectId == nil)
+
+                    Button(action: pickProjectFolder) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(isAddHovered ? theme.text : theme.textDim)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Add Project")
+                    .buttonStyle(.plain)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(isAddHovered ? theme.accent.opacity(0.08) : theme.border.opacity(0.2))
+                    )
+                    .scaleEffect(isAddHovered ? 1.04 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: isAddHovered)
+                    .onHover { hovering in
+                        isAddHovered = hovering
+                        if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                    }
                 }
             }
             .padding(Layout.sidebarHeaderPadding)
 
-            // Project list
+            theme.border.opacity(0.7).frame(height: 1)
+
             if store.projects.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "folder")
@@ -57,6 +89,7 @@ struct SidebarView: View {
                         .foregroundStyle(theme.textDim)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 16)
             } else {
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
@@ -72,12 +105,13 @@ struct SidebarView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
             }
         }
-        .background(theme.accent.opacity(store.sidebarFocused ? 0.02 : 0))
+        .background(theme.accent.opacity(store.sidebarFocused ? 0.025 : 0))
         .animation(.easeInOut(duration: 0.15), value: store.sidebarFocused)
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
@@ -85,6 +119,30 @@ struct SidebarView: View {
 
     private func pickProjectFolder() {
         store.pickProjectFolder()
+    }
+
+    private func toggleNewWindowMenu() {
+        store.showNewTabMenu.toggle()
+    }
+
+    private func handleNewWindowAction(_ action: NewTabAction) {
+        store.showNewTabMenu = false
+        guard let projectId = store.activeProjectId else { return }
+
+        switch action {
+        case .terminal:
+            store.openTab(projectId: projectId)
+        case .claude:
+            store.openOrFocusCommandTab(projectId: projectId, command: "claude", label: "Claude Code")
+        case .claudeYolo:
+            store.openOrFocusCommandTab(projectId: projectId, command: "claude --dangerously-skip-permissions", label: "Claude Code")
+        case .codex:
+            store.openOrFocusCommandTab(projectId: projectId, command: "codex", label: "Codex")
+        case .openCode:
+            store.openOrFocusCommandTab(projectId: projectId, command: "opencode", label: "Open Code")
+        case .lazygit:
+            store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
+        }
     }
 
     private func installKeyMonitor() {

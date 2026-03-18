@@ -15,6 +15,8 @@ private enum StorageKeys {
     static let sidebarVisible = "blink.sidebarVisible"
     static let projects = "blink.projects"
     static let lastSelectedProjectId = "blink.lastSelectedProjectId"
+    static let lastActiveTabs = "blink.lastActiveTabs"
+    static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
 }
 
 @MainActor @Observable
@@ -67,6 +69,13 @@ final class AppStore {
     var sidebarFocused: Bool = false
     var surfaceManager: SurfaceManager?
 
+    private var lastActiveTab: [String: String] {
+        didSet { Self.saveDictionary(lastActiveTab, forKey: StorageKeys.lastActiveTabs) }
+    }
+    private var workspaceViewportOffsets: [String: Double] {
+        didSet { Self.saveDictionary(workspaceViewportOffsets, forKey: StorageKeys.workspaceViewportOffsets) }
+    }
+
     func focusTerminal() {
         sidebarFocused = false
         if let tabId = activeTabId {
@@ -84,6 +93,8 @@ final class AppStore {
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
         self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
+        self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
+        self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
         if let storedLastProjectId,
            loadedProjects.contains(where: { $0.id == storedLastProjectId }) {
             self.lastSelectedProjectId = storedLastProjectId
@@ -112,15 +123,21 @@ final class AppStore {
     }
 
     func toggleSidebar() {
-        sidebarVisible.toggle()
-        if !sidebarVisible { sidebarFocused = false }
+        withAnimation(.snappy(duration: 0.18, extraBounce: 0)) {
+            sidebarVisible.toggle()
+            if !sidebarVisible { sidebarFocused = false }
+        }
     }
 
     func toggleSidebarFocus() {
         if sidebarFocused {
             focusTerminal()
         } else {
-            if !sidebarVisible { sidebarVisible = true }
+            if !sidebarVisible {
+                withAnimation(.snappy(duration: 0.18, extraBounce: 0)) {
+                    sidebarVisible = true
+                }
+            }
             sidebarFocused = true
         }
     }
@@ -189,9 +206,6 @@ final class AppStore {
         backgroundImage != nil
     }
 
-    // Last active tab per project — remembered when switching away
-    private var lastActiveTab: [String: String] = [:]
-
     // MARK: - Actions
 
     func setActiveProject(_ id: String?) {
@@ -240,7 +254,43 @@ final class AppStore {
 
     func setActiveTab(_ id: String) {
         activeTabId = id
+        if let tab = tabs.first(where: { $0.id == id }) {
+            lastActiveTab[tab.projectId] = id
+        }
         clearUnread(id)
+    }
+
+    func selectNextTab() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+        guard !tabs.isEmpty else { return }
+
+        guard let activeTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else {
+            setActiveTab(tabs[0].id)
+            return
+        }
+
+        let nextIndex = tabs.index(after: currentIndex)
+        let tab = nextIndex < tabs.endIndex ? tabs[nextIndex] : tabs[0]
+        setActiveTab(tab.id)
+    }
+
+    func selectPreviousTab() {
+        guard let projectId = activeProjectId else { return }
+        let tabs = projectTabs(for: projectId)
+        guard !tabs.isEmpty else { return }
+
+        guard let activeTabId,
+              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else {
+            setActiveTab(tabs[tabs.index(before: tabs.endIndex)].id)
+            return
+        }
+
+        let tab = currentIndex > tabs.startIndex
+            ? tabs[tabs.index(before: currentIndex)]
+            : tabs[tabs.index(before: tabs.endIndex)]
+        setActiveTab(tab.id)
     }
 
     // MARK: - Tab Actions
@@ -259,9 +309,21 @@ final class AppStore {
             command: command
         )
         tabs.append(tab)
-        activeTabId = tab.id
-        clearUnread(tab.id)
+        setActiveTab(tab.id)
         return tab
+    }
+
+    func openOrFocusCommandTab(projectId: String, command: String, label: String) {
+        if let existing = projectTabs(for: projectId).first(where: { $0.command == command }) {
+            setActiveTab(existing.id)
+        } else {
+            openTab(projectId: projectId, command: command, label: label)
+        }
+    }
+
+    func openOrFocusCommandTabForActiveProject(command: String, label: String) {
+        guard let projectId = activeProjectId else { return }
+        openOrFocusCommandTab(projectId: projectId, command: command, label: label)
     }
 
     /// Update a tab's title.
@@ -305,8 +367,11 @@ final class AppStore {
     }
 
     func removeProject(_ id: String) {
+        let tabIds = tabs.filter { $0.projectId == id }.map(\.id)
         projects.removeAll { $0.id == id }
         tabs.removeAll { $0.projectId == id }
+        unreadTabs.subtract(tabIds)
+        lastActiveTab[id] = nil
         if activeProjectId == id {
             activeProjectId = nil
             activeTabId = nil
@@ -314,16 +379,41 @@ final class AppStore {
         if lastSelectedProjectId == id {
             lastSelectedProjectId = nil
         }
+        workspaceViewportOffsets[id] = nil
+
+        let surfaceManager = surfaceManager
+        DispatchQueue.main.async {
+            surfaceManager?.destroySurfaces(tabIds: tabIds)
+        }
     }
 
     func closeTab(_ id: String) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
         tabs.removeAll { $0.id == id }
+        unreadTabs.remove(id)
+        if lastActiveTab[tab.projectId] == id {
+            lastActiveTab[tab.projectId] = nil
+        }
         if activeTabId == id {
             let remaining = projectTabs(for: tab.projectId)
-            activeTabId = remaining.last?.id
+            if let nextActiveTabId = remaining.last?.id {
+                setActiveTab(nextActiveTabId)
+            } else {
+                activeTabId = nil
+                workspaceViewportOffsets[tab.projectId] = nil
+            }
         }
         reindexTabs(for: tab.projectId)
+
+        let surfaceManager = surfaceManager
+        DispatchQueue.main.async {
+            surfaceManager?.destroySurface(tabId: id)
+        }
+    }
+
+    func closeActiveTab() {
+        guard let activeTabId else { return }
+        closeTab(activeTabId)
     }
 
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
@@ -394,6 +484,32 @@ final class AppStore {
     private static func saveProjects(_ projects: [Project]) {
         if let data = try? JSONEncoder().encode(projects) {
             UserDefaults.standard.set(data, forKey: StorageKeys.projects)
+        }
+    }
+
+    func workspaceViewportOffset(for projectId: String) -> CGFloat {
+        CGFloat(workspaceViewportOffsets[projectId] ?? 0)
+    }
+
+    func hasWorkspaceViewportOffset(for projectId: String) -> Bool {
+        workspaceViewportOffsets[projectId] != nil
+    }
+
+    func setWorkspaceViewportOffset(_ offset: CGFloat, for projectId: String) {
+        workspaceViewportOffsets[projectId] = Double(offset)
+    }
+
+    private static func loadDictionary<Value: Decodable>(forKey key: String) -> [String: Value] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let value = try? JSONDecoder().decode([String: Value].self, from: data) else {
+            return [:]
+        }
+        return value
+    }
+
+    private static func saveDictionary<Value: Encodable>(_ value: [String: Value], forKey key: String) {
+        if let data = try? JSONEncoder().encode(value) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 }

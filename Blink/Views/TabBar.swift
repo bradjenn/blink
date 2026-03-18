@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Logo area — sits in the top bar left section.
 struct TabBarLogoArea: View {
@@ -9,9 +10,7 @@ struct TabBarLogoArea: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Button {
-                store.toggleSidebar()
-            } label: {
+            Button(action: toggleSidebar) {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(isToggleHovered ? theme.text : theme.textDim)
@@ -33,158 +32,18 @@ struct TabBarLogoArea: View {
         }
         .frame(maxHeight: .infinity, alignment: .leading)
     }
+
+    private func toggleSidebar() {
+        store.toggleSidebar()
+    }
 }
 
-/// Tabs area — sits in the top bar right section.
+/// Workspace toolbar — shows project and focused window context.
 struct TabBarTabsArea: View {
-    @Environment(\.theme) private var theme
-    @Environment(AppStore.self) private var store
-
-    let ghosttyApp: GhosttyApp
-    let surfaceManager: SurfaceManager
-
-    @State private var isPlusHovered = false
-
-    private var projectTabs: [AppTab] {
-        guard let id = store.activeProjectId else { return [] }
-        return store.projectTabs(for: id)
-    }
-
     var body: some View {
-        HStack(spacing: 0) {
-            if store.activeProjectId != nil {
-                HStack(spacing: 0) {
-                    ForEach(projectTabs) { tab in
-                        TabPill(
-                            tab: tab,
-                            isActive: store.activeTabId == tab.id,
-                            onSelect: { store.setActiveTab(tab.id) },
-                            onClose: {
-                                surfaceManager.destroySurface(tabId: tab.id)
-                                store.closeTab(tab.id)
-                            }
-                        )
-                    }
-                }
-
-                Button {
-                    store.showNewTabMenu.toggle()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(isPlusHovered ? theme.text : theme.textDim)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("New Tab")
-                .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isPlusHovered ? theme.accent.opacity(0.1) : theme.border.opacity(0.3))
-                )
-                .scaleEffect(isPlusHovered ? 1.08 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isPlusHovered)
-                .padding(.leading, 6)
-                .onHover { hovering in
-                    isPlusHovered = hovering
-                    if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-                }
-                .backgroundPopover(
-                    isPresented: Binding(
-                        get: { store.showNewTabMenu },
-                        set: { store.showNewTabMenu = $0 }
-                    )
-                ) {
-                    NewTabMenu(onAction: { action in
-                        store.showNewTabMenu = false
-                        guard let projectId = store.activeProjectId else { return }
-                        switch action {
-                        case .terminal:
-                            store.openTab(projectId: projectId)
-                        case .claude:
-                            openOrFocusCommand(projectId: projectId, command: "claude", label: "Claude Code")
-                        case .claudeYolo:
-                            openOrFocusCommand(projectId: projectId, command: "claude --dangerously-skip-permissions", label: "Claude Code")
-                        case .codex:
-                            openOrFocusCommand(projectId: projectId, command: "codex", label: "Codex")
-                        case .openCode:
-                            openOrFocusCommand(projectId: projectId, command: "opencode", label: "Open Code")
-                        case .lazygit:
-                            openOrFocusCommand(projectId: projectId, command: "lazygit", label: "lazygit")
-                        }
-                    })
-                }
-            }
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func openOrFocusCommand(projectId: String, command: String, label: String) {
-        if let existing = store.projectTabs(for: projectId).first(where: { $0.command == command }) {
-            store.setActiveTab(existing.id)
-        } else {
-            store.openTab(projectId: projectId, command: command, label: label)
-        }
-    }
-}
-
-struct TabPill: View {
-    @Environment(\.theme) private var theme
-
-    let tab: AppTab
-    let isActive: Bool
-    let onSelect: () -> Void
-    let onClose: () -> Void
-
-    @State private var isHovered = false
-    @State private var isCloseHovered = false
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 6) {
-                Text(tab.label)
-                    .font(Fonts.primary(size: 12).leading(.tight))
-                    .foregroundStyle(isActive || isHovered ? theme.text : theme.textMuted)
-                    .lineLimit(1)
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(isCloseHovered ? theme.danger : theme.textDim)
-                        .padding(4)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Close Tab")
-                .buttonStyle(.plain)
-                .background(
-                    isCloseHovered
-                        ? theme.danger.opacity(0.15)
-                        : Color.clear
-                )
-                .clipShape(.rect(cornerRadius: 3))
-                .opacity(isHovered ? 1 : 0)
-                .animation(.easeInOut(duration: 0.1), value: isHovered)
-                .onHover { isCloseHovered = $0 }
-            }
-            .padding(.horizontal, Layout.tabPillPaddingH)
-            .frame(maxHeight: .infinity)
+        Rectangle()
+            .fill(Color.clear)
             .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .background(
-            isActive || isHovered
-                ? Color.white.opacity(0.02)
-                : Color.clear
-        )
-        .overlay(alignment: .bottom) {
-            if isActive {
-                theme.accent.frame(height: 2)
-            }
-        }
-        .onHover { isHovered = $0 }
-        .pointerCursor()
     }
 }
 
@@ -209,7 +68,7 @@ struct NewTabMenu: View {
 
                 Divider().overlay(theme.border).frame(height: 28)
 
-                Button { onAction(.claudeYolo) } label: {
+                Button(action: runClaudeYolo) {
                     Text("Yolo")
                         .font(Fonts.primary(size: 11, weight: .medium))
                         .foregroundStyle(yoloHovered ? theme.text : theme.textDim)
@@ -236,6 +95,10 @@ struct NewTabMenu: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
         .padding(.top, 4)
+    }
+
+    private func runClaudeYolo() {
+        onAction(.claudeYolo)
     }
 
     private func menuRow(_ label: String, icon: String, action: @escaping () -> Void) -> some View {

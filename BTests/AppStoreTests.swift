@@ -3,30 +3,64 @@ import XCTest
 
 @MainActor
 final class AppStoreTests: XCTestCase {
+    private let defaults = UserDefaults.standard
+    private let storageKeys = [
+        "blink.theme",
+        "blink.backgroundImage",
+        "blink.backgroundOpacity",
+        "blink.backgroundBlur",
+        "blink.hideTitleBar",
+        "blink.sidebarVisible",
+        "blink.projects",
+        "blink.lastSelectedProjectId",
+        "blink.lastActiveTabs",
+        "blink.workspaceViewportOffsets",
+    ]
+
+    private var savedDefaults: [String: Any?] = [:]
+
+    override func setUpWithError() throws {
+        savedDefaults = [:]
+        for key in storageKeys {
+            savedDefaults[key] = defaults.object(forKey: key)
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    override func tearDownWithError() throws {
+        for key in storageKeys {
+            if let value = savedDefaults[key] {
+                defaults.set(value, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
     func testInitialState() {
         let store = AppStore()
-        XCTAssertEqual(store.projects.count, 4)
+        XCTAssertEqual(store.projects.count, 0)
         XCTAssertNil(store.activeProjectId)
         XCTAssertNil(store.activeTabId)
         XCTAssertTrue(store.sidebarVisible)
     }
 
     func testSetActiveProjectActivatesFirstTab() {
-        let store = AppStore()
-        store.setActiveProject("1") // has 2 tabs
+        let store = makeStore()
+        store.setActiveProject("1")
         XCTAssertEqual(store.activeProjectId, "1")
         XCTAssertEqual(store.activeTabId, "t1")
     }
 
     func testSetActiveProjectNoTabs() {
-        let store = AppStore()
-        store.setActiveProject("4") // dotfiles — no tabs
+        let store = makeStore()
+        store.setActiveProject("4")
         XCTAssertEqual(store.activeProjectId, "4")
         XCTAssertNil(store.activeTabId)
     }
 
     func testClearActiveProject() {
-        let store = AppStore()
+        let store = makeStore()
         store.setActiveProject("1")
         store.setActiveProject(nil)
         XCTAssertNil(store.activeProjectId)
@@ -34,21 +68,21 @@ final class AppStoreTests: XCTestCase {
     }
 
     func testProjectTabs() {
-        let store = AppStore()
+        let store = makeStore()
         let tabs = store.projectTabs(for: "1")
         XCTAssertEqual(tabs.count, 2)
         XCTAssertEqual(tabs[0].label, "Terminal 1")
     }
 
     func testRemoveProject() {
-        let store = AppStore()
+        let store = makeStore()
         store.removeProject("1")
         XCTAssertEqual(store.projects.count, 3)
         XCTAssertFalse(store.projects.contains(where: { $0.id == "1" }))
     }
 
     func testRemoveActiveProjectClearsSelection() {
-        let store = AppStore()
+        let store = makeStore()
         store.setActiveProject("1")
         store.removeProject("1")
         XCTAssertNil(store.activeProjectId)
@@ -56,48 +90,105 @@ final class AppStoreTests: XCTestCase {
     }
 
     func testTerminalCount() {
-        let store = AppStore()
+        let store = makeStore()
         XCTAssertEqual(store.terminalCount(for: "1"), 2)
         XCTAssertEqual(store.terminalCount(for: "2"), 1)
         XCTAssertEqual(store.terminalCount(for: "4"), 0)
     }
 
     func testSetActiveTab() {
-        let store = AppStore()
+        let store = makeStore()
         store.setActiveProject("1")
         store.setActiveTab("t2")
         XCTAssertEqual(store.activeTabId, "t2")
     }
 
+    func testSelectNextTabWrapsWithinProject() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.selectNextTab()
+
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testSelectPreviousTabWrapsWithinProject() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.selectPreviousTab()
+
+        XCTAssertEqual(store.activeTabId, "t2")
+    }
+
     func testCloseTab() {
-        let store = AppStore()
+        let store = makeStore()
         store.setActiveProject("1")
         store.setActiveTab("t1")
         store.closeTab("t1")
-        // Should activate last remaining tab in same project
         XCTAssertEqual(store.activeTabId, "t2")
         XCTAssertEqual(store.tabs.count, 2)
     }
 
     func testHideTitleBarPersists() {
-        let defaults = UserDefaults.standard
-        let key = "blink.hideTitleBar"
-        let previousValue = defaults.object(forKey: key)
-
-        defer {
-            if let previousValue {
-                defaults.set(previousValue, forKey: key)
-            } else {
-                defaults.removeObject(forKey: key)
-            }
-        }
-
-        defaults.removeObject(forKey: key)
         XCTAssertFalse(AppStore().hideTitleBar)
 
         let store = AppStore()
         store.hideTitleBar = true
 
         XCTAssertTrue(AppStore().hideTitleBar)
+    }
+
+    func testLastActiveTabPersistsPerProject() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        let reloaded = AppStore()
+        reloaded.projects = store.projects
+        reloaded.tabs = store.tabs
+
+        reloaded.setActiveProject("1")
+
+        XCTAssertEqual(reloaded.activeTabId, "t2")
+    }
+
+    func testWorkspaceViewportOffsetPersists() {
+        let store = AppStore()
+        store.setWorkspaceViewportOffset(184, for: "1")
+
+        XCTAssertEqual(AppStore().workspaceViewportOffset(for: "1"), 184, accuracy: 0.001)
+    }
+
+    private func makeStore() -> AppStore {
+        let store = AppStore()
+        store.projects = [
+            project(id: "1", name: "blink"),
+            project(id: "2", name: "krux"),
+            project(id: "3", name: "api-server"),
+            project(id: "4", name: "dotfiles"),
+        ]
+        store.tabs = [
+            AppTab(id: "t1", type: "shell", label: "Terminal 1", defaultLabel: "Terminal 1", projectId: "1"),
+            AppTab(id: "t2", type: "shell", label: "Terminal 2", defaultLabel: "Terminal 2", projectId: "1"),
+            AppTab(id: "t3", type: "shell", label: "Terminal 1", defaultLabel: "Terminal 1", projectId: "2"),
+        ]
+        store.activeProjectId = nil
+        store.activeTabId = nil
+        store.lastSelectedProjectId = nil
+        store.unreadTabs = []
+        return store
+    }
+
+    private func project(id: String, name: String) -> Project {
+        Project(
+            id: id,
+            name: name,
+            path: "/tmp/\(name)",
+            color: "#7aa2f7",
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
     }
 }

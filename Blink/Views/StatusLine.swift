@@ -1,58 +1,64 @@
 import SwiftUI
 
-struct StatusLine: View {
+struct FooterBar: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
     @Environment(GitStatusMonitor.self) private var gitMonitor
+
+    let onToggleSidebar: () -> Void
+    let onShowSettings: () -> Void
 
     private var activeProject: Project? {
         store.projects.first { $0.id == store.activeProjectId }
     }
 
-    private var terminalCount: Int {
-        guard let id = store.activeProjectId else { return 0 }
-        return store.terminalCount(for: id)
+    private var activeProjectTabs: [AppTab] {
+        guard let id = store.activeProjectId else { return [] }
+        return store.projectTabs(for: id)
+    }
+
+    private var isSettingsActive: Bool {
+        store.activeView == .settings
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: mode indicator (placeholder — always terminal mode in M1)
-            HStack(spacing: 8) {
-                // Mode badge would go here in M2
-            }
-            .frame(minWidth: 0)
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                FooterIconButton(
+                    systemImage: "sidebar.left",
+                    accessibilityLabel: "Toggle Sidebar",
+                    action: onToggleSidebar
+                )
 
-            // Center: project name (left-aligned within flex space)
-            if let project = activeProject {
-                Text(project.name)
-                    .font(Fonts.primary(size: 12).leading(.tight))
-                    .foregroundStyle(theme.textMuted)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 16)
-            } else {
-                Spacer()
+                FooterIconButton(
+                    systemImage: "gearshape",
+                    isActive: isSettingsActive,
+                    accessibilityLabel: "Settings",
+                    action: onShowSettings
+                )
             }
 
-            // Right: git status + terminal count
-            if store.activeProjectId != nil {
-                HStack(spacing: 12) {
-                    if !gitMonitor.status.branch.isEmpty {
-                        GitStatusBadge(status: gitMonitor.status)
-                            .onTapGesture { openLazygit() }
-                            .pointerCursor()
-                    }
+            HStack(spacing: 20) {
+                if let project = activeProject {
+                    FooterProjectLabel(name: project.path)
+                }
 
-                    if terminalCount > 0 {
-                        Text("\(terminalCount) term\(terminalCount != 1 ? "s" : "")")
-                            .font(Fonts.primary(size: 12))
-                            .foregroundStyle(theme.textMuted)
+                if !gitMonitor.status.branch.isEmpty {
+                    Button(action: openLazygit) {
+                        GitStatusLabel(status: gitMonitor.status)
                     }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
                 }
             }
+
+            Spacer(minLength: 8)
+
+            if !activeProjectTabs.isEmpty {
+                WindowDots(tabs: activeProjectTabs, activeTabId: store.activeTabId)
+            }
         }
-        .padding(.horizontal, Layout.statusLinePaddingH)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .font(Fonts.primary(size: 12))
         .onChange(of: store.activeProjectId, initial: true) {
@@ -65,18 +71,104 @@ struct StatusLine: View {
     }
 
     private func openLazygit() {
-        guard let project = activeProject else { return }
-        if let existing = store.projectTabs(for: project.id).first(where: { $0.command == "lazygit" }) {
-            store.setActiveTab(existing.id)
+        store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
+    }
+}
+
+private struct FooterIconButton: View {
+    @Environment(\.theme) private var theme
+
+    let systemImage: String
+    let isActive: Bool
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    init(
+        systemImage: String,
+        isActive: Bool = false,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) {
+        self.systemImage = systemImage
+        self.isActive = isActive
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isActive || isHovered ? theme.text : theme.textMuted)
+                .frame(width: 28, height: 22)
+                .background(buttonBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var buttonBackground: some ShapeStyle {
+        if isActive {
+            AnyShapeStyle(theme.accent.opacity(0.14))
+        } else if isHovered {
+            AnyShapeStyle(theme.border.opacity(0.3))
         } else {
-            store.openTab(projectId: project.id, command: "lazygit", label: "lazygit")
+            AnyShapeStyle(theme.border.opacity(0.16))
         }
     }
 }
 
-struct GitStatusBadge: View {
+private struct FooterProjectLabel: View {
     @Environment(\.theme) private var theme
+
+    let name: String
+
+    private var displayPath: String {
+        (name as NSString).abbreviatingWithTildeInPath
+    }
+
+    var body: some View {
+        Text(displayPath)
+            .font(Fonts.primary(size: 12))
+            .foregroundStyle(theme.textMuted)
+            .lineLimit(1)
+    }
+}
+
+private struct WindowDots: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let tabs: [AppTab]
+    let activeTabId: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(tabs) { tab in
+                Button(action: { store.setActiveTab(tab.id) }) {
+                    Capsule()
+                        .fill(tab.id == activeTabId ? theme.accent : theme.textMuted.opacity(0.28))
+                        .frame(width: tab.id == activeTabId ? 18 : 6, height: 6)
+                        .animation(.easeInOut(duration: 0.16), value: activeTabId)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.label)
+                .accessibilityValue(tab.id == activeTabId ? "Current window" : "Window")
+            }
+        }
+    }
+}
+
+private struct GitStatusLabel: View {
+    @Environment(\.theme) private var theme
+
     let status: GitStatus
+
     @State private var isHovered = false
 
     var body: some View {
@@ -84,19 +176,23 @@ struct GitStatusBadge: View {
             Image(systemName: "point.3.connected.trianglepath.dotted")
                 .font(.system(size: 10))
                 .foregroundStyle(isHovered ? theme.text : theme.textMuted)
+
             Text(status.branch)
                 .font(Fonts.primary(size: 12))
                 .foregroundStyle(isHovered ? theme.text : theme.textMuted)
+
             if status.added > 0 {
                 Text("+\(status.added)")
                     .font(Fonts.primary(size: 12))
                     .foregroundStyle(theme.green)
             }
+
             if status.modified > 0 {
                 Text("~\(status.modified)")
                     .font(Fonts.primary(size: 12))
                     .foregroundStyle(theme.yellow)
             }
+
             if status.deleted > 0 {
                 Text("-\(status.deleted)")
                     .font(Fonts.primary(size: 12))
