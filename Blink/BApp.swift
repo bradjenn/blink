@@ -127,12 +127,12 @@ struct BApp: App {
                 .keyboardShortcut("l", modifiers: .command)
 
                 Button("Move Window Left") {
-                    store.moveActiveTabLeft()
+                    store.moveColumnLeft()
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
 
                 Button("Move Window Right") {
-                    store.moveActiveTabRight()
+                    store.moveColumnRight()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
 

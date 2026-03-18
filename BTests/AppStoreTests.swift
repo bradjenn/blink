@@ -229,56 +229,6 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTabId, "t2")
     }
 
-    func testMoveTabRight() {
-        let store = makeStore()
-        store.setActiveProject("1")
-        store.setActiveTab("t1")
-
-        store.moveActiveTabRight()
-
-        let tabs = store.projectTabs(for: "1")
-        XCTAssertEqual(tabs[0].id, "t2")
-        XCTAssertEqual(tabs[1].id, "t1")
-        XCTAssertEqual(store.activeTabId, "t1")
-    }
-
-    func testMoveTabLeft() {
-        let store = makeStore()
-        store.setActiveProject("1")
-        store.setActiveTab("t2")
-
-        store.moveActiveTabLeft()
-
-        let tabs = store.projectTabs(for: "1")
-        XCTAssertEqual(tabs[0].id, "t2")
-        XCTAssertEqual(tabs[1].id, "t1")
-        XCTAssertEqual(store.activeTabId, "t2")
-    }
-
-    func testMoveTabRightNoOpAtEnd() {
-        let store = makeStore()
-        store.setActiveProject("1")
-        store.setActiveTab("t2")
-
-        store.moveActiveTabRight()
-
-        let tabs = store.projectTabs(for: "1")
-        XCTAssertEqual(tabs[0].id, "t1")
-        XCTAssertEqual(tabs[1].id, "t2")
-    }
-
-    func testMoveTabLeftNoOpAtStart() {
-        let store = makeStore()
-        store.setActiveProject("1")
-        store.setActiveTab("t1")
-
-        store.moveActiveTabLeft()
-
-        let tabs = store.projectTabs(for: "1")
-        XCTAssertEqual(tabs[0].id, "t1")
-        XCTAssertEqual(tabs[1].id, "t2")
-    }
-
     // MARK: - Overview Tests
 
     func testToggleOverviewEntersAndExits() {
@@ -519,6 +469,105 @@ final class AppStoreTests: XCTestCase {
 
         store.focusRight()
         XCTAssertEqual(store.activeTabId, "t2")
+    }
+
+    // MARK: - Column Move Tests
+
+    func testMoveColumnRight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.moveColumnRight()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols[0].tabIds, ["t2"])
+        XCTAssertEqual(cols[1].tabIds, ["t1"])
+    }
+
+    func testMoveColumnLeft() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.moveColumnLeft()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols[0].tabIds, ["t2"])
+        XCTAssertEqual(cols[1].tabIds, ["t1"])
+    }
+
+    func testMoveColumnRightNoOpAtEnd() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.moveColumnRight()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols[0].tabIds, ["t1"])
+        XCTAssertEqual(cols[1].tabIds, ["t2"])
+    }
+
+    // MARK: - Absorb & Expel Tests
+
+    func testAbsorbFromLeft() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t2")
+
+        store.absorbFromLeft()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 1)
+        XCTAssertEqual(cols[0].tabIds, ["t2", "t1"])
+    }
+
+    func testAbsorbFromRight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.absorbFromRight()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 1)
+        XCTAssertEqual(cols[0].tabIds, ["t1", "t2"])
+    }
+
+    func testAbsorbFromLeftNoOpAtFirstColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.absorbFromLeft()
+
+        XCTAssertEqual(store.projectColumns(for: "1").count, 2)
+    }
+
+    func testExpelActiveTab() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t1")
+
+        store.expelActiveTab()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 2)
+        XCTAssertEqual(cols[0].tabIds, ["t2"])
+        XCTAssertEqual(cols[1].tabIds, ["t1"])
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testExpelNoOpOnSingleTabColumn() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.expelActiveTab()
+
+        XCTAssertEqual(store.projectColumns(for: "1").count, 2)
     }
 
     private func makeStore() -> AppStore {

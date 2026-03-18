@@ -311,34 +311,34 @@ final class AppStore {
 
     func selectNextTab() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
-        guard !tabs.isEmpty else { return }
+        let ordered = orderedTabs(for: projectId)
+        guard !ordered.isEmpty else { return }
 
         guard let activeTabId,
-              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else {
-            setActiveTab(tabs[0].id)
+              let currentIndex = ordered.firstIndex(where: { $0.id == activeTabId }) else {
+            setActiveTab(ordered[0].id)
             return
         }
 
-        let nextIndex = tabs.index(after: currentIndex)
-        let tab = nextIndex < tabs.endIndex ? tabs[nextIndex] : tabs[0]
+        let nextIndex = ordered.index(after: currentIndex)
+        let tab = nextIndex < ordered.endIndex ? ordered[nextIndex] : ordered[0]
         setActiveTab(tab.id)
     }
 
     func selectPreviousTab() {
         guard let projectId = activeProjectId else { return }
-        let tabs = projectTabs(for: projectId)
-        guard !tabs.isEmpty else { return }
+        let ordered = orderedTabs(for: projectId)
+        guard !ordered.isEmpty else { return }
 
         guard let activeTabId,
-              let currentIndex = tabs.firstIndex(where: { $0.id == activeTabId }) else {
-            setActiveTab(tabs[tabs.index(before: tabs.endIndex)].id)
+              let currentIndex = ordered.firstIndex(where: { $0.id == activeTabId }) else {
+            setActiveTab(ordered[ordered.index(before: ordered.endIndex)].id)
             return
         }
 
-        let tab = currentIndex > tabs.startIndex
-            ? tabs[tabs.index(before: currentIndex)]
-            : tabs[tabs.index(before: tabs.endIndex)]
+        let tab = currentIndex > ordered.startIndex
+            ? ordered[ordered.index(before: currentIndex)]
+            : ordered[ordered.index(before: ordered.endIndex)]
         setActiveTab(tab.id)
     }
 
@@ -414,38 +414,91 @@ final class AppStore {
         }
     }
 
-    func moveActiveTabLeft() {
+    func moveColumnLeft() {
         guard let projectId = activeProjectId,
-              let activeTabId else { return }
-
-        let projectTabIds = projectTabs(for: projectId).map(\.id)
-        guard let localIndex = projectTabIds.firstIndex(of: activeTabId),
-              localIndex > projectTabIds.startIndex else { return }
-
-        let prevTabId = projectTabIds[projectTabIds.index(before: localIndex)]
-
-        guard let globalCurrent = tabs.firstIndex(where: { $0.id == activeTabId }),
-              let globalPrev = tabs.firstIndex(where: { $0.id == prevTabId }) else { return }
-
-        tabs.swapAt(globalCurrent, globalPrev)
+              let currentCol = activeColumn else { return }
+        var cols = projectColumns(for: projectId)
+        guard let idx = cols.firstIndex(where: { $0.id == currentCol.id }),
+              idx > cols.startIndex else { return }
+        cols.swapAt(idx, cols.index(before: idx))
+        columns[projectId] = cols
     }
 
-    func moveActiveTabRight() {
+    func moveColumnRight() {
         guard let projectId = activeProjectId,
-              let activeTabId else { return }
+              let currentCol = activeColumn else { return }
+        var cols = projectColumns(for: projectId)
+        guard let idx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
+        let nextIdx = cols.index(after: idx)
+        guard nextIdx < cols.endIndex else { return }
+        cols.swapAt(idx, nextIdx)
+        columns[projectId] = cols
+    }
 
-        let projectTabIds = projectTabs(for: projectId).map(\.id)
-        guard let localIndex = projectTabIds.firstIndex(of: activeTabId) else { return }
+    func absorbFromLeft() {
+        guard let projectId = activeProjectId,
+              let currentCol = activeColumn else { return }
+        var cols = projectColumns(for: projectId)
+        guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }),
+              colIdx > cols.startIndex else { return }
 
-        let nextLocalIndex = projectTabIds.index(after: localIndex)
-        guard nextLocalIndex < projectTabIds.endIndex else { return }
+        let sourceIdx = cols.index(before: colIdx)
+        guard let absorbedTabId = cols[sourceIdx].tabIds.last else { return }
 
-        let nextTabId = projectTabIds[nextLocalIndex]
+        // Move tab from source column to current column
+        cols[sourceIdx].tabIds.removeLast()
+        cols[colIdx].tabIds.append(absorbedTabId)
 
-        guard let globalCurrent = tabs.firstIndex(where: { $0.id == activeTabId }),
-              let globalNext = tabs.firstIndex(where: { $0.id == nextTabId }) else { return }
+        // Remove source column if empty
+        if cols[sourceIdx].tabIds.isEmpty {
+            columnFocusedTab[cols[sourceIdx].id] = nil
+            cols.remove(at: sourceIdx)
+        }
 
-        tabs.swapAt(globalCurrent, globalNext)
+        columns[projectId] = cols
+    }
+
+    func absorbFromRight() {
+        guard let projectId = activeProjectId,
+              let currentCol = activeColumn else { return }
+        var cols = projectColumns(for: projectId)
+        guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
+
+        let sourceIdx = cols.index(after: colIdx)
+        guard sourceIdx < cols.endIndex,
+              let absorbedTabId = cols[sourceIdx].tabIds.last else { return }
+
+        // Move tab from source column to current column
+        cols[sourceIdx].tabIds.removeLast()
+        cols[colIdx].tabIds.append(absorbedTabId)
+
+        // Remove source column if empty
+        if cols[sourceIdx].tabIds.isEmpty {
+            columnFocusedTab[cols[sourceIdx].id] = nil
+            cols.remove(at: sourceIdx)
+        }
+
+        columns[projectId] = cols
+    }
+
+    func expelActiveTab() {
+        guard let projectId = activeProjectId,
+              let activeTabId,
+              let currentCol = activeColumn else { return }
+        guard currentCol.tabIds.count > 1 else { return }
+
+        var cols = projectColumns(for: projectId)
+        guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
+
+        // Remove tab from current column
+        cols[colIdx].tabIds.removeAll { $0 == activeTabId }
+
+        // Create new column to the right
+        let newCol = Column(id: UUID().uuidString, tabIds: [activeTabId])
+        cols.insert(newCol, at: cols.index(after: colIdx))
+
+        columns[projectId] = cols
+        // Focus follows expelled tab (activeTabId unchanged)
     }
 
     // MARK: - Overview Actions
