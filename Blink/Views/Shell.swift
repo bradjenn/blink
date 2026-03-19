@@ -195,7 +195,7 @@ private struct WorkspaceSidebarPanel: View {
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
+                    .strokeBorder(store.sidebarFocused ? theme.accent.opacity(0.85) : theme.border, lineWidth: 1)
             )
     }
 
@@ -329,32 +329,31 @@ private struct WorkspaceColumnsView: View {
         let isOverview = store.isOverviewMode
 
         ZStack {
-            // Normal workspace view
-            if !isOverview {
-                ZStack(alignment: .topLeading) {
-                    ForEach(columns) { col in
-                        if let frame = layout.frames[col.id] {
-                            WorkspaceColumnView(
-                                column: col,
-                                project: project,
-                                activeTabId: store.activeTabId,
-                                ghosttyApp: ghosttyApp,
-                                surfaceManager: surfaceManager
-                            )
-                            .frame(width: frame.width)
-                            .frame(height: viewportHeight)
-                            .offset(x: frame.minX)
-                            .zIndex(col.tabIds.contains(store.activeTabId ?? "") ? 1 : 0)
-                            .transition(workspaceColumnTransition)
-                        }
+            // Normal workspace view — always in hierarchy to preserve terminal surfaces
+            ZStack(alignment: .topLeading) {
+                ForEach(columns) { col in
+                    if let frame = layout.frames[col.id] {
+                        WorkspaceColumnView(
+                            column: col,
+                            project: project,
+                            activeTabId: store.activeTabId,
+                            ghosttyApp: ghosttyApp,
+                            surfaceManager: surfaceManager
+                        )
+                        .frame(width: frame.width)
+                        .frame(height: viewportHeight)
+                        .offset(x: frame.minX)
+                        .zIndex(col.tabIds.contains(store.activeTabId ?? "") ? 1 : 0)
+                        .transition(workspaceColumnTransition)
                     }
                 }
-                .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
-                .offset(x: -layout.viewportOffset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .clipped()
-                .transition(.opacity.combined(with: .scale(scale: 1.02)))
             }
+            .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
+            .offset(x: -layout.viewportOffset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .clipped()
+            .opacity(isOverview ? 0 : 1)
+            .allowsHitTesting(!isOverview)
 
             // Overview grid
             if isOverview {
@@ -556,27 +555,42 @@ private struct WorkspaceColumnsView: View {
         }
     }
 
-    /// After resize: if everything fits, show it all.
-    /// If column grew past viewport, scroll to its left edge.
-    /// If column shrank, keep viewport where it is.
+    /// After resize: ensure the active column is visible and fill blank space
+    /// by scrolling left to show more content when possible.
     private func ensureActiveColumnVisible(viewportWidth: CGFloat) {
         guard let colId = store.activeColumn?.id else { return }
         let layout = stripLayout(viewportWidth: viewportWidth)
-        let currentOffset = store.workspaceViewportOffset(for: project.id)
+        var offset = store.workspaceViewportOffset(for: project.id)
 
-        // Account for column spacing when checking if everything fits
+        // If everything fits, show it all
         let fitsInViewport = layout.contentWidth <= viewportWidth + Layout.workspaceColumnSpacing
         if fitsInViewport {
-            // Everything fits — show it all
             store.setWorkspaceViewportOffset(0, for: project.id)
-        } else if let frame = layout.frames[colId] {
-            let colRight = frame.minX + frame.width
-            if colRight > currentOffset + viewportWidth {
-                // Column grew past the right edge — scroll to its left edge
-                store.setWorkspaceViewportOffset(max(0, frame.minX), for: project.id)
-            }
-            // Column shrank — keep current offset (don't move)
+            return
         }
+
+        guard let frame = layout.frames[colId] else { return }
+        let colLeft = frame.minX
+        let colRight = frame.minX + frame.width
+
+        // If there's blank space on the right, scroll left to fill it
+        // (this pulls in content from the left, e.g. a 75% col next to a 25% col)
+        let maxOffset = layout.contentWidth - viewportWidth
+        if offset > maxOffset {
+            offset = max(0, maxOffset)
+        }
+
+        // Ensure active column is fully visible
+        if colRight > offset + viewportWidth {
+            // Right edge clipped — scroll right
+            offset = colRight - viewportWidth
+        }
+        if colLeft < offset {
+            // Left edge clipped — scroll to its left edge
+            offset = colLeft
+        }
+
+        store.setWorkspaceViewportOffset(max(0, offset), for: project.id)
     }
 
     private func alignActiveTab(viewportWidth: CGFloat, animated: Bool) {
@@ -679,11 +693,7 @@ private struct WorkspaceColumnsView: View {
             targetOffset = colLeft
         }
 
-        return clampedViewportOffset(
-            targetOffset,
-            contentWidth: layout.contentWidth,
-            viewportWidth: viewportWidth
-        )
+        return max(0, targetOffset)
     }
 
     private func clampedViewportOffset(_ offset: CGFloat, contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
@@ -716,7 +726,7 @@ private struct WorkspaceColumnView: View {
     var body: some View {
         VStack(spacing: Layout.workspaceColumnSpacing) {
             ForEach(columnTabs) { tab in
-                let isFocused = activeTabId == tab.id
+                let isFocused = activeTabId == tab.id && !store.sidebarFocused
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)

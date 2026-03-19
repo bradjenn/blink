@@ -95,6 +95,7 @@ struct TerminalView: NSViewRepresentable {
             }
             surfaceView.onInteraction = { [weak coordinator] in
                 guard let coordinator else { return }
+                coordinator.store?.sidebarFocused = false
                 if coordinator.store?.activeTabId != coordinator.tabId {
                     coordinator.store?.setActiveTab(coordinator.tabId)
                 }

@@ -111,8 +111,6 @@ struct SidebarView: View {
                 .frame(maxHeight: .infinity)
             }
         }
-        .background(theme.accent.opacity(store.sidebarFocused ? 0.025 : 0))
-        .animation(.easeInOut(duration: 0.15), value: store.sidebarFocused)
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
     }

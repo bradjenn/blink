@@ -19,11 +19,19 @@ echo "==> Build succeeded: $(stat -f '%Sm' "$APP/Contents/MacOS/Blink")"
 
 echo "==> Creating DMG..."
 rm -f "$DMG"
+
+# Stage app + Applications symlink in a temp folder
+STAGING=$(mktemp -d)
+cp -R "$APP" "$STAGING/"
+ln -s /Applications "$STAGING/Applications"
+
 hdiutil create \
   -volname "Blink" \
-  -srcfolder "$APP" \
+  -srcfolder "$STAGING" \
   -ov -format UDZO \
   "$DMG" \
   -quiet
+
+rm -rf "$STAGING"
 
 echo "==> Done: $DMG ($(du -h "$DMG" | cut -f1))"
