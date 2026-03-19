@@ -6,3 +6,4 @@ build/
 *.swp
 .DS_Store
 Frameworks/
+Blink.dmg
