@@ -9,21 +9,41 @@ struct AppearanceSettings: View {
     let ghosttyApp: GhosttyApp
 
     private let wallpaperColumns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+    @State private var monospaceFonts: [String] = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 Text("Appearance")
-                    .font(Fonts.primary(size: 18, weight: .bold))
+                    .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
                     .foregroundStyle(theme.text)
+
+                // UI font section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("UI font")
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
+                        .foregroundStyle(theme.text)
+                    Text("Font used for labels, settings, and sidebar")
+                        .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                        .foregroundStyle(theme.textMuted)
+
+                    StyledDropdown(
+                        selection: store.uiFontFamily,
+                        options: ["MesloLGS Nerd Font Mono"] + monospaceFonts,
+                        label: { $0 },
+                        onChange: { store.uiFontFamily = $0 },
+                        fontPreview: true
+                    )
+                    .frame(maxWidth: 300)
+                }
 
                 // Theme section
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Theme")
-                        .font(Fonts.primary(size: 14, weight: .medium))
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                         .foregroundStyle(theme.text)
                     Text("Color scheme for the app and terminal")
-                        .font(Fonts.primary(size: 12))
+                        .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                         .foregroundStyle(theme.textMuted)
 
                     Button {
@@ -31,7 +51,7 @@ struct AppearanceSettings: View {
                     } label: {
                         HStack(spacing: 10) {
                             Text(store.theme)
-                                .font(Fonts.primary(size: 13))
+                                .font(Fonts.primary(size: 13, family: store.uiFontFamily))
                                 .foregroundStyle(theme.text)
 
                             // Color palette preview
@@ -67,10 +87,10 @@ struct AppearanceSettings: View {
                 // Background image section
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Background image")
-                        .font(Fonts.primary(size: 14, weight: .medium))
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                         .foregroundStyle(theme.text)
                     Text("Show a wallpaper behind the content area")
-                        .font(Fonts.primary(size: 12))
+                        .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                         .foregroundStyle(theme.textMuted)
 
                     LazyVGrid(columns: wallpaperColumns, spacing: 12) {
@@ -104,10 +124,10 @@ struct AppearanceSettings: View {
                 // Background opacity section
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Background opacity")
-                        .font(Fonts.primary(size: 14, weight: .medium))
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                         .foregroundStyle(theme.text)
                     Text("How translucent the terminal overlay is (lower = more wallpaper visible)")
-                        .font(Fonts.primary(size: 12))
+                        .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                         .foregroundStyle(theme.textMuted)
 
                     HStack(spacing: 12) {
@@ -130,7 +150,7 @@ struct AppearanceSettings: View {
                             }
 
                         Text("\(Int(store.backgroundOpacity * 100))%")
-                            .font(Fonts.primary(size: 12))
+                            .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                             .foregroundStyle(theme.textMuted)
                             .frame(width: 40, alignment: .trailing)
                     }
@@ -139,10 +159,10 @@ struct AppearanceSettings: View {
                 // Background blur section
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Background blur")
-                        .font(Fonts.primary(size: 14, weight: .medium))
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                         .foregroundStyle(theme.text)
                     Text("Apply gaussian blur to the wallpaper image")
-                        .font(Fonts.primary(size: 12))
+                        .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                         .foregroundStyle(theme.textMuted)
 
                     HStack(spacing: 12) {
@@ -155,7 +175,7 @@ struct AppearanceSettings: View {
                             }
 
                         Text("\(Int(store.backgroundBlur))px")
-                            .font(Fonts.primary(size: 12))
+                            .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                             .foregroundStyle(theme.textMuted)
                             .frame(width: 40, alignment: .trailing)
                     }
@@ -163,12 +183,27 @@ struct AppearanceSettings: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
+            .padding(.leading, 24)
+            .padding(.trailing, 20)
+            .padding(.top, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
         .background(Color.clear)
+        .task { monospaceFonts = Self.loadMonospaceFonts() }
+    }
+
+    private static func loadMonospaceFonts() -> [String] {
+        let manager = NSFontManager.shared
+        return manager.availableFontFamilies.filter { family in
+            guard let members = manager.availableMembers(ofFontFamily: family),
+                  let first = members.first,
+                  let fontName = first[0] as? String,
+                  let font = NSFont(name: fontName, size: 13) else { return false }
+            return font.isFixedPitch
+        }
+        .filter { $0 != "MesloLGS Nerd Font Mono" }
+        .sorted()
     }
 
     /// Set wallpaper and update terminal opacity accordingly.

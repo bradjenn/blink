@@ -41,14 +41,20 @@ private extension NSPasteboard {
 /// Blink controls all terminal settings — no Ghostty config files are loaded.
 @MainActor
 final class GhosttyApp {
-    private(set) var app: ghostty_app_t?
-    private(set) var config: ghostty_config_t?
-    private var configTemplateCache: [String: ghostty_config_t] = [:]
+    // These are opaque C pointers with no Swift-managed state.
+    // Marked nonisolated(unsafe) so deinit can free them without
+    // violating @MainActor isolation in Swift 6 strict concurrency.
+    nonisolated(unsafe) private(set) var app: ghostty_app_t?
+    nonisolated(unsafe) private(set) var config: ghostty_config_t?
+    nonisolated(unsafe) private var configTemplateCache: [String: ghostty_config_t] = [:]
     private var activeConfigKey: String?
 
     /// Weak refs for routing callbacks back to Swift objects.
     weak var store: AppStore?
     weak var surfaceManager: SurfaceManager?
+
+    /// Per-tab debounce timers to coalesce rapid SET_TITLE updates.
+    private var titleDebounceTimers: [String: Timer] = [:]
 
     /// Whether ghostty_init has been called. Must happen exactly once.
     private static var initialized = false
@@ -133,19 +139,23 @@ final class GhosttyApp {
                     let view = Unmanaged<TerminalSurfaceView>.fromOpaque(viewPtr).takeUnretainedValue()
                     let tabId = view.tabId
 
-                    DispatchQueue.main.async {
-                        // Skip title updates for tabs with an explicit command (e.g. lazygit)
-                        let isCommandTab = ghostty.store?.tabs.first(where: { $0.id == tabId })?.command != nil
-                        if !isCommandTab {
-                            // Filter: only update title for known long-running processes
-                            if let displayName = TabTitleFilter.displayName(for: titleStr) {
-                                ghostty.store?.setTabTitle(tabId, title: displayName)
-                            } else if TabTitleFilter.isShellPrompt(titleStr) {
-                                // Back at shell prompt — revert to default tab name
-                                ghostty.store?.revertTabTitle(tabId)
+                    // Debounce: coalesce rapid title updates into one mutation
+                    // after 100ms of quiet. Prevents SwiftUI body recomputation
+                    // storms during scrollback / rapid output.
+                    ghostty.titleDebounceTimers[tabId]?.invalidate()
+                    ghostty.titleDebounceTimers[tabId] = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak ghostty] _ in
+                        DispatchQueue.main.async {
+                            guard let store = ghostty?.store else { return }
+                            let isCommandTab = store.tabsById[tabId]?.command != nil
+                            if !isCommandTab {
+                                if let displayName = TabTitleFilter.displayName(for: titleStr) {
+                                    store.setTabTitle(tabId, title: displayName)
+                                } else if TabTitleFilter.isShellPrompt(titleStr) {
+                                    store.revertTabTitle(tabId)
+                                }
                             }
+                            store.markUnread(tabId)
                         }
-                        ghostty.store?.markUnread(tabId)
                     }
                 }
                 return true
@@ -164,6 +174,12 @@ final class GhosttyApp {
             }
         }
 
+        // Note: read_clipboard_cb and confirm_read_clipboard_cb must
+        // return synchronously to Ghostty. They access NSPasteboard (main-
+        // thread-only) and call completeClipboardRequest which feeds data
+        // back into the Ghostty C API. Ghostty calls these from
+        // ghostty_app_tick which is dispatched to main in wakeup_cb,
+        // so they already execute on the main thread.
         runtime.read_clipboard_cb = { userdata, clipboard, state in
             guard let userdata, let state else { return false }
             let view = Unmanaged<TerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
@@ -181,12 +197,10 @@ final class GhosttyApp {
             view.completeClipboardRequest(String(cString: string), state: state, confirmed: true)
         }
         runtime.write_clipboard_cb = { _, clipboard, content, len, _ in
-            guard let pasteboard = NSPasteboard.blink(clipboard),
-                  let content,
-                  len > 0 else {
-                return
-            }
+            guard let content, len > 0 else { return }
 
+            // Extract clipboard data before dispatching — the pointers
+            // are only valid for the duration of this callback.
             let items = (0..<len).compactMap { index -> (type: NSPasteboard.PasteboardType, value: String)? in
                 let entry = content[index]
                 guard let mime = String(validatingUTF8: entry.mime),
@@ -198,9 +212,13 @@ final class GhosttyApp {
             }
             guard !items.isEmpty else { return }
 
-            pasteboard.declareTypes(items.map(\.type), owner: nil)
-            for item in items {
-                pasteboard.setString(item.value, forType: item.type)
+            // NSPasteboard is main-thread-only — dispatch writes there
+            DispatchQueue.main.async {
+                guard let pasteboard = NSPasteboard.blink(clipboard) else { return }
+                pasteboard.declareTypes(items.map(\.type), owner: nil)
+                for item in items {
+                    pasteboard.setString(item.value, forType: item.type)
+                }
             }
         }
 

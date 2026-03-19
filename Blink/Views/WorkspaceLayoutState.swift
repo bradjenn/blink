@@ -35,27 +35,28 @@ final class WorkspaceLayoutState {
         columnFractions[projectId] = fractions
     }
 
-    /// Cycle through preset fractions. Returns the new absolute width.
-    func cyclePreset(for columnId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
+    /// Increase to next larger preset. Caps at 1.0.
+    func increasePreset(for columnId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
         let presets = Layout.workspaceColumnPresets
-        let currentFraction = columnFractions[projectId]?[columnId] ?? Layout.workspaceColumnDefaultFraction
+        let current = columnFractions[projectId]?[columnId] ?? Layout.workspaceColumnDefaultFraction
         let tolerance: CGFloat = 0.02
 
-        // Find which preset we're closest to, then advance to the next
-        var nextPreset = presets[0]
-        for (i, preset) in presets.enumerated() {
-            if abs(currentFraction - preset) < tolerance {
-                nextPreset = presets[(i + 1) % presets.count]
-                break
-            }
-            if i == presets.count - 1 {
-                nextPreset = presets[0]
-            }
-        }
+        // Find next preset larger than current
+        let next = presets.first { $0 > current + tolerance } ?? presets.last!
+        setFraction(next, for: columnId, projectId: projectId)
+        return viewportWidth * next
+    }
 
-        setFraction(nextPreset, for: columnId, projectId: projectId)
-        preMaximizeFractions[projectId]?.removeValue(forKey: columnId)
-        return viewportWidth * nextPreset
+    /// Decrease to next smaller preset. Caps at smallest preset.
+    func decreasePreset(for columnId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
+        let presets = Layout.workspaceColumnPresets
+        let current = columnFractions[projectId]?[columnId] ?? Layout.workspaceColumnDefaultFraction
+        let tolerance: CGFloat = 0.02
+
+        // Find next preset smaller than current
+        let next = presets.last { $0 < current - tolerance } ?? presets.first!
+        setFraction(next, for: columnId, projectId: projectId)
+        return viewportWidth * next
     }
 
     /// Toggle maximize: fraction 1.0 ↔ restore previous fraction.

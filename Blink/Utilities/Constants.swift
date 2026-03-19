@@ -41,17 +41,17 @@ enum Layout {
 }
 
 enum Fonts {
-    /// Returns the correct MesloLGS Nerd Font Mono variant for a given weight.
-    /// SwiftUI's `.weight()` does NOT work with custom fonts — you must use the
-    /// exact PostScript font name for each weight variant.
-    static func primary(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let name: String
-        switch weight {
-        case .bold:
-            name = "MesloLGSNFM-Bold"
-        default:
-            name = "MesloLGSNFM-Regular"
+    static let defaultFamily = "MesloLGS Nerd Font Mono"
+
+    /// Returns a font from the given family (or the bundled MesloLGS default).
+    /// For the default family, exact PostScript names are used because
+    /// SwiftUI's `.weight()` does NOT work with custom fonts.
+    static func primary(size: CGFloat, weight: Font.Weight = .regular, family: String? = nil) -> Font {
+        let resolvedFamily = family ?? defaultFamily
+        if resolvedFamily == defaultFamily {
+            let name = weight == .bold ? "MesloLGSNFM-Bold" : "MesloLGSNFM-Regular"
+            return .custom(name, size: size)
         }
-        return .custom(name, size: size)
+        return .custom(resolvedFamily, size: size).weight(weight)
     }
 }

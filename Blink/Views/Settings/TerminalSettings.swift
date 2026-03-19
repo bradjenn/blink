@@ -14,7 +14,7 @@ struct TerminalSettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 Text("Terminal")
-                    .font(Fonts.primary(size: 18, weight: .bold))
+                    .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
                     .foregroundStyle(theme.text)
 
                 fontFamilySection
@@ -24,8 +24,9 @@ struct TerminalSettings: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
+            .padding(.leading, 24)
+            .padding(.trailing, 20)
+            .padding(.top, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
@@ -36,28 +37,22 @@ struct TerminalSettings: View {
     private var fontFamilySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Font family")
-                .font(Fonts.primary(size: 14, weight: .medium))
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                 .foregroundStyle(theme.text)
             Text("Monospace font used in the terminal")
-                .font(Fonts.primary(size: 12))
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
 
-            Picker("", selection: Binding(
-                get: { store.fontFamily },
-                set: { newValue in
-                    store.fontFamily = newValue
+            StyledDropdown(
+                selection: store.fontFamily,
+                options: ["MesloLGS Nerd Font Mono"] + monospaceFonts,
+                label: { $0 },
+                onChange: {
+                    store.fontFamily = $0
                     updateTerminalConfig()
-                }
-            )) {
-                Text("MesloLGS Nerd Font Mono").tag("MesloLGS Nerd Font Mono")
-                if !monospaceFonts.isEmpty {
-                    Divider()
-                    ForEach(monospaceFonts, id: \.self) { font in
-                        Text(font).tag(font)
-                    }
-                }
-            }
-            .labelsHidden()
+                },
+                fontPreview: true
+            )
             .frame(maxWidth: 300)
         }
     }
@@ -65,75 +60,64 @@ struct TerminalSettings: View {
     private var fontSizeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Font size")
-                .font(Fonts.primary(size: 14, weight: .medium))
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                 .foregroundStyle(theme.text)
             Text("Size in points for terminal text")
-                .font(Fonts.primary(size: 12))
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
 
-            HStack(spacing: 12) {
-                @Bindable var store = store
-                Stepper(
-                    "\(Int(store.fontSize))pt",
-                    value: $store.fontSize,
-                    in: 10...32,
-                    step: 1
-                )
-                .font(Fonts.primary(size: 13))
-                .foregroundStyle(theme.text)
-                .onChange(of: store.fontSize) {
+            StyledStepper(
+                value: Int(store.fontSize),
+                range: 10...32,
+                label: "\(Int(store.fontSize))pt",
+                onChange: {
+                    store.fontSize = CGFloat($0)
                     updateTerminalConfig()
                 }
-            }
+            )
         }
     }
 
     private var cursorStyleSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Cursor style")
-                .font(Fonts.primary(size: 14, weight: .medium))
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                 .foregroundStyle(theme.text)
             Text("Shape of the terminal cursor")
-                .font(Fonts.primary(size: 12))
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
 
-            Picker("", selection: Binding(
-                get: { store.cursorStyle },
-                set: { newValue in
-                    store.cursorStyle = newValue
+            StyledSegmentPicker(
+                options: CursorStyle.allCases,
+                selection: store.cursorStyle,
+                label: { $0.displayName },
+                onChange: {
+                    store.cursorStyle = $0
                     updateTerminalConfig()
                 }
-            )) {
-                ForEach(CursorStyle.allCases, id: \.self) { style in
-                    Text(style.displayName).tag(style)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 240)
+            )
         }
     }
 
     private var shellSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Shell")
-                .font(Fonts.primary(size: 14, weight: .medium))
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                 .foregroundStyle(theme.text)
             Text("Program to run in new terminal tabs (changes apply to new tabs)")
-                .font(Fonts.primary(size: 12))
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
 
             HStack(spacing: 8) {
                 @Bindable var store = store
-                TextField("Shell path", text: $store.shell)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13, design: .monospaced))
+                StyledTextField(text: $store.shell, placeholder: "Shell path")
                     .frame(maxWidth: 300)
 
                 if store.shell != AppStore.defaultShell {
                     Button("Reset") {
                         store.shell = AppStore.defaultShell
                     }
-                    .font(Fonts.primary(size: 12))
+                    .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                     .foregroundStyle(theme.accent)
                     .buttonStyle(.plain)
                     .pointerCursor()

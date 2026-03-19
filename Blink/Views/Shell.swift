@@ -9,6 +9,8 @@ struct Shell: View {
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
 
+    @State private var escapeMonitor: Any?
+
     private var isSettingsActive: Bool {
         store.activeView == .settings
     }
@@ -77,6 +79,20 @@ struct Shell: View {
             windowBackground
                 .ignoresSafeArea()
         }
+        .onAppear {
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
+                guard event.keyCode == 53, // Escape
+                      store.activeView == .settings else { return event }
+                DispatchQueue.main.async { store.toggleSettings() }
+                return nil
+            }
+        }
+        .onDisappear {
+            if let monitor = escapeMonitor {
+                NSEvent.removeMonitor(monitor)
+                escapeMonitor = nil
+            }
+        }
     }
 
     private var workspaceArea: some View {
@@ -141,14 +157,15 @@ struct Shell: View {
         Rectangle()
             .fill(chromeBackground)
 
-        if let wallpaperId = store.backgroundImage {
-            wallpaperImage(for: wallpaperId)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scaleEffect(1.1)
-                .blur(radius: store.backgroundBlur)
-                .clipped()
+        if store.backgroundImage != nil {
+            if let cached = store.cachedBlurredWallpaper {
+                Image(nsImage: cached)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scaleEffect(1.1)
+                    .clipped()
+            }
         }
     }
 
@@ -165,19 +182,6 @@ struct Shell: View {
         store.toggleSidebar()
     }
 
-    private func wallpaperImage(for id: String) -> Image {
-        if let preset = WallpaperPreset.find(id) {
-            let parts = preset.filename.split(separator: ".")
-            if parts.count == 2,
-               let url = Bundle.main.url(forResource: String(parts[0]), withExtension: String(parts[1])),
-               let nsImage = NSImage(contentsOf: url) {
-                return Image(nsImage: nsImage)
-            }
-        } else if !id.hasPrefix("preset:"), let nsImage = NSImage(contentsOfFile: id) {
-            return Image(nsImage: nsImage)
-        }
-        return Image(systemName: "photo")
-    }
 }
 
 private struct WorkspaceSidebarPanel: View {
@@ -211,7 +215,13 @@ private struct WorkspaceColumnsView: View {
 
     @State private var layoutState = WorkspaceLayoutState()
     @State private var overviewMonitor: Any?
+    @State private var resizeMonitor: Any?
     @State private var currentViewportWidth: CGFloat = 0
+
+    // Cached strip layout to avoid redundant recomputation across
+    // onChange handlers within the same evaluation cycle.
+    @State private var cachedLayout: WorkspaceStripLayout?
+    @State private var cachedLayoutKey: String = ""
 
     private var tabs: [AppTab] {
         store.projectTabs(for: project.id)
@@ -270,22 +280,11 @@ private struct WorkspaceColumnsView: View {
                         currentViewportWidth = geometry.size.width
                         handleViewportChange(viewportWidth: geometry.size.width)
                     }
-                    .onKeyPress(characters: CharacterSet(charactersIn: "rf")) { keyPress in
-                        guard keyPress.modifiers == .command else { return .ignored }
-                        guard !store.isOverviewMode else { return .ignored }
-                        guard let colId = store.activeColumn?.id else { return .ignored }
-                        switch keyPress.characters {
-                        case "r":
-                            let _ = layoutState.cyclePreset(for: colId, projectId: project.id, viewportWidth: geometry.size.width)
-                            alignActiveTab(viewportWidth: geometry.size.width, animated: true)
-                            return .handled
-                        case "f":
-                            let _ = layoutState.toggleMaximize(for: colId, projectId: project.id, viewportWidth: geometry.size.width)
-                            alignActiveTab(viewportWidth: geometry.size.width, animated: true)
-                            return .handled
-                        default:
-                            return .ignored
-                        }
+                    .onAppear { installResizeMonitor(viewportWidth: geometry.size.width) }
+                    .onDisappear { removeResizeMonitor() }
+                    .onChange(of: geometry.size.width) { _, newWidth in
+                        // Reinstall so the closure captures the current viewport width
+                        installResizeMonitor(viewportWidth: newWidth)
                     }
                     .onChange(of: columns.count) {
                         if store.isOverviewMode {
@@ -395,9 +394,7 @@ private struct WorkspaceColumnsView: View {
     @ViewBuilder
     private func overviewThumbnail(column: Column, frame: CGRect, viewportHeight: CGFloat) -> some View {
         let isHighlighted = store.overviewHighlightedColumnId == column.id
-        let columnTabs = column.tabIds.compactMap { tabId in
-            store.tabs.first { $0.id == tabId }
-        }
+        let columnTabs = column.tabIds.compactMap { store.tabsById[$0] }
 
         VStack(spacing: Layout.workspaceColumnSpacing) {
             ForEach(columnTabs) { tab in
@@ -483,6 +480,57 @@ private struct WorkspaceColumnsView: View {
         }
     }
 
+    private func installResizeMonitor(viewportWidth: CGFloat) {
+        removeResizeMonitor()
+        let projectId = project.id
+        resizeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store, layoutState] event in
+            guard event.modifierFlags.contains(.command),
+                  !event.modifierFlags.contains(.shift),
+                  !store.isOverviewMode,
+                  let colId = store.activeColumn?.id,
+                  let chars = event.charactersIgnoringModifiers else { return event }
+
+            switch chars {
+            case "]":
+                DispatchQueue.main.async { [self] in
+                    cachedLayoutKey = ""
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        let _ = layoutState.increasePreset(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        ensureActiveColumnVisible(viewportWidth: viewportWidth)
+                    }
+                }
+                return nil
+            case "[":
+                DispatchQueue.main.async { [self] in
+                    cachedLayoutKey = ""
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        let _ = layoutState.decreasePreset(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        ensureActiveColumnVisible(viewportWidth: viewportWidth)
+                    }
+                }
+                return nil
+            case "f":
+                DispatchQueue.main.async { [self] in
+                    cachedLayoutKey = ""
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        let _ = layoutState.toggleMaximize(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        ensureActiveColumnVisible(viewportWidth: viewportWidth)
+                    }
+                }
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeResizeMonitor() {
+        if let monitor = resizeMonitor {
+            NSEvent.removeMonitor(monitor)
+            resizeMonitor = nil
+        }
+    }
+
     private func syncColumns(viewportWidth: CGFloat) {
         layoutState.sync(
             projectId: project.id,
@@ -505,6 +553,29 @@ private struct WorkspaceColumnsView: View {
             clampViewportOffset(viewportWidth: viewportWidth, animated: false)
         } else {
             restoreViewport(viewportWidth: viewportWidth)
+        }
+    }
+
+    /// After resize: if everything fits, show it all.
+    /// If column grew past viewport, scroll to its left edge.
+    /// If column shrank, keep viewport where it is.
+    private func ensureActiveColumnVisible(viewportWidth: CGFloat) {
+        guard let colId = store.activeColumn?.id else { return }
+        let layout = stripLayout(viewportWidth: viewportWidth)
+        let currentOffset = store.workspaceViewportOffset(for: project.id)
+
+        // Account for column spacing when checking if everything fits
+        let fitsInViewport = layout.contentWidth <= viewportWidth + Layout.workspaceColumnSpacing
+        if fitsInViewport {
+            // Everything fits — show it all
+            store.setWorkspaceViewportOffset(0, for: project.id)
+        } else if let frame = layout.frames[colId] {
+            let colRight = frame.minX + frame.width
+            if colRight > currentOffset + viewportWidth {
+                // Column grew past the right edge — scroll to its left edge
+                store.setWorkspaceViewportOffset(max(0, frame.minX), for: project.id)
+            }
+            // Column shrank — keep current offset (don't move)
         }
     }
 
@@ -541,6 +612,16 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func stripLayout(viewportWidth: CGFloat) -> WorkspaceStripLayout {
+        // Build a cache key from geometry inputs (NOT viewport offset — that's derived)
+        let fractions = columns.map { col in
+            String(format: "%.4f", layoutState.width(for: col.id, projectId: project.id, viewportWidth: viewportWidth))
+        }.joined(separator: ",")
+        let offset = store.workspaceViewportOffset(for: project.id)
+        let key = "\(viewportWidth)|\(columns.map(\.id).joined(separator: ","))|\(fractions)|\(offset)"
+        if key == cachedLayoutKey, let cached = cachedLayout {
+            return cached
+        }
+
         var frames: [String: CGRect] = [:]
         var leadingX: CGFloat = 0
 
@@ -551,17 +632,19 @@ private struct WorkspaceColumnsView: View {
         }
 
         let contentWidth = max(0, leadingX - Layout.workspaceColumnSpacing)
-        let viewportOffset = clampedViewportOffset(
-            store.workspaceViewportOffset(for: project.id),
-            contentWidth: contentWidth,
-            viewportWidth: viewportWidth
-        )
+        // Only clamp to >= 0. Don't clamp to content width — allow empty space
+        // on the right when a column shrinks in place.
+        let viewportOffset = max(0, offset)
 
-        return WorkspaceStripLayout(
+        let result = WorkspaceStripLayout(
             frames: frames,
             contentWidth: contentWidth,
             viewportOffset: viewportOffset
         )
+
+        cachedLayoutKey = key
+        cachedLayout = result
+        return result
     }
 
     private func columnWidth(for columnId: String, viewportWidth: CGFloat) -> CGFloat {
@@ -580,9 +663,24 @@ private struct WorkspaceColumnsView: View {
         guard layout.contentWidth > viewportWidth else { return 0 }
         guard let frame = layout.frames[colId] else { return 0 }
 
-        let centeredOffset = frame.minX - (viewportWidth - frame.width) / 2
+        // Niri-style: scroll the minimum amount to make the active column fully visible
+        let currentOffset = store.workspaceViewportOffset(for: project.id)
+        let colLeft = frame.minX
+        let colRight = frame.minX + frame.width
+
+        var targetOffset = currentOffset
+
+        // If column's right edge is past the viewport, scroll right
+        if colRight > currentOffset + viewportWidth {
+            targetOffset = colRight - viewportWidth
+        }
+        // If column's left edge is before the viewport, scroll left
+        if colLeft < targetOffset {
+            targetOffset = colLeft
+        }
+
         return clampedViewportOffset(
-            centeredOffset,
+            targetOffset,
             contentWidth: layout.contentWidth,
             viewportWidth: viewportWidth
         )
@@ -612,9 +710,7 @@ private struct WorkspaceColumnView: View {
     let surfaceManager: SurfaceManager
 
     private var columnTabs: [AppTab] {
-        column.tabIds.compactMap { tabId in
-            store.tabs.first { $0.id == tabId }
-        }
+        column.tabIds.compactMap { store.tabsById[$0] }
     }
 
     var body: some View {

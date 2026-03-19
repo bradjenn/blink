@@ -73,6 +73,7 @@
 		EC0AF83FC7C2722793015744 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED9F4FAD326C2510EE7917 /* Project.swift */; };
 		FCEF539DCEAA441195942DEF /* SurfaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3DE79377AAA27E649D315 /* SurfaceManager.swift */; };
 		FFE6F430E417FF7DF298E9DE /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */; };
+		SC00000002STYLEDCONTROLS /* StyledControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = SC00000001STYLEDCONTROLS /* StyledControls.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -154,6 +155,7 @@
 		F6E53B8CED8557F923515E7F /* TerminalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTheme.swift; sourceTree = "<group>"; };
 		F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyApp.swift; sourceTree = "<group>"; };
 		F9A82625A455F5E823649549 /* akane-mist.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-mist.jpg"; sourceTree = "<group>"; };
+		SC00000001STYLEDCONTROLS /* StyledControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyledControls.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -345,6 +347,7 @@
 			children = (
 				F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */,
 				DEE79A9F7347C5201472A699 /* WallpaperCard.swift */,
+				SC00000001STYLEDCONTROLS /* StyledControls.swift */,
 							6C79741DD69B423986C45D8C /* TerminalSettings.swift */,
 				2E3BAA35E5AB429BA758027E /* KeyboardShortcutsSettings.swift */,
 );
@@ -463,6 +466,7 @@
 				EC0AF83FC7C2722793015744 /* Project.swift in Sources */,
 				D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */,
 				829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */,
+				SC00000002STYLEDCONTROLS /* StyledControls.swift in Sources */,
 				41326086246AF35521615246 /* Shell.swift in Sources */,
 				3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */,
 				9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */,
@@ -584,7 +588,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.blink.app.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Blink.app/Contents/MacOS/Blink";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Blink Dev.app/Contents/MacOS/Blink Dev";
 			};
 			name = Debug;
 		};
@@ -657,14 +661,14 @@
 		AEA610DE59472AAECC971BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-Debug";
 				COMBINE_HIDPI_IMAGES = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Blink;
+				INFOPLIST_KEY_CFBundleDisplayName = "Blink Dev";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -672,8 +676,8 @@
 				OTHER_LDFLAGS = (
 					"-lstdc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.blink.app;
-				PRODUCT_NAME = Blink;
+				PRODUCT_BUNDLE_IDENTIFIER = com.blink.app.debug;
+				PRODUCT_NAME = "Blink Dev";
 				SDKROOT = macosx;
 			};
 			name = Debug;

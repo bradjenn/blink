@@ -13,60 +13,28 @@ struct SettingsPage: View {
     }
 
     @State private var selectedTab: SettingsTab = .appearance
-    @State private var isBackHovered = false
+    @State private var isCloseHovered = false
+    @State private var closePressed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header: back button — aligned over nav tabs
-            Button(action: { store.toggleSettings() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .medium))
-                    Text("Settings")
-                        .font(Fonts.primary(size: 16, weight: .bold))
-                }
-                .foregroundStyle(isBackHovered ? theme.text : theme.textMuted)
-            }
-            .buttonStyle(.plain)
-            .onHover { isBackHovered = $0 }
-            .pointerCursor()
-            .padding(.leading, 32)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
-
-            // Body: nav + content fills available space
+        ZStack(alignment: .topLeading) {
             HStack(alignment: .top, spacing: 0) {
-                // Nav sidebar
-                VStack(alignment: .leading, spacing: 4) {
+                // Nav sidebar — sits to the left of the content max-width
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(SettingsTab.allCases, id: \.self) { tab in
-                        let isActive = selectedTab == tab
-                        let isDisabled = false
-
-                        Button(action: { if !isDisabled { selectedTab = tab } }) {
-                            Text(tab.rawValue)
-                                .font(Fonts.primary(size: 14))
-                                .foregroundStyle(
-                                    isDisabled ? theme.textDim :
-                                    isActive ? theme.text : theme.textMuted
-                                )
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    isActive ? Color.white.opacity(0.06) : Color.clear
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isDisabled)
-                        .pointerCursor()
+                        SettingsTabButton(
+                            label: tab.rawValue,
+                            isActive: selectedTab == tab,
+                            action: { selectedTab = tab }
+                        )
                     }
                 }
-                .frame(width: 200)
-                .padding(.leading, 32)
-                .padding(.trailing, 16)
+                .frame(width: 180)
+                .padding(.top, 20)
+                .padding(.leading, 16)
+                .padding(.trailing, 12)
 
-                // Content area — fills remaining space
+                // Content area — fixed max width, scrollbar hugs right edge
                 switch selectedTab {
                 case .appearance:
                     AppearanceSettings(ghosttyApp: ghosttyApp)
@@ -76,7 +44,72 @@ struct SettingsPage: View {
                     KeyboardShortcutsSettings()
                 }
             }
+            .frame(maxWidth: 1100)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Close button — top left
+            Button(action: {
+                withAnimation(.easeOut(duration: 0.12)) { closePressed = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    store.toggleSettings()
+                    closePressed = false
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isCloseHovered ? theme.text : theme.textMuted)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(isCloseHovered ? Color.white.opacity(0.12) : Color.white.opacity(0.05))
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                isCloseHovered ? theme.textMuted.opacity(0.4) : theme.border,
+                                lineWidth: 1
+                            )
+                    )
+                    .scaleEffect(closePressed ? 0.85 : 1.0)
+                    .opacity(closePressed ? 0.6 : 1.0)
+            }
+            .buttonStyle(.plain)
+            .onHover { isCloseHovered = $0 }
+            .pointerCursor()
+            .animation(.easeOut(duration: 0.15), value: isCloseHovered)
+            .padding(.leading, 10)
+            .padding(.top, 10)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .font(Fonts.primary(size: 13, family: store.uiFontFamily))
+    }
+}
+
+private struct SettingsTabButton: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let label: String
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(Fonts.primary(size: 14, family: store.uiFontFamily))
+                .foregroundStyle(isActive ? theme.text : isHovered ? theme.text : theme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isActive ? Color.white.opacity(0.06) : isHovered ? Color.white.opacity(0.03) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage
 
 enum ActiveView {
     case projects
@@ -19,6 +20,7 @@ private enum StorageKeys {
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
     static let columns = "blink.columns"
     static let fontFamily = "blink.fontFamily"
+    static let uiFontFamily = "blink.uiFontFamily"
     static let fontSize = "blink.fontSize"
     static let cursorStyle = "blink.cursorStyle"
     static let shell = "blink.shell"
@@ -38,6 +40,11 @@ final class AppStore {
     // Tabs
     var tabs: [AppTab] = []
     var activeTabId: String?
+
+    /// O(1) tab lookup by ID. Rebuilt on access when tabs change.
+    var tabsById: [String: AppTab] {
+        Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
+    }
 
     // Unread activity tracking
     var unreadTabs: Set<String> = []
@@ -65,13 +72,19 @@ final class AppStore {
 
     // Background
     var backgroundImage: String? {
-        didSet { UserDefaults.standard.set(backgroundImage, forKey: StorageKeys.backgroundImage) }
+        didSet {
+            UserDefaults.standard.set(backgroundImage, forKey: StorageKeys.backgroundImage)
+            updateBlurredWallpaper()
+        }
     }
     var backgroundOpacity: Double {
         didSet { UserDefaults.standard.set(backgroundOpacity, forKey: StorageKeys.backgroundOpacity) }
     }
     var backgroundBlur: Double {
-        didSet { UserDefaults.standard.set(backgroundBlur, forKey: StorageKeys.backgroundBlur) }
+        didSet {
+            UserDefaults.standard.set(backgroundBlur, forKey: StorageKeys.backgroundBlur)
+            updateBlurredWallpaper()
+        }
     }
     var hideTitleBar: Bool {
         didSet { UserDefaults.standard.set(hideTitleBar, forKey: StorageKeys.hideTitleBar) }
@@ -80,6 +93,10 @@ final class AppStore {
     // Terminal
     var fontFamily: String {
         didSet { UserDefaults.standard.set(fontFamily, forKey: StorageKeys.fontFamily) }
+    }
+    // UI
+    var uiFontFamily: String {
+        didSet { UserDefaults.standard.set(uiFontFamily, forKey: StorageKeys.uiFontFamily) }
     }
     var fontSize: Double {
         didSet { UserDefaults.standard.set(fontSize, forKey: StorageKeys.fontSize) }
@@ -127,6 +144,7 @@ final class AppStore {
         self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
         self.fontFamily = defaults.string(forKey: StorageKeys.fontFamily) ?? "MesloLGS Nerd Font Mono"
+        self.uiFontFamily = defaults.string(forKey: StorageKeys.uiFontFamily) ?? "MesloLGS Nerd Font Mono"
         self.fontSize = defaults.object(forKey: StorageKeys.fontSize) != nil
             ? defaults.double(forKey: StorageKeys.fontSize) : 19
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
@@ -153,6 +171,9 @@ final class AppStore {
         } else {
             self.backgroundBlur = 0
         }
+
+        // Pre-render blurred wallpaper from persisted settings
+        updateBlurredWallpaper()
     }
 
     // MARK: - View Actions
@@ -249,6 +270,40 @@ final class AppStore {
         backgroundImage != nil
     }
 
+    /// Pre-rendered blurred wallpaper image. Avoids real-time GPU blur every frame.
+    var cachedBlurredWallpaper: NSImage?
+
+    func updateBlurredWallpaper() {
+        guard let wallpaperId = backgroundImage else {
+            cachedBlurredWallpaper = nil
+            return
+        }
+
+        guard let source = loadWallpaperNSImage(for: wallpaperId) else {
+            cachedBlurredWallpaper = nil
+            return
+        }
+
+        if backgroundBlur > 0 {
+            cachedBlurredWallpaper = source.blurredCopy(radius: backgroundBlur)
+        } else {
+            cachedBlurredWallpaper = source
+        }
+    }
+
+    private func loadWallpaperNSImage(for id: String) -> NSImage? {
+        if let preset = WallpaperPreset.find(id) {
+            let parts = preset.filename.split(separator: ".")
+            if parts.count == 2,
+               let url = Bundle.main.url(forResource: String(parts[0]), withExtension: String(parts[1])) {
+                return NSImage(contentsOf: url)
+            }
+        } else if !id.hasPrefix("preset:") {
+            return NSImage(contentsOfFile: id)
+        }
+        return nil
+    }
+
     // MARK: - Column Helpers
 
     func projectColumns(for projectId: String) -> [Column] {
@@ -256,7 +311,7 @@ final class AppStore {
     }
 
     func columnFor(tabId: String) -> Column? {
-        guard let tab = tabs.first(where: { $0.id == tabId }) else { return nil }
+        guard let tab = tabsById[tabId] else { return nil }
         return projectColumns(for: tab.projectId).first { $0.tabIds.contains(tabId) }
     }
 
@@ -268,10 +323,9 @@ final class AppStore {
     /// Returns tabs in column-major order: left-to-right columns, top-to-bottom within each.
     func orderedTabs(for projectId: String) -> [AppTab] {
         let cols = projectColumns(for: projectId)
+        let lookup = tabsById
         return cols.flatMap { col in
-            col.tabIds.compactMap { tabId in
-                tabs.first { $0.id == tabId }
-            }
+            col.tabIds.compactMap { lookup[$0] }
         }
     }
 
@@ -346,7 +400,7 @@ final class AppStore {
 
     func setActiveTab(_ id: String) {
         activeTabId = id
-        if let tab = tabs.first(where: { $0.id == id }) {
+        if let tab = tabsById[id] {
             lastActiveTab[tab.projectId] = id
         }
         clearUnread(id)
@@ -698,7 +752,7 @@ final class AppStore {
     }
 
     func closeTab(_ id: String) {
-        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        guard let tab = tabsById[id] else { return }
         let projectId = tab.projectId
 
         // Find the column and position of this tab
@@ -883,5 +937,34 @@ final class AppStore {
         if let data = try? JSONEncoder().encode(value) {
             UserDefaults.standard.set(data, forKey: key)
         }
+    }
+}
+
+// MARK: - NSImage Gaussian Blur
+
+extension NSImage {
+    /// Returns a new NSImage with a Gaussian blur applied via CoreImage.
+    func blurredCopy(radius: Double) -> NSImage? {
+        guard radius > 0 else { return self }
+        guard let tiffData = tiffRepresentation,
+              let ciImage = CIImage(data: tiffData) else {
+            return nil
+        }
+
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(radius, forKey: kCIInputRadiusKey)
+
+        guard let output = filter.outputImage else { return nil }
+
+        // CIGaussianBlur expands the image extent — crop back to original
+        let cropped = output.cropped(to: ciImage.extent)
+
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(cropped, from: ciImage.extent) else {
+            return nil
+        }
+
+        return NSImage(cgImage: cgImage, size: size)
     }
 }

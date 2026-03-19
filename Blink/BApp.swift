@@ -88,7 +88,7 @@ struct BApp: App {
                     store.surfaceManager = surfaceManager
                     surfaceManager.onProcessExit = { tabId in
                         // Auto-close tabs that ran a command (e.g. lazygit)
-                        if let tab = store.tabs.first(where: { $0.id == tabId }), tab.command != nil {
+                        if let tab = store.tabsById[tabId], tab.command != nil {
                             store.closeTab(tabId)
                         }
                     }

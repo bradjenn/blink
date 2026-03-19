@@ -56,11 +56,22 @@ struct TerminalView: NSViewRepresentable {
     let isFocused: Bool
     var command: String? = nil
 
+    final class Coordinator {
+        var store: AppStore?
+        var tabId: String = ""
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> TerminalContainerView {
         TerminalContainerView()
     }
 
     func updateNSView(_ container: TerminalContainerView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.store = store
+        coordinator.tabId = tabId
+
         let surfaceView: TerminalSurfaceView
         if let existing = surfaceManager.surface(for: tabId) {
             surfaceView = existing
@@ -71,19 +82,22 @@ struct TerminalView: NSViewRepresentable {
                 workingDirectory: workingDirectory,
                 command: command
             )
-        }
 
-        surfaceView.onSwipeNavigation = { [store] direction in
-            switch direction {
-            case .previous:
-                store.selectPreviousTab()
-            case .next:
-                store.selectNextTab()
+            // Set closures once per surface, reading current state via coordinator
+            surfaceView.onSwipeNavigation = { [weak coordinator] direction in
+                guard let store = coordinator?.store else { return }
+                switch direction {
+                case .previous:
+                    store.selectPreviousTab()
+                case .next:
+                    store.selectNextTab()
+                }
             }
-        }
-        surfaceView.onInteraction = { [store, tabId] in
-            if store.activeTabId != tabId {
-                store.setActiveTab(tabId)
+            surfaceView.onInteraction = { [weak coordinator] in
+                guard let coordinator else { return }
+                if coordinator.store?.activeTabId != coordinator.tabId {
+                    coordinator.store?.setActiveTab(coordinator.tabId)
+                }
             }
         }
 
