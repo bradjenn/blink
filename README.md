@@ -40,7 +40,7 @@
 - **Niri-style vertical columns** — each tab opens in a scrollable column layout, not a fixed grid
 - **Absorb and expel panes** — pull a neighboring column's tab into your column, or push one out
 - **Overview mode** — zoom out to see all columns and panes at once
-- **Resizable columns** — drag edges or use presets (50/50, 70/30, etc.)
+- **Resizable columns** — cycle through width presets with `⌘]` / `⌘[`
 
 ### Project Management
 
