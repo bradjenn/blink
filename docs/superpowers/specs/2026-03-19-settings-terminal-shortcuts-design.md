@@ -23,7 +23,9 @@ Matches AppearanceSettings style: section headers with label-left / control-righ
 
 ### Hot-reload
 
-All four settings feed into `TerminalTheme.toConfigString()` which already generates the Ghostty config block. The new properties get interpolated into that string. `GhosttyApp.updateConfig()` pushes changes to all active surfaces without restart.
+Font family, font size, and cursor style are passed as parameters to `TerminalTheme.toConfigString()` (matching the existing pattern where `backgroundOpacity` is passed in). The generated config string includes `font-family`, `font-size`, and `cursor-shape` keys. `GhosttyApp.updateConfig()` pushes changes to all active surfaces without restart.
+
+**Shell is different.** The shell path is resolved at surface creation time in `TerminalSurfaceView.createSurface()` and cannot be hot-reloaded via Ghostty config. Changing the shell setting applies to **new tabs only**. `TerminalSurfaceView` reads the shell from AppStore (falling back to `$SHELL`) when creating a surface.
 
 ### Cursor style enum
 
@@ -51,7 +53,7 @@ A reference table displaying all current shortcuts. No rebinding — just discov
 |----------|-----------|
 | **Navigation** | Focus Left (Cmd+H), Focus Right (Cmd+L), Focus Down (Cmd+J), Focus Up (Cmd+K) |
 | **Windows** | New Window (Cmd+T), Close Window (Cmd+W), Window 1-9 (Cmd+1-9) |
-| **Columns** | Move Left (Cmd+Shift+H), Move Right (Cmd+Shift+L), Absorb Left (Cmd+Shift+J), Absorb Right (Cmd+Shift+K), Expel Pane (Cmd+Shift+E), Resize (Cmd+R), Maximize (Cmd+F) |
+| **Columns** | Move Window Left (Cmd+Shift+H), Move Window Right (Cmd+Shift+L), Absorb from Left (Cmd+Shift+J), Absorb from Right (Cmd+Shift+K), Expel Pane (Cmd+Shift+E), Resize Column (Cmd+R), Maximize Column (Cmd+F) |
 | **Workspace** | Toggle Sidebar (Cmd+B), Overview (Cmd+O), Open Git (Cmd+G) |
 | **App** | Settings (Cmd+,), Switch Project (Cmd+P), Switch Theme (Cmd+Shift+T) |
 
