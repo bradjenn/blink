@@ -11,3 +11,5 @@ Blink.dmg
 # AI agent config
 .claude/
 .agents/
+skills-lock.json
+docs/superpowers/
