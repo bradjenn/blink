@@ -120,7 +120,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 }
             }
         }
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shell = UserDefaults.standard.string(forKey: "blink.shell")
+            ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let wrapped: String
         if let command {
             // Command tabs: non-interactive login shell running a specific command

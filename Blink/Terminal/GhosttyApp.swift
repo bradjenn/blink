@@ -76,9 +76,19 @@ final class GhosttyApp {
             opacity = 1.0
         }
 
+        let fontFamily = defaults.string(forKey: "blink.fontFamily") ?? "MesloLGS Nerd Font Mono"
+        let fontSize = defaults.object(forKey: "blink.fontSize") != nil
+            ? defaults.double(forKey: "blink.fontSize") : 19.0
+        let cursorStyle = CursorStyle(rawValue: defaults.string(forKey: "blink.cursorStyle") ?? "") ?? .block
+
         let configString: String
         if let defaultTheme = TerminalTheme.load(name: themeName) {
-            configString = defaultTheme.toConfigString(backgroundOpacity: opacity)
+            configString = defaultTheme.toConfigString(
+                backgroundOpacity: opacity,
+                fontFamily: fontFamily,
+                fontSize: fontSize,
+                cursorStyle: cursorStyle
+            )
         } else {
             configString = "background-opacity = \(opacity)\n"
         }
@@ -202,10 +212,21 @@ final class GhosttyApp {
     }
 
     /// Hot-reload the terminal config with new theme colors and opacity.
-    func updateConfig(terminalTheme: TerminalTheme, backgroundOpacity: Double) {
+    func updateConfig(
+        terminalTheme: TerminalTheme,
+        backgroundOpacity: Double,
+        fontFamily: String = "MesloLGS Nerd Font Mono",
+        fontSize: Double = 19,
+        cursorStyle: CursorStyle = .block
+    ) {
         guard let app else { return }
 
-        let configString = terminalTheme.toConfigString(backgroundOpacity: backgroundOpacity)
+        let configString = terminalTheme.toConfigString(
+            backgroundOpacity: backgroundOpacity,
+            fontFamily: fontFamily,
+            fontSize: fontSize,
+            cursorStyle: cursorStyle
+        )
         guard activeConfigKey != configString else { return }
 
         guard let newCfg = clonedConfig(for: configString) ?? buildConfig(from: configString) else {

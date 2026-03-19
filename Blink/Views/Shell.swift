@@ -34,15 +34,23 @@ struct Shell: View {
                 }
             }
             .font(Fonts.primary(size: 13))
-            .ignoresSafeArea(.container, edges: .top)
 
-            if isSettingsActive {
-                SettingsPage(ghosttyApp: ghosttyApp)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Rectangle().fill(chromeBackground))
-                    .transition(.opacity)
-                    .zIndex(1)
-            }
+            SettingsPage(ghosttyApp: ghosttyApp)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(theme.accent.opacity(0.85), lineWidth: 1)
+                )
+                .padding(.horizontal, Layout.workspacePaddingH)
+                .padding(.top, Layout.workspacePaddingV)
+                .padding(.bottom, 8)
+                .background(Rectangle().fill(chromeBackground))
+                .opacity(isSettingsActive ? 1 : 0)
+                .scaleEffect(isSettingsActive ? 1 : 0.97)
+                .animation(.easeOut(duration: 0.25), value: isSettingsActive)
+                .allowsHitTesting(isSettingsActive)
+                .zIndex(1)
 
             if store.showProjectSwitcher {
                 StartScreenProjectPicker(
@@ -64,6 +72,7 @@ struct Shell: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: .top)
         .background {
             windowBackground
                 .ignoresSafeArea()
@@ -114,7 +123,6 @@ struct Shell: View {
                 }
             }
         }
-        .ignoresSafeArea(.container, edges: .top)
         .clipped()
     }
 
@@ -150,7 +158,7 @@ struct Shell: View {
     }
 
     private func showSettings() {
-        store.setActiveView(.settings)
+        store.toggleSettings()
     }
 
     private func toggleSidebar() {

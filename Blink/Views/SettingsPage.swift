@@ -18,7 +18,7 @@ struct SettingsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header: back button — aligned over nav tabs
-            Button(action: { store.setActiveView(.projects) }) {
+            Button(action: { store.toggleSettings() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .medium))
@@ -40,7 +40,7 @@ struct SettingsPage: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(SettingsTab.allCases, id: \.self) { tab in
                         let isActive = selectedTab == tab
-                        let isDisabled = tab != .appearance
+                        let isDisabled = false
 
                         Button(action: { if !isDisabled { selectedTab = tab } }) {
                             Text(tab.rawValue)
@@ -71,17 +71,9 @@ struct SettingsPage: View {
                 case .appearance:
                     AppearanceSettings(ghosttyApp: ghosttyApp)
                 case .terminal:
-                    Text("Terminal settings coming soon")
-                        .font(Fonts.primary(size: 14))
-                        .foregroundStyle(theme.textDim)
-                        .padding(32)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    TerminalSettings(ghosttyApp: ghosttyApp)
                 case .keyboardShortcuts:
-                    Text("Keyboard shortcuts coming soon")
-                        .font(Fonts.primary(size: 14))
-                        .foregroundStyle(theme.textDim)
-                        .padding(32)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    KeyboardShortcutsSettings()
                 }
             }
         }

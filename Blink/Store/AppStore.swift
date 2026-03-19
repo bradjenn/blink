@@ -18,6 +18,10 @@ private enum StorageKeys {
     static let lastActiveTabs = "blink.lastActiveTabs"
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
     static let columns = "blink.columns"
+    static let fontFamily = "blink.fontFamily"
+    static let fontSize = "blink.fontSize"
+    static let cursorStyle = "blink.cursorStyle"
+    static let shell = "blink.shell"
 }
 
 @MainActor @Observable
@@ -73,6 +77,24 @@ final class AppStore {
         didSet { UserDefaults.standard.set(hideTitleBar, forKey: StorageKeys.hideTitleBar) }
     }
 
+    // Terminal
+    var fontFamily: String {
+        didSet { UserDefaults.standard.set(fontFamily, forKey: StorageKeys.fontFamily) }
+    }
+    var fontSize: Double {
+        didSet { UserDefaults.standard.set(fontSize, forKey: StorageKeys.fontSize) }
+    }
+    var cursorStyle: CursorStyle {
+        didSet { UserDefaults.standard.set(cursorStyle.rawValue, forKey: StorageKeys.cursorStyle) }
+    }
+    var shell: String {
+        didSet { UserDefaults.standard.set(shell, forKey: StorageKeys.shell) }
+    }
+
+    static var defaultShell: String {
+        ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    }
+
     // Sidebar
     var sidebarVisible: Bool {
         didSet { UserDefaults.standard.set(sidebarVisible, forKey: StorageKeys.sidebarVisible) }
@@ -104,6 +126,11 @@ final class AppStore {
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
         self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
+        self.fontFamily = defaults.string(forKey: StorageKeys.fontFamily) ?? "MesloLGS Nerd Font Mono"
+        self.fontSize = defaults.object(forKey: StorageKeys.fontSize) != nil
+            ? defaults.double(forKey: StorageKeys.fontSize) : 19
+        self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
+        self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
         self.columns = Self.loadColumns()
@@ -132,6 +159,10 @@ final class AppStore {
 
     func setActiveView(_ view: ActiveView) {
         activeView = view
+    }
+
+    func toggleSettings() {
+        activeView = activeView == .settings ? .projects : .settings
     }
 
     func toggleSidebar() {

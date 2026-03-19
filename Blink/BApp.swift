@@ -102,7 +102,7 @@ struct BApp: App {
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
-                    store.setActiveView(.settings)
+                    store.toggleSettings()
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }

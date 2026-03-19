@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		26137FC568C546C9B9362C7B /* KeyboardShortcutsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E3BAA35E5AB429BA758027E /* KeyboardShortcutsSettings.swift */; };
+
+		98BBFDDAA4C64F75B2E14E84 /* TerminalSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C79741DD69B423986C45D8C /* TerminalSettings.swift */; };
+
+		44C726EDA6144763824B3CB3 /* CursorStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DCE606C2304238968F5C62 /* CursorStyle.swift */; };
+
 		025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */; };
 		0973322112C267606F0D23CC /* StartScreenLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */; };
 		A1B2C3D4E5F6071829304152 /* Column.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6970819203142 /* Column.swift */; };
@@ -80,6 +86,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2E3BAA35E5AB429BA758027E /* KeyboardShortcutsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsSettings.swift; sourceTree = "<group>"; };
+
+		6C79741DD69B423986C45D8C /* TerminalSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSettings.swift; sourceTree = "<group>"; };
+
+		B0DCE606C2304238968F5C62 /* CursorStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorStyle.swift; sourceTree = "<group>"; };
+
 		0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		09D47A5C0A44933E63A3104C /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		F1E2D3C4B5A6970819203142 /* Column.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Column.swift; sourceTree = "<group>"; };
@@ -278,7 +290,8 @@
 				55ED9F4FAD326C2510EE7917 /* Project.swift */,
 				912BF0925C71AED8B1C12E74 /* Tab.swift */,
 				2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */,
-			);
+							B0DCE606C2304238968F5C62 /* CursorStyle.swift */,
+);
 			path = Models;
 			sourceTree = "<group>";
 		};
@@ -332,7 +345,9 @@
 			children = (
 				F6608D4939643268CCB44FA8 /* AppearanceSettings.swift */,
 				DEE79A9F7347C5201472A699 /* WallpaperCard.swift */,
-			);
+							6C79741DD69B423986C45D8C /* TerminalSettings.swift */,
+				2E3BAA35E5AB429BA758027E /* KeyboardShortcutsSettings.swift */,
+);
 			path = Settings;
 			sourceTree = "<group>";
 		};
@@ -471,7 +486,10 @@
 				E2C7CF53477F3E8E337009BE /* WindowDragRegion.swift in Sources */,
 				495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */,
 				AB42C98139912D4E2C064CA3 /* WorkspaceLayoutState.swift in Sources */,
-			);
+							44C726EDA6144763824B3CB3 /* CursorStyle.swift in Sources */,
+				98BBFDDAA4C64F75B2E14E84 /* TerminalSettings.swift in Sources */,
+				26137FC568C546C9B9362C7B /* KeyboardShortcutsSettings.swift in Sources */,
+);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA584FD69819E0E1D800AEC8 /* Sources */ = {

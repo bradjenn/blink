@@ -121,7 +121,10 @@ struct AppearanceSettings: View {
                                     let effectiveOpacity = store.hasWallpaper ? newValue : 1.0
                                     ghosttyApp.updateConfig(
                                         terminalTheme: termTheme,
-                                        backgroundOpacity: effectiveOpacity
+                                        backgroundOpacity: effectiveOpacity,
+                                        fontFamily: store.fontFamily,
+                                        fontSize: store.fontSize,
+                                        cursorStyle: store.cursorStyle
                                     )
                                 }
                             }
@@ -189,7 +192,13 @@ struct AppearanceSettings: View {
     private func updateTerminalOpacity() {
         if let termTheme = themeManager.activeTerminalTheme {
             let effectiveOpacity = store.hasWallpaper ? store.backgroundOpacity : 1.0
-            ghosttyApp.updateConfig(terminalTheme: termTheme, backgroundOpacity: effectiveOpacity)
+            ghosttyApp.updateConfig(
+                terminalTheme: termTheme,
+                backgroundOpacity: effectiveOpacity,
+                fontFamily: store.fontFamily,
+                fontSize: store.fontSize,
+                cursorStyle: store.cursorStyle
+            )
         }
     }
 }
