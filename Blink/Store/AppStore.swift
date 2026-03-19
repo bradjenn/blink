@@ -52,6 +52,7 @@ final class AppStore {
     // Overview
     var isOverviewMode = false
     var overviewHighlightedColumnId: String?
+    var overviewHighlightedTabId: String?
 
     // Columns — source of truth for spatial layout (left-to-right order)
     var columns: [String: [Column]] = [:] {
@@ -189,7 +190,11 @@ final class AppStore {
     func toggleSidebar() {
         withAnimation(.snappy(duration: 0.18, extraBounce: 0)) {
             sidebarVisible.toggle()
-            if !sidebarVisible { sidebarFocused = false }
+            if sidebarVisible && activeTabId == nil {
+                sidebarFocused = true
+            } else if !sidebarVisible {
+                sidebarFocused = false
+            }
         }
     }
 
@@ -606,21 +611,21 @@ final class AppStore {
         guard !cols.isEmpty else { return }
 
         if isOverviewMode {
-            exitOverview(selecting: overviewHighlightedColumnId)
+            exitOverview(selecting: overviewHighlightedTabId)
         } else {
             isOverviewMode = true
             overviewHighlightedColumnId = activeColumn?.id
+            overviewHighlightedTabId = activeTabId
         }
     }
 
-    func exitOverview(selecting columnId: String?) {
-        if let columnId,
-           let col = projectColumns(for: activeProjectId ?? "").first(where: { $0.id == columnId }),
-           let targetTab = columnFocusedTab[columnId] ?? col.tabIds.first {
-            setActiveTab(targetTab)
+    func exitOverview(selecting tabId: String?) {
+        if let tabId {
+            setActiveTab(tabId)
         }
         isOverviewMode = false
         overviewHighlightedColumnId = nil
+        overviewHighlightedTabId = nil
     }
 
     func overviewHighlightLeft() {
@@ -629,7 +634,9 @@ final class AppStore {
         guard let highlightId = overviewHighlightedColumnId,
               let idx = cols.firstIndex(where: { $0.id == highlightId }),
               idx > cols.startIndex else { return }
-        overviewHighlightedColumnId = cols[cols.index(before: idx)].id
+        let newCol = cols[cols.index(before: idx)]
+        overviewHighlightedColumnId = newCol.id
+        overviewHighlightedTabId = newCol.tabIds.first
     }
 
     func overviewHighlightRight() {
@@ -639,7 +646,30 @@ final class AppStore {
               let idx = cols.firstIndex(where: { $0.id == highlightId }) else { return }
         let next = cols.index(after: idx)
         guard next < cols.endIndex else { return }
-        overviewHighlightedColumnId = cols[next].id
+        let newCol = cols[next]
+        overviewHighlightedColumnId = newCol.id
+        overviewHighlightedTabId = newCol.tabIds.first
+    }
+
+    func overviewHighlightUp() {
+        guard let highlightedColId = overviewHighlightedColumnId,
+              let projectId = activeProjectId,
+              let col = projectColumns(for: projectId).first(where: { $0.id == highlightedColId }),
+              let currentTab = overviewHighlightedTabId,
+              let idx = col.tabIds.firstIndex(of: currentTab),
+              idx > col.tabIds.startIndex else { return }
+        overviewHighlightedTabId = col.tabIds[col.tabIds.index(before: idx)]
+    }
+
+    func overviewHighlightDown() {
+        guard let highlightedColId = overviewHighlightedColumnId,
+              let projectId = activeProjectId,
+              let col = projectColumns(for: projectId).first(where: { $0.id == highlightedColId }),
+              let currentTab = overviewHighlightedTabId,
+              let idx = col.tabIds.firstIndex(of: currentTab) else { return }
+        let next = col.tabIds.index(after: idx)
+        guard next < col.tabIds.endIndex else { return }
+        overviewHighlightedTabId = col.tabIds[next]
     }
 
     // MARK: - Tab Actions
@@ -811,6 +841,7 @@ final class AppStore {
                 } else {
                     activeTabId = nil
                     workspaceViewportOffsets[projectId] = nil
+                    if sidebarVisible { sidebarFocused = true }
                 }
             }
         }

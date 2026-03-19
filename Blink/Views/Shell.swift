@@ -217,6 +217,7 @@ private struct WorkspaceColumnsView: View {
     @State private var overviewMonitor: Any?
     @State private var resizeMonitor: Any?
     @State private var currentViewportWidth: CGFloat = 0
+    @State private var overviewSnapshots: [String: NSImage] = [:]
 
     // Cached strip layout to avoid redundant recomputation across
     // onChange handlers within the same evaluation cycle.
@@ -294,6 +295,7 @@ private struct WorkspaceColumnsView: View {
                             } else if let highlightId = store.overviewHighlightedColumnId,
                                       !cols.contains(where: { $0.id == highlightId }) {
                                 store.overviewHighlightedColumnId = cols.first?.id
+                                store.overviewHighlightedTabId = cols.first?.tabIds.first
                             }
                         }
                     }
@@ -309,11 +311,13 @@ private struct WorkspaceColumnsView: View {
                     }
                     .onChange(of: store.isOverviewMode) {
                         if store.isOverviewMode {
+                            captureOverviewSnapshots()
                             installOverviewMonitor()
                         } else {
                             // Align viewport to active tab so exit doesn't slide
                             alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
                             removeOverviewMonitor()
+                            overviewSnapshots = [:]
                         }
                     }
                     .onDisappear {
@@ -392,52 +396,64 @@ private struct WorkspaceColumnsView: View {
 
     @ViewBuilder
     private func overviewThumbnail(column: Column, frame: CGRect, viewportHeight: CGFloat) -> some View {
-        let isHighlighted = store.overviewHighlightedColumnId == column.id
+        let isHighlightedColumn = store.overviewHighlightedColumnId == column.id
         let columnTabs = column.tabIds.compactMap { store.tabsById[$0] }
 
         VStack(spacing: Layout.workspaceColumnSpacing) {
             ForEach(columnTabs) { tab in
-                let isActive = store.activeTabId == tab.id
+                let isHighlightedTab = store.overviewHighlightedTabId == tab.id
 
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(theme.bg.opacity(isHighlighted ? 0.85 : 0.7))
-                    .overlay(alignment: .bottomLeading) {
-                        Text(tab.label)
-                            .font(Fonts.primary(size: 13))
-                            .foregroundStyle(isHighlighted ? theme.text : theme.textDim)
-                            .lineLimit(1)
-                            .padding(8)
+                ZStack {
+                    if let snapshot = overviewSnapshots[tab.id] {
+                        Image(nsImage: snapshot)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .clipped()
+                    } else {
+                        theme.bg.opacity(isHighlightedTab ? 0.85 : isHighlightedColumn ? 0.75 : 0.7)
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(
-                                isActive ? theme.accent.opacity(0.85) : theme.border,
-                                lineWidth: isActive ? 2 : 1
-                            )
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        store.setActiveTab(tab.id)
-                        exitOverviewAnimated(selecting: column.id)
-                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    Text(tab.label)
+                        .font(Fonts.primary(size: 13))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(theme.bg.opacity(0.7))
+                        )
+                        .padding(6)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(
+                            isHighlightedTab ? theme.accent.opacity(0.85) : theme.border,
+                            lineWidth: isHighlightedTab ? 2 : 1
+                        )
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    store.setActiveTab(tab.id)
+                    exitOverviewAnimated(selecting: nil)
+                }
             }
         }
-        .shadow(color: isHighlighted ? theme.accent.opacity(0.3) : .clear, radius: 8)
-        .animation(.easeInOut(duration: 0.15), value: isHighlighted)
+        .shadow(color: isHighlightedColumn ? theme.accent.opacity(0.3) : .clear, radius: 8)
+        .animation(.easeInOut(duration: 0.15), value: store.overviewHighlightedTabId)
+        .animation(.easeInOut(duration: 0.15), value: isHighlightedColumn)
     }
 
-    private func exitOverviewAnimated(selecting columnId: String?) {
-        // Set active tab from selected column before animating exit
-        if let columnId,
-           let projectId = store.activeProjectId,
-           let col = store.projectColumns(for: projectId).first(where: { $0.id == columnId }),
-           let targetTab = store.columnFocusedTab[columnId] ?? col.tabIds.first {
-            store.setActiveTab(targetTab)
+    private func exitOverviewAnimated(selecting tabId: String?) {
+        if let tabId {
+            store.setActiveTab(tabId)
         }
         alignActiveTab(viewportWidth: currentViewportWidth, animated: false)
         withAnimation(overviewAnimation) {
             store.isOverviewMode = false
             store.overviewHighlightedColumnId = nil
+            store.overviewHighlightedTabId = nil
         }
         removeOverviewMonitor()
         // Focus the terminal surface after the animation completes
@@ -450,8 +466,15 @@ private struct WorkspaceColumnsView: View {
         removeOverviewMonitor()
         overviewMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
             guard store.isOverviewMode else { return event }
-            // Let Cmd-modified keys pass through to menu shortcuts
-            if event.modifierFlags.contains(.command) { return event }
+
+            // Block Cmd+HJKL during overview so normal focus commands don't fire
+            if event.modifierFlags.contains(.command) {
+                if let key = event.charactersIgnoringModifiers?.lowercased(),
+                   ["h", "j", "k", "l"].contains(key) {
+                    return nil
+                }
+                return event
+            }
 
             switch event.keyCode {
             case 123, 4: // left arrow, H
@@ -460,8 +483,14 @@ private struct WorkspaceColumnsView: View {
             case 124, 37: // right arrow, L
                 store.overviewHighlightRight()
                 return nil
+            case 125, 38: // down arrow, J
+                store.overviewHighlightDown()
+                return nil
+            case 126, 40: // up arrow, K
+                store.overviewHighlightUp()
+                return nil
             case 36: // return
-                self.exitOverviewAnimated(selecting: store.overviewHighlightedColumnId)
+                self.exitOverviewAnimated(selecting: store.overviewHighlightedTabId)
                 return nil
             case 53: // escape
                 self.exitOverviewAnimated(selecting: nil)
@@ -477,6 +506,22 @@ private struct WorkspaceColumnsView: View {
             NSEvent.removeMonitor(monitor)
             overviewMonitor = nil
         }
+    }
+
+    private func captureOverviewSnapshots() {
+        var snapshots: [String: NSImage] = [:]
+        for (tabId, surfaceView) in surfaceManager.surfaces {
+            let bounds = surfaceView.bounds
+            guard bounds.width > 0 && bounds.height > 0 else { continue }
+            let image = NSImage(size: bounds.size)
+            image.lockFocus()
+            if let ctx = NSGraphicsContext.current?.cgContext {
+                surfaceView.layer?.render(in: ctx)
+            }
+            image.unlockFocus()
+            snapshots[tabId] = image
+        }
+        overviewSnapshots = snapshots
     }
 
     private func installResizeMonitor(viewportWidth: CGFloat) {

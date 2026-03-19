@@ -17,11 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             self?.clearReservedKeyboardShortcuts()
         }
+
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
         clearReservedKeyboardShortcuts()
     }
+
 
     private func clearReservedKeyboardShortcuts() {
         guard let mainMenu = NSApp.mainMenu else { return }
