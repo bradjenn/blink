@@ -7,3 +7,7 @@ build/
 .DS_Store
 Frameworks/
 Blink.dmg
+
+# AI agent config
+.claude/
+.agents/
