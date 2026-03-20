@@ -24,6 +24,7 @@ private enum StorageKeys {
     static let fontSize = "blink.fontSize"
     static let cursorStyle = "blink.cursorStyle"
     static let shell = "blink.shell"
+    static let focusCenteringMode = "blink.focusCenteringMode"
 }
 
 @MainActor @Observable
@@ -109,6 +110,11 @@ final class AppStore {
         didSet { UserDefaults.standard.set(shell, forKey: StorageKeys.shell) }
     }
 
+    // Focus centering
+    var focusCenteringMode: FocusCenteringMode {
+        didSet { UserDefaults.standard.set(focusCenteringMode.rawValue, forKey: StorageKeys.focusCenteringMode) }
+    }
+
     static var defaultShell: String {
         ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     }
@@ -150,6 +156,7 @@ final class AppStore {
             ? defaults.double(forKey: StorageKeys.fontSize) : 19
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
         self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
+        self.focusCenteringMode = FocusCenteringMode(rawValue: defaults.string(forKey: StorageKeys.focusCenteringMode) ?? "") ?? .never
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
         self.columns = Self.loadColumns()
@@ -423,8 +430,8 @@ final class AppStore {
         }
 
         let nextIndex = ordered.index(after: currentIndex)
-        let tab = nextIndex < ordered.endIndex ? ordered[nextIndex] : ordered[0]
-        setActiveTab(tab.id)
+        guard nextIndex < ordered.endIndex else { return }
+        setActiveTab(ordered[nextIndex].id)
     }
 
     func selectPreviousTab() {
@@ -438,10 +445,8 @@ final class AppStore {
             return
         }
 
-        let tab = currentIndex > ordered.startIndex
-            ? ordered[ordered.index(before: currentIndex)]
-            : ordered[ordered.index(before: ordered.endIndex)]
-        setActiveTab(tab.id)
+        guard currentIndex > ordered.startIndex else { return }
+        setActiveTab(ordered[ordered.index(before: currentIndex)].id)
     }
 
     func focusLeft() {

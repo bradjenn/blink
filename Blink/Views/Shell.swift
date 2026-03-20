@@ -278,12 +278,16 @@ private struct WorkspaceColumnsView: View {
                     .onChange(of: store.activeTabId, initial: false) {
                         alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
                     }
-                    .onChange(of: geometry.size.width, initial: true) { _, _ in
-                        currentViewportWidth = geometry.size.width
-                        handleViewportChange(viewportWidth: geometry.size.width)
+                    .onChange(of: geometry.size.width, initial: true) { _, newWidth in
+                        currentViewportWidth = newWidth
+                        handleViewportChange(viewportWidth: newWidth)
                     }
-                    .onAppear { installResizeMonitor(viewportWidth: geometry.size.width) }
-                    .onDisappear { removeResizeMonitor() }
+                    .onAppear {
+                        installResizeMonitor(viewportWidth: geometry.size.width)
+                    }
+                    .onDisappear {
+                        removeResizeMonitor()
+                    }
                     .onChange(of: geometry.size.width) { _, newWidth in
                         // Reinstall so the closure captures the current viewport width
                         installResizeMonitor(viewportWidth: newWidth)
@@ -692,8 +696,6 @@ private struct WorkspaceColumnsView: View {
         }
 
         let contentWidth = max(0, leadingX - Layout.workspaceColumnSpacing)
-        // Only clamp to >= 0. Don't clamp to content width — allow empty space
-        // on the right when a column shrinks in place.
         let viewportOffset = max(0, offset)
 
         let result = WorkspaceStripLayout(
@@ -723,11 +725,74 @@ private struct WorkspaceColumnsView: View {
         guard layout.contentWidth > viewportWidth else { return 0 }
         guard let frame = layout.frames[colId] else { return 0 }
 
-        // Niri-style: scroll the minimum amount to make the active column fully visible
         let currentOffset = store.workspaceViewportOffset(for: project.id)
         let colLeft = frame.minX
         let colRight = frame.minX + frame.width
+        let colCenter = frame.minX + frame.width / 2
+        let maxOffset = layout.contentWidth - viewportWidth
 
+        switch store.focusCenteringMode {
+        case .always:
+            // Center the active column in the viewport
+            let centered = colCenter - viewportWidth / 2
+            return min(max(centered, 0), maxOffset)
+
+        case .onOverflow:
+            // Center only when adjacent columns don't fit alongside
+            let cols = columns
+            let colIdx = cols.firstIndex { $0.id == colId }
+
+            // Calculate how much padding we'd ideally give on each side
+            let idealPadding = max((viewportWidth - frame.width) / 2, 0)
+            let availablePadding = min(idealPadding, Layout.workspaceColumnSpacing)
+
+            // Check if left neighbor fits
+            var leftNeighborFits = true
+            if let colIdx, colIdx > cols.startIndex {
+                let leftCol = cols[cols.index(before: colIdx)]
+                if let leftFrame = layout.frames[leftCol.id] {
+                    leftNeighborFits = leftFrame.width <= availablePadding
+                }
+            }
+
+            // Check if right neighbor fits
+            var rightNeighborFits = true
+            if let colIdx {
+                let nextIdx = cols.index(after: colIdx)
+                if nextIdx < cols.endIndex {
+                    let rightCol = cols[nextIdx]
+                    if let rightFrame = layout.frames[rightCol.id] {
+                        rightNeighborFits = rightFrame.width <= availablePadding
+                    }
+                }
+            }
+
+            if leftNeighborFits && rightNeighborFits {
+                // Both neighbors fit — use minimal scroll (same as .never)
+                return minimalScrollOffset(
+                    currentOffset: currentOffset, colLeft: colLeft,
+                    colRight: colRight, viewportWidth: viewportWidth, maxOffset: maxOffset
+                )
+            } else {
+                // Neighbors don't fit — center the active column
+                let centered = colCenter - viewportWidth / 2
+                return min(max(centered, 0), maxOffset)
+            }
+
+        case .never:
+            // Niri-style: scroll the minimum amount to make the active column fully visible
+            return minimalScrollOffset(
+                currentOffset: currentOffset, colLeft: colLeft,
+                colRight: colRight, viewportWidth: viewportWidth, maxOffset: maxOffset
+            )
+        }
+    }
+
+    /// Scroll the minimum amount to make the column fully visible.
+    private func minimalScrollOffset(
+        currentOffset: CGFloat, colLeft: CGFloat, colRight: CGFloat,
+        viewportWidth: CGFloat, maxOffset: CGFloat
+    ) -> CGFloat {
         var targetOffset = currentOffset
 
         // If column's right edge is past the viewport, scroll right
@@ -739,7 +804,7 @@ private struct WorkspaceColumnsView: View {
             targetOffset = colLeft
         }
 
-        return max(0, targetOffset)
+        return min(max(targetOffset, 0), maxOffset)
     }
 
     private func clampedViewportOffset(_ offset: CGFloat, contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {

@@ -40,6 +40,16 @@ enum Layout {
     static let windowDefaultHeight: CGFloat = 750
 }
 
+/// How the viewport tracks the focused column, ported from Niri's centering strategies.
+enum FocusCenteringMode: String, CaseIterable {
+    /// Scroll minimum amount to make active column fully visible (current behavior).
+    case never
+    /// Center the active column when adjacent columns don't fit in the viewport.
+    case onOverflow
+    /// Always center the active column in the viewport.
+    case always
+}
+
 enum Fonts {
     static let defaultFamily = "MesloLGS Nerd Font Mono"
 

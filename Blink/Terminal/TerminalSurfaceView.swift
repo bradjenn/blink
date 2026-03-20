@@ -484,14 +484,12 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             resetSwipeNavigation()
         }
 
-        let isCommandSwipe = event.hasPreciseScrollingDeltas
-            && event.modifierFlags.contains(.command)
+        let isHorizontalSwipe = event.hasPreciseScrollingDeltas
             && event.momentumPhase.isEmpty
             && abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) * Self.swipeNavigationHorizontalBias
 
-        guard isCommandSwipe else {
-            if !event.modifierFlags.contains(.command)
-                || !event.hasPreciseScrollingDeltas
+        guard isHorizontalSwipe else {
+            if !event.hasPreciseScrollingDeltas
                 || !event.momentumPhase.isEmpty
                 || event.phase.contains(.ended)
                 || event.phase.contains(.cancelled) {
