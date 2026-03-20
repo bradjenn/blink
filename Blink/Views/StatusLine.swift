@@ -4,6 +4,7 @@ struct FooterBar: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
     @Environment(GitStatusMonitor.self) private var gitMonitor
+    @Environment(UpdateChecker.self) private var updateChecker
 
     let onToggleSidebar: () -> Void
     let onShowSettings: () -> Void
@@ -50,6 +51,10 @@ struct FooterBar: View {
                     .buttonStyle(.plain)
                     .pointerCursor()
                 }
+            }
+
+            if let release = updateChecker.availableRelease {
+                UpdateBadge(release: release, updateChecker: updateChecker)
             }
 
             Spacer(minLength: 8)
@@ -216,5 +221,34 @@ private struct GitStatusLabel: View {
             }
         }
         .onHover { isHovered = $0 }
+    }
+}
+
+private struct UpdateBadge: View {
+    @Environment(\.theme) private var theme
+
+    let release: AppRelease
+    let updateChecker: UpdateChecker
+
+    @State private var isHovered = false
+
+    private var version: String {
+        String(release.tagName.trimmingPrefix("v"))
+    }
+
+    var body: some View {
+        Button(action: { updateChecker.openReleasePage() }) {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 10))
+                Text(version)
+                    .font(Fonts.primary(size: 12))
+            }
+            .foregroundStyle(isHovered ? theme.accent : theme.textMuted)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+        .help("Update available — click to view release")
     }
 }

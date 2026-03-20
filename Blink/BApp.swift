@@ -65,6 +65,7 @@ struct BApp: App {
     @State private var ghosttyApp = GhosttyApp()
     @State private var surfaceManager = SurfaceManager()
     @State private var gitMonitor = GitStatusMonitor()
+    @State private var updateChecker = UpdateChecker()
 
     var body: some Scene {
         WindowGroup {
@@ -77,6 +78,7 @@ struct BApp: App {
                 .environment(store)
                 .environment(themeManager)
                 .environment(gitMonitor)
+                .environment(updateChecker)
                 .environment(\.theme, themeManager.activeTheme)
                 .frame(
                     minWidth: Layout.windowMinWidth,
@@ -84,6 +86,7 @@ struct BApp: App {
                 )
                 .preferredColorScheme(.dark)
                 .onAppear {
+                    updateChecker.checkIfNeeded()
                     // Wire GhosttyApp to store and surface manager for callbacks
                     ghosttyApp.store = store
                     ghosttyApp.surfaceManager = surfaceManager
@@ -103,6 +106,10 @@ struct BApp: App {
         )
         .commands {
             CommandGroup(replacing: .appSettings) {
+                Button("Check for Updates...") {
+                    Task { await updateChecker.check() }
+                }
+
                 Button("Settings...") {
                     store.toggleSettings()
                 }
