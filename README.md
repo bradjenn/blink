@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="#features">Features</a> •
-  <a href="#download">Download</a> •
+  <a href="#install">Install</a> •
   <a href="#keybindings">Keybindings</a> •
   <a href="#development">Development</a> •
   <a href="#project-structure">Project Structure</a> •
@@ -54,13 +54,25 @@
 - **Wallpapers with opacity and blur** — set a background image behind your terminal
 - **Dark mode by default** — designed for dark environments
 
-## Download
+## Install
 
-[**Download the latest release**](https://github.com/bradjenn/blink/releases/latest)
+### Homebrew (recommended)
 
-> macOS only. Requires Apple Silicon (M1 or later).
->
-> Blink is currently unsigned — on first launch, right-click the app and select **Open** to bypass Gatekeeper.
+```sh
+brew install --cask bradjenn/tap/blink
+```
+
+### Manual Download
+
+[Download the latest DMG](https://github.com/bradjenn/blink/releases/latest)
+
+> Blink is not yet notarized. After installing manually, run:
+> ```
+> xattr -d com.apple.quarantine /Applications/Blink.app
+> ```
+> Or right-click the app and select **Open** on first launch.
+
+Requires macOS Sonoma+ and Apple Silicon (M1 or later).
 
 ## Keybindings
 

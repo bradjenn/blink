@@ -1,0 +1,36 @@
+name: Build & Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # GhosttyKit.xcframework is gitignored — download it here.
+      # Set GHOSTTYKIT_URL as a repo secret pointing to a .tar.gz of the framework.
+      - name: Fetch GhosttyKit
+        env:
+          GHOSTTYKIT_URL: ${{ secrets.GHOSTTYKIT_URL }}
+        run: |
+          mkdir -p Frameworks
+          curl -L -o ghosttykit.tar.gz "$GHOSTTYKIT_URL"
+          tar -xzf ghosttykit.tar.gz -C Frameworks/
+          rm ghosttykit.tar.gz
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build DMG
+        run: ./scripts/build-dmg.sh
+
+      - name: Upload DMG to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Blink.dmg
