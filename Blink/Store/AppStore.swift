@@ -556,6 +556,11 @@ final class AppStore {
         cols[sourceIdx].tabIds.removeLast()
         cols[colIdx].tabIds.append(absorbedTabId)
 
+        // Clear stale focus memory if it pointed to the moved tab
+        if columnFocusedTab[cols[sourceIdx].id] == absorbedTabId {
+            columnFocusedTab.removeValue(forKey: cols[sourceIdx].id)
+        }
+
         // Remove source column if empty
         if cols[sourceIdx].tabIds.isEmpty {
             columnFocusedTab[cols[sourceIdx].id] = nil
@@ -579,6 +584,11 @@ final class AppStore {
         cols[sourceIdx].tabIds.removeLast()
         cols[colIdx].tabIds.append(absorbedTabId)
 
+        // Clear stale focus memory if it pointed to the moved tab
+        if columnFocusedTab[cols[sourceIdx].id] == absorbedTabId {
+            columnFocusedTab.removeValue(forKey: cols[sourceIdx].id)
+        }
+
         // Remove source column if empty
         if cols[sourceIdx].tabIds.isEmpty {
             columnFocusedTab[cols[sourceIdx].id] = nil
@@ -599,6 +609,9 @@ final class AppStore {
 
         // Remove tab from current column
         cols[colIdx].tabIds.removeAll { $0 == activeTabId }
+
+        // Clear stale focus memory — the expelled tab no longer lives in this column
+        columnFocusedTab.removeValue(forKey: currentCol.id)
 
         // Create new column to the right
         let newCol = Column(id: UUID().uuidString, tabIds: [activeTabId])
