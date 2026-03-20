@@ -273,6 +273,7 @@ private struct WorkspaceColumnsView: View {
                     .onChange(of: columns.map(\.id), initial: true) { _, _ in
                         syncColumns(viewportWidth: geometry.size.width)
                         restoreViewport(viewportWidth: geometry.size.width)
+                        alignActiveTab(viewportWidth: geometry.size.width, animated: false)
                     }
                     .onChange(of: store.activeTabId, initial: false) {
                         alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
