@@ -44,3 +44,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: Blink.dmg
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA256=$(shasum -a 256 Blink.dmg | awk '{print $1}')
+          echo "Updating tap to version $VERSION (sha256: $SHA256)"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bradjenn/homebrew-tap.git" /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+
+          sed -i '' "s/version \".*\"/version \"$VERSION\"/" Casks/blink.rb
+          sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" Casks/blink.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/blink.rb
+          git commit -m "Update blink to v$VERSION"
+          git push
