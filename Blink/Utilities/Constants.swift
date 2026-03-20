@@ -23,9 +23,11 @@ enum Layout {
     static let workspaceColumnDefaultFraction: CGFloat = 0.5
     static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0]
 
-    // Overview
+    // Overview (Niri-style horizontal strip)
     static let overviewPadding: CGFloat = 40
-    static let overviewMinScale: CGFloat = 0.15
+    static let overviewGap: CGFloat = 16
+    static let overviewThumbnailHeightRatio: CGFloat = 0.50  // % of viewport height
+    static let overviewCornerRadius: CGFloat = 8
 
     // Column panes
     static let columnPaneDividerHeight: CGFloat = 1

@@ -240,10 +240,21 @@ private struct WorkspaceColumnsView: View {
         reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.25)
     }
 
-    private func overviewScale(contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
-        guard store.isOverviewMode else { return 1.0 }
-        let padded = viewportWidth - Layout.overviewPadding * 2
-        return min(1.0, max(Layout.overviewMinScale, padded / max(contentWidth, 1)))
+    /// Compute thumbnail scale so all columns fit in viewport width, capped by max height ratio.
+    private func overviewThumbnailScale(layout: WorkspaceStripLayout, viewportWidth: CGFloat, viewportHeight: CGFloat) -> CGFloat {
+        let maxHeightScale = Layout.overviewThumbnailHeightRatio
+        let gap = Layout.overviewGap
+        let padding = Layout.overviewPadding * 2
+
+        // Total unscaled column widths + gaps + padding
+        let totalGaps = CGFloat(max(0, columns.count - 1)) * gap
+        let totalUnscaledWidth = columns.reduce(CGFloat(0)) { $0 + (layout.frames[$1.id]?.width ?? 200) }
+
+        // Scale to fit: (totalUnscaledWidth * scale) + gaps + padding <= viewportWidth
+        let availableForThumbnails = viewportWidth - totalGaps - padding
+        let widthScale = availableForThumbnails / max(totalUnscaledWidth, 1)
+
+        return min(maxHeightScale, widthScale)
     }
 
     private var workspaceColumnTransition: AnyTransition {
@@ -364,10 +375,13 @@ private struct WorkspaceColumnsView: View {
             .opacity(isOverview ? 0 : 1)
             .allowsHitTesting(!isOverview)
 
-            // Overview grid
+            // Overview grid — explicitly sized to viewport and pinned to top-leading
+            // so it isn't affected by the workspace content expanding beyond viewport
             if isOverview {
                 overviewGrid(layout: layout, viewportWidth: viewportWidth, viewportHeight: viewportHeight)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .frame(width: viewportWidth, height: viewportHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .transition(.opacity)
             }
         }
         .contentShape(Rectangle())
@@ -377,64 +391,95 @@ private struct WorkspaceColumnsView: View {
 
     @ViewBuilder
     private func overviewGrid(layout: WorkspaceStripLayout, viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
-        let scale = overviewScale(contentWidth: layout.contentWidth, viewportWidth: viewportWidth)
-        let scaledContent = layout.contentWidth * scale
-        let scaledHeight = viewportHeight * scale
-        let offsetX = max((viewportWidth - scaledContent) / 2, Layout.overviewPadding)
-        let offsetY = (viewportHeight - scaledHeight) / 2
+        let scale = overviewThumbnailScale(layout: layout, viewportWidth: viewportWidth, viewportHeight: viewportHeight)
+        let gap = Layout.overviewGap
+        let thumbnailHeight = viewportHeight * scale
 
-        ZStack(alignment: .topLeading) {
-            ForEach(columns) { col in
-                if let frame = layout.frames[col.id] {
-                    overviewThumbnail(column: col, frame: frame, viewportHeight: viewportHeight)
-                        .frame(width: frame.width, height: viewportHeight)
-                        .offset(x: frame.minX)
-                        .zIndex(store.overviewHighlightedColumnId == col.id ? 1 : 0)
-                }
+        // Compute column widths at thumbnail scale
+        let colWidths: [(column: Column, width: CGFloat)] = columns.map { col in
+            let w = (layout.frames[col.id]?.width ?? 200) * scale
+            return (col, w)
+        }
+
+        let stripWidth = colWidths.reduce(0) { $0 + $1.width } + CGFloat(max(0, colWidths.count - 1)) * gap
+        let fits = stripWidth <= viewportWidth
+
+        // Compute cumulative X positions for panning
+        let colPositions: [(column: Column, centerX: CGFloat)] = {
+            var positions: [(Column, CGFloat)] = []
+            var x: CGFloat = 0
+            for (col, w) in colWidths {
+                positions.append((col, x + w / 2))
+                x += w + gap
+            }
+            return positions
+        }()
+
+        // Pan offset: center on highlighted column when strip overflows
+        let panOffset: CGFloat = {
+            guard !fits,
+                  let highlightId = store.overviewHighlightedColumnId,
+                  let entry = colPositions.first(where: { $0.column.id == highlightId }) else {
+                return 0
+            }
+            let idealOffset = entry.centerX - viewportWidth / 2
+            let maxOffset = max(0, stripWidth - viewportWidth)
+            return min(max(idealOffset, 0), maxOffset)
+        }()
+
+        let xOffset: CGFloat = fits
+            ? (viewportWidth - stripWidth) / 2   // Center when everything fits
+            : -panOffset                          // Pan to highlighted column
+
+        HStack(spacing: gap) {
+            ForEach(colWidths, id: \.column.id) { entry in
+                overviewThumbnail(column: entry.column, viewportHeight: viewportHeight, scale: scale)
+                    .frame(width: entry.width, height: thumbnailHeight)
+                    .zIndex(store.overviewHighlightedColumnId == entry.column.id ? 1 : 0)
             }
         }
-        .frame(width: max(layout.contentWidth, viewportWidth), height: viewportHeight, alignment: .topLeading)
-        .scaleEffect(scale, anchor: .topLeading)
-        .offset(x: offsetX, y: offsetY)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .offset(x: xOffset)
+        .frame(width: viewportWidth, height: viewportHeight, alignment: .leading)
+        .clipped()
+        .animation(overviewAnimation, value: store.overviewHighlightedColumnId)
     }
 
     @ViewBuilder
-    private func overviewThumbnail(column: Column, frame: CGRect, viewportHeight: CGFloat) -> some View {
+    private func overviewThumbnail(column: Column, viewportHeight: CGFloat, scale: CGFloat) -> some View {
         let isHighlightedColumn = store.overviewHighlightedColumnId == column.id
         let columnTabs = column.tabIds.compactMap { store.tabsById[$0] }
+        let cornerRadius = Layout.overviewCornerRadius
+        let paneSpacing: CGFloat = Layout.workspaceColumnSpacing * scale
 
-        VStack(spacing: Layout.workspaceColumnSpacing) {
+        VStack(spacing: paneSpacing) {
             ForEach(columnTabs) { tab in
                 let isHighlightedTab = store.overviewHighlightedTabId == tab.id
 
                 ZStack {
+                    theme.bg.opacity(isHighlightedTab ? 0.85 : isHighlightedColumn ? 0.75 : 0.7)
                     if let snapshot = overviewSnapshots[tab.id] {
                         Image(nsImage: snapshot)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .clipped()
-                    } else {
-                        theme.bg.opacity(isHighlightedTab ? 0.85 : isHighlightedColumn ? 0.75 : 0.7)
+                            .aspectRatio(contentMode: .fit)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
                     Text(tab.label)
-                        .font(Fonts.primary(size: 13))
+                        .font(Fonts.primary(size: 11))
                         .foregroundStyle(theme.text)
                         .lineLimit(1)
-                        .padding(8)
+                        .padding(6)
                         .background(
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(theme.bg.opacity(0.7))
+                                .fill(theme.bg.opacity(0.75))
                         )
-                        .padding(6)
+                        .padding(4)
                 }
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(
-                            isHighlightedTab ? theme.accent.opacity(0.85) : theme.border,
+                            isHighlightedTab ? theme.accent : theme.border.opacity(0.5),
                             lineWidth: isHighlightedTab ? 2 : 1
                         )
                 )
@@ -445,7 +490,8 @@ private struct WorkspaceColumnsView: View {
                 }
             }
         }
-        .shadow(color: isHighlightedColumn ? theme.accent.opacity(0.3) : .clear, radius: 8)
+        .scaleEffect(isHighlightedColumn ? 1.03 : 1.0)
+        .shadow(color: isHighlightedColumn ? theme.accent.opacity(0.3) : .clear, radius: 12)
         .animation(.easeInOut(duration: 0.15), value: store.overviewHighlightedTabId)
         .animation(.easeInOut(duration: 0.15), value: isHighlightedColumn)
     }
