@@ -39,6 +39,39 @@ targets:
         PRODUCT_NAME: Blink
         OTHER_LDFLAGS:
           - "-lstdc++"
+  BlinkDev:
+    type: application
+    platform: macOS
+    sources:
+      - path: Blink
+        excludes:
+          - Resources/Themes
+      - path: Blink/Resources/Themes
+        type: folder
+        buildPhase: resources
+    resources:
+      - path: Blink/Resources/Wallpapers
+        buildPhase: resources
+    dependencies:
+      - framework: Frameworks/GhosttyKit.xcframework
+        embed: false
+      - sdk: Metal.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: CoreVideo.framework
+      - sdk: QuartzCore.framework
+      - sdk: IOSurface.framework
+      - sdk: Carbon.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.dev
+        INFOPLIST_KEY_CFBundleDisplayName: "Blink Dev"
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_NAME: "Blink Dev"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Debug
+        OTHER_LDFLAGS:
+          - "-lstdc++"
   BTests:
     type: bundle.unit-test
     platform: macOS
@@ -57,6 +90,14 @@ schemes:
     build:
       targets:
         Blink: all
+        BTests: [test]
+    test:
+      targets:
+        - BTests
+  Blink Dev:
+    build:
+      targets:
+        BlinkDev: all
         BTests: [test]
     test:
       targets:
