@@ -59,6 +59,9 @@ struct FooterBar: View {
 
             Spacer(minLength: 8)
 
+            SpotifyNowPlaying()
+                .padding(.trailing, 30)
+
             if let projectId = store.activeProjectId {
                 let cols = store.projectColumns(for: projectId)
                 if !cols.isEmpty {
@@ -250,5 +253,63 @@ private struct UpdateBadge: View {
         .onHover { isHovered = $0 }
         .pointerCursor()
         .help("Update available — click to view release")
+    }
+}
+
+private struct SpotifyNowPlaying: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+    @Environment(ThemeManager.self) private var themeManager
+    @Environment(SpotifyMonitor.self) private var spotifyMonitor
+
+    @State private var isHovered = false
+    @State private var isAnimatingPlayback = false
+
+    private var playbackStateLabel: String {
+        spotifyMonitor.status.isPlaying ? "Playing" : "Paused"
+    }
+
+    var body: some View {
+        if store.spotifyEnabled, spotifyMonitor.status.hasTrack {
+            Button(action: openSpotifyTUI) {
+                HStack(spacing: 5) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 10))
+                        .scaleEffect(spotifyMonitor.status.isPlaying && isAnimatingPlayback ? 1.15 : 1.0)
+                        .opacity(reduceMotion ? 1.0 : (spotifyMonitor.status.isPlaying && isAnimatingPlayback ? 0.55 : 1.0))
+                    Text("\(spotifyMonitor.status.artist) — \(spotifyMonitor.status.track)")
+                        .font(Fonts.primary(size: 12))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(isHovered ? theme.text : theme.textMuted)
+                .frame(maxWidth: 200, alignment: .trailing)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .pointerCursor()
+            .help("\(playbackStateLabel) on Spotify")
+            .accessibilityLabel("\(playbackStateLabel): \(spotifyMonitor.status.artist) — \(spotifyMonitor.status.track)")
+            .animation(
+                reduceMotion || !spotifyMonitor.status.isPlaying
+                    ? nil
+                    : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: isAnimatingPlayback
+            )
+            .onAppear {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+            .onChange(of: spotifyMonitor.status.isPlaying, initial: true) {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+            .onChange(of: reduceMotion, initial: true) {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+        }
+    }
+
+    private func openSpotifyTUI() {
+        let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
+        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", fullWidth: true)
     }
 }

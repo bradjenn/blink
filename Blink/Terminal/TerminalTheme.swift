@@ -113,6 +113,43 @@ struct TerminalTheme {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// Build a spotatui config string from this theme's colors.
+    func toSpotatuiConfigString() -> String {
+        let primaryAccent = cursorColor.lowercased() != foreground.lowercased() ? cursorColor : palette[4]
+        let secondaryAccent = palette[6]
+        let inactiveBorder = palette[8]
+        let errorText = palette.count > 9 ? palette[9] : palette[1]
+
+        return """
+        theme:
+          active: "\(Self.spotatuiRGB(from: secondaryAccent))"
+          banner: "\(Self.spotatuiRGB(from: secondaryAccent))"
+          error_border: "\(Self.spotatuiRGB(from: palette[1]))"
+          error_text: "\(Self.spotatuiRGB(from: errorText))"
+          hint: "\(Self.spotatuiRGB(from: palette[3]))"
+          hovered: "\(Self.spotatuiRGB(from: palette[5]))"
+          inactive: "\(Self.spotatuiRGB(from: inactiveBorder))"
+          playbar_background: "\(Self.spotatuiRGB(from: palette[0]))"
+          playbar_progress: "\(Self.spotatuiRGB(from: secondaryAccent))"
+          playbar_progress_text: "\(Self.spotatuiRGB(from: primaryAccent))"
+          playbar_text: "\(Self.spotatuiRGB(from: foreground))"
+          selected: "\(Self.spotatuiRGB(from: primaryAccent))"
+          text: "\(Self.spotatuiRGB(from: foreground))"
+          header: "\(Self.spotatuiRGB(from: palette[15]))"
+        behavior:
+          show_loading_indicator: false
+          set_window_title: false
+        """
+    }
+
+    func spotatuiLaunchCommand() -> String {
+        guard let configPath = writeSpotatuiConfig() else {
+            return "spotatui"
+        }
+
+        return "spotatui --config \(Self.shellQuote(configPath))"
+    }
+
     /// Hand-tuned accent overrides for favorite themes where auto-derivation
     /// picks the wrong identity color.
     /// Format: theme name → (accent hex, accent2 hex)
@@ -180,5 +217,40 @@ struct TerminalTheme {
         nsA.getHue(nil, saturation: nil, brightness: &bA, alpha: nil)
         nsB.getHue(nil, saturation: nil, brightness: &bB, alpha: nil)
         return bA >= bB ? a : b
+    }
+
+    private func writeSpotatuiConfig() -> String? {
+        let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directoryURL = cachesURL.appendingPathComponent("blink-spotatui", isDirectory: true)
+        let configURL = directoryURL.appendingPathComponent("config.yml")
+
+        do {
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            try toSpotatuiConfigString().write(to: configURL, atomically: true, encoding: .utf8)
+            return configURL.path
+        } catch {
+            print("[TerminalTheme] Failed to write spotatui config: \(error)")
+            return nil
+        }
+    }
+
+    private static func spotatuiRGB(from hex: String) -> String {
+        let sanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines).trimmingPrefix("#")
+        guard sanitized.count == 6 else { return "255, 255, 255" }
+
+        let red = Int(sanitized.prefix(2), radix: 16) ?? 255
+        let greenStart = sanitized.index(sanitized.startIndex, offsetBy: 2)
+        let greenEnd = sanitized.index(greenStart, offsetBy: 2)
+        let blueStart = sanitized.index(greenEnd, offsetBy: 0)
+        let blueEnd = sanitized.index(blueStart, offsetBy: 2)
+        let green = Int(sanitized[greenStart..<greenEnd], radix: 16) ?? 255
+        let blue = Int(sanitized[blueStart..<blueEnd], radix: 16) ?? 255
+
+        return "\(red), \(green), \(blue)"
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 }

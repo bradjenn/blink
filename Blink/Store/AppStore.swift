@@ -25,6 +25,7 @@ private enum StorageKeys {
     static let cursorStyle = "blink.cursorStyle"
     static let shell = "blink.shell"
     static let focusCenteringMode = "blink.focusCenteringMode"
+    static let spotifyEnabled = "blink.spotifyEnabled"
 }
 
 @MainActor @Observable
@@ -109,7 +110,9 @@ final class AppStore {
     var shell: String {
         didSet { UserDefaults.standard.set(shell, forKey: StorageKeys.shell) }
     }
-
+    var spotifyEnabled: Bool {
+        didSet { UserDefaults.standard.set(spotifyEnabled, forKey: StorageKeys.spotifyEnabled) }
+    }
     // Focus centering
     var focusCenteringMode: FocusCenteringMode {
         didSet { UserDefaults.standard.set(focusCenteringMode.rawValue, forKey: StorageKeys.focusCenteringMode) }
@@ -118,6 +121,7 @@ final class AppStore {
     static var defaultShell: String {
         ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     }
+
 
     // Sidebar
     var sidebarVisible: Bool {
@@ -156,6 +160,7 @@ final class AppStore {
             ? defaults.double(forKey: StorageKeys.fontSize) : 19
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
         self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
+        self.spotifyEnabled = defaults.object(forKey: StorageKeys.spotifyEnabled) as? Bool ?? false
         self.focusCenteringMode = FocusCenteringMode(rawValue: defaults.string(forKey: StorageKeys.focusCenteringMode) ?? "") ?? .never
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
@@ -717,17 +722,66 @@ final class AppStore {
         return tab
     }
 
-    func openOrFocusCommandTab(projectId: String, command: String, label: String) {
+    func openOrFocusCommandTab(projectId: String, command: String, label: String, fullWidth: Bool = false) {
         if let existing = projectTabs(for: projectId).first(where: { $0.command == command }) {
+            if fullWidth, !fullWidthTabIds.contains(existing.id) {
+                // Existing tab found but not in full-width mode — make it full-width
+                savedColumns[projectId] = columns[projectId] ?? []
+                let column = Column(id: UUID().uuidString, tabIds: [existing.id])
+                columns[projectId] = [column]
+                fullWidthTabIds.insert(existing.id)
+            }
             setActiveTab(existing.id)
+        } else if fullWidth {
+            openFullWidthTab(projectId: projectId, command: command, label: label)
         } else {
             openTab(projectId: projectId, command: command, label: label)
         }
     }
 
-    func openOrFocusCommandTabForActiveProject(command: String, label: String) {
+    func openOrFocusCommandTabForActiveProject(command: String, label: String, fullWidth: Bool = false) {
         guard let projectId = activeProjectId else { return }
-        openOrFocusCommandTab(projectId: projectId, command: command, label: label)
+        openOrFocusCommandTab(projectId: projectId, command: command, label: label, fullWidth: fullWidth)
+    }
+
+    func isFullWidthTab(_ tabId: String) -> Bool {
+        fullWidthTabIds.contains(tabId)
+    }
+
+    // MARK: - Full Width Tabs
+
+    /// Columns saved before a full-width tab replaced them, keyed by project ID.
+    private var savedColumns: [String: [Column]] = [:]
+    /// Tracks which tab triggered full-width mode per project, so we can restore on close.
+    private var fullWidthTabIds: Set<String> = []
+
+    /// Open a tab that replaces all columns, taking the full workspace width.
+    /// The previous layout is saved and restored when the tab closes.
+    private func openFullWidthTab(projectId: String, command: String, label: String) {
+        let tab = AppTab(
+            id: UUID().uuidString,
+            type: "shell",
+            label: label,
+            defaultLabel: label,
+            projectId: projectId,
+            command: command
+        )
+        tabs.append(tab)
+
+        // Save current columns and replace with just this tab
+        savedColumns[projectId] = columns[projectId] ?? []
+        let column = Column(id: UUID().uuidString, tabIds: [tab.id])
+        columns[projectId] = [column]
+        fullWidthTabIds.insert(tab.id)
+
+        setActiveTab(tab.id)
+    }
+
+    /// Restore columns after a full-width tab closes. Called from closeTab.
+    private func restoreColumnsIfNeeded(tabId: String, projectId: String) {
+        guard fullWidthTabIds.remove(tabId) != nil,
+              let saved = savedColumns.removeValue(forKey: projectId) else { return }
+        columns[projectId] = saved
     }
 
     /// Update a tab's title.
@@ -802,6 +856,25 @@ final class AppStore {
     func closeTab(_ id: String) {
         guard let tab = tabsById[id] else { return }
         let projectId = tab.projectId
+
+        // If this was a full-width tab, restore the saved layout and clean up
+        if fullWidthTabIds.contains(id) {
+            restoreColumnsIfNeeded(tabId: id, projectId: projectId)
+            tabs.removeAll { $0.id == id }
+            unreadTabs.remove(id)
+            if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
+            // Focus the previously active tab in the restored layout
+            if activeTabId == id {
+                let restoredCols = projectColumns(for: projectId)
+                if let firstCol = restoredCols.first,
+                   let fallback = columnFocusedTab[firstCol.id] ?? firstCol.tabIds.first {
+                    setActiveTab(fallback)
+                } else {
+                    activeTabId = nil
+                }
+            }
+            return
+        }
 
         // Find the column and position of this tab
         var projectCols = columns[projectId] ?? []

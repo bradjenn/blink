@@ -16,6 +16,7 @@ enum TabTitleFilter {
         "nvim": "Neovim",
         "nano": "Nano",
         "emacs": "Emacs",
+        "yazi": "Yazi",
 
         // Runtimes
         "node": "Node",

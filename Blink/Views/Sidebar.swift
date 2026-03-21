@@ -110,6 +110,8 @@ struct SidebarView: View {
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
             }
+
+            SidebarNowPlaying()
         }
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
@@ -140,6 +142,8 @@ struct SidebarView: View {
             store.openOrFocusCommandTab(projectId: projectId, command: "opencode", label: "Open Code")
         case .lazygit:
             store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
+        case .yazi:
+            store.openOrFocusCommandTab(projectId: projectId, command: "yazi", label: "Yazi", fullWidth: true)
         }
     }
 
@@ -175,5 +179,102 @@ struct SidebarView: View {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
+    }
+}
+
+private struct SidebarNowPlaying: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+    @Environment(ThemeManager.self) private var themeManager
+    @Environment(SpotifyMonitor.self) private var spotifyMonitor
+
+    @State private var isHovered = false
+    @State private var isAnimatingPlayback = false
+
+    private var playbackStateLabel: String {
+        spotifyMonitor.status.isPlaying ? "Playing" : "Paused"
+    }
+
+    private var content: some View {
+        HStack(spacing: 10) {
+            AsyncImage(url: URL(string: spotifyMonitor.status.artworkURL ?? "")) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                default:
+                    Image(systemName: "music.note")
+                        .font(.system(size: 20))
+                        .foregroundStyle(theme.textDim)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(theme.border.opacity(0.3))
+                }
+            }
+            .frame(width: 48, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                        .scaleEffect(spotifyMonitor.status.isPlaying && isAnimatingPlayback ? 1.15 : 1.0)
+                        .opacity(reduceMotion ? 1.0 : (spotifyMonitor.status.isPlaying && isAnimatingPlayback ? 0.55 : 1.0))
+                    Text(spotifyMonitor.status.track)
+                        .font(Fonts.primary(size: 13))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1)
+                }
+                Text(spotifyMonitor.status.artist)
+                    .font(Fonts.primary(size: 12))
+                    .foregroundStyle(theme.textMuted)
+                    .lineLimit(1)
+                Text(spotifyMonitor.status.album)
+                    .font(Fonts.primary(size: 11))
+                    .foregroundStyle(theme.textDim)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(Layout.sidebarHeaderPadding)
+    }
+
+    var body: some View {
+        if store.spotifyEnabled, spotifyMonitor.status.hasTrack {
+            theme.border.opacity(0.7).frame(height: 1)
+
+            Button(action: openSpotifyTUI) {
+                content
+                    .background(isHovered ? theme.border.opacity(0.15) : Color.clear)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .pointerCursor()
+            .help("\(playbackStateLabel) on Spotify")
+            .accessibilityLabel("\(playbackStateLabel): \(spotifyMonitor.status.track) by \(spotifyMonitor.status.artist)")
+            .animation(
+                reduceMotion || !spotifyMonitor.status.isPlaying
+                    ? nil
+                    : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: isAnimatingPlayback
+            )
+            .onAppear {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+            .onChange(of: spotifyMonitor.status.isPlaying, initial: true) {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+            .onChange(of: reduceMotion, initial: true) {
+                isAnimatingPlayback = spotifyMonitor.status.isPlaying && !reduceMotion
+            }
+        }
+    }
+
+    private func openSpotifyTUI() {
+        let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
+        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", fullWidth: true)
     }
 }

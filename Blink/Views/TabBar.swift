@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, claude, claudeYolo, codex, openCode, lazygit
+    case terminal, claude, claudeYolo, codex, openCode, lazygit, yazi
 }
 
 struct NewTabMenu: View {
@@ -89,6 +89,8 @@ struct NewTabMenu: View {
             menuRow("Open Code", customIcon: BundledSVGIcon(name: "opencode-icon")) { onAction(.openCode) }
             Divider().overlay(theme.border)
             menuRow("lazygit", icon: "point.3.connected.trianglepath.dotted") { onAction(.lazygit) }
+            Divider().overlay(theme.border)
+            menuRow("Yazi", icon: "folder") { onAction(.yazi) }
         }
         .frame(width: 200)
         .background(theme.bg)

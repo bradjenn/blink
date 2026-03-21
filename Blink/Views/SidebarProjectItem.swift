@@ -89,6 +89,8 @@ struct SidebarProjectItem: View {
 
 /// Animated pulsing dot indicating active terminals.
 struct PulseDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let color: Color
     let glowColor: Color
     @State private var isPulsing = false
@@ -98,11 +100,11 @@ struct PulseDot: View {
             .fill(color)
             .frame(width: 6, height: 6)
             .shadow(color: glowColor, radius: 4, x: 0, y: 0)
-            .opacity(isPulsing ? 0.4 : 1.0)
+            .opacity(reduceMotion ? 1.0 : (isPulsing ? 0.4 : 1.0))
             .animation(
-                .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                reduceMotion ? nil : .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
                 value: isPulsing
             )
-            .onAppear { isPulsing = true }
+            .onAppear { isPulsing = !reduceMotion }
     }
 }

@@ -1,0 +1,101 @@
+import Foundation
+
+struct SpotifyStatus: Equatable {
+    let track: String
+    let artist: String
+    let album: String
+    let artworkURL: String?
+    let isPlaying: Bool
+
+    var hasTrack: Bool { !track.isEmpty }
+
+    static let empty = SpotifyStatus(track: "", artist: "", album: "", artworkURL: nil, isPlaying: false)
+}
+
+@MainActor @Observable
+final class SpotifyMonitor {
+    var status: SpotifyStatus = .empty
+    private var timer: Timer?
+    private var refreshTask: Task<Void, Never>?
+
+    func startMonitoring() {
+        stopMonitoring()
+        refresh()
+        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
+    }
+
+    func stopMonitoring() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        timer?.invalidate()
+        timer = nil
+        status = .empty
+    }
+
+    private func refresh() {
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .utility) { [weak self] in
+            let newStatus = fetchSpotifyStatus()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.status = newStatus
+            }
+        }
+    }
+}
+
+private func fetchSpotifyStatus() -> SpotifyStatus {
+    // Check if Spotify is running
+    let isRunning = runOsascript(script:
+        "tell application \"System Events\" to (name of processes) contains \"Spotify\""
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard isRunning == "true" else { return .empty }
+
+    // Query track info in a single script to minimize process spawns
+    let script = """
+    tell application "Spotify"
+        if player state is stopped then return "STOPPED"
+        set trackName to name of current track
+        set trackArtist to artist of current track
+        set trackAlbum to album of current track
+        set trackArtwork to artwork url of current track
+        set pState to player state as string
+        return trackName & "||" & trackArtist & "||" & trackAlbum & "||" & trackArtwork & "||" & pState
+    end tell
+    """
+    let result = runOsascript(script: script).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !result.isEmpty, result != "STOPPED" else { return .empty }
+
+    let parts = result.components(separatedBy: "||")
+    guard parts.count >= 5 else { return .empty }
+
+    return SpotifyStatus(
+        track: parts[0],
+        artist: parts[1],
+        album: parts[2],
+        artworkURL: parts[3].isEmpty ? nil : parts[3],
+        isPlaying: parts[4] == "playing"
+    )
+}
+
+private func runOsascript(script: String) -> String {
+    let process = Process()
+    let pipe = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
+    process.standardOutput = pipe
+    process.standardError = FileHandle.nullDevice
+    do {
+        try process.run()
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
+    } catch {
+        return ""
+    }
+}

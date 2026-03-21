@@ -626,11 +626,25 @@ private struct WorkspaceColumnsView: View {
         }
     }
 
+    private func defaultColumnFraction(for columnIds: [String]) -> CGFloat {
+        guard columnIds.count == 1,
+              let column = columns.first,
+              column.id == columnIds[0],
+              column.tabIds.count == 1,
+              let tabId = column.tabIds.first,
+              store.isFullWidthTab(tabId) else {
+            return Layout.workspaceColumnDefaultFraction
+        }
+
+        return 1.0
+    }
+
     private func syncColumns(viewportWidth: CGFloat) {
+        let columnIds = columns.map(\.id)
         layoutState.sync(
             projectId: project.id,
-            columnIds: columns.map(\.id),
-            defaultFraction: Layout.workspaceColumnDefaultFraction
+            columnIds: columnIds,
+            defaultFraction: defaultColumnFraction(for: columnIds)
         )
     }
 

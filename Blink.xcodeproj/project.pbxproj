@@ -48,6 +48,7 @@
 		4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1448D063BC06561A433B9DEC /* AppStore.swift */; };
 		47FEDB0F8562D283E9CB10EF /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */; };
 		495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */; };
+		4C153E196C842764C6E58F0D /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */; };
 		4C2420397E186DFD6248708F /* codex-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 24588121A0A9DB5D03163B12 /* codex-icon.svg */; };
 		4C5130AEA9410C2D10E84F7E /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
 		4D9587506D4B00FC3A51C90E /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */; };
@@ -61,6 +62,7 @@
 		5CCD3E4C8BFF60FF3FFBE4F9 /* CursorStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9548147B4FB10C2860D5C78 /* CursorStyle.swift */; };
 		6243578B4A44A0CDD78A4A6E /* akane-pagoda.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */; };
 		6510A2C09D7FE43F521FEF23 /* gruvbox-ferns.jpg in Resources */ = {isa = PBXBuildFile; fileRef = C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */; };
+		666B443D5962F1244391BC7E /* SpotifyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */; };
 		66C4487E7EEF20E78EC1FA6C /* ship-at-sea.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 4D827DCB9D74780EBED3851F /* ship-at-sea.jpg */; };
 		672462DEE17013E27F473A1D /* akane-pagoda.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */; };
 		67982F5A633D95E2C86BF651 /* StartScreenActionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50350C7F81ECA4D4A6D34A8A /* StartScreenActionRow.swift */; };
@@ -87,11 +89,13 @@
 		9D7653F138E03F29AA3979D0 /* akane-bridge.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */; };
 		9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */; };
 		9EBB482464EC652877305F72 /* SurfaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3DE79377AAA27E649D315 /* SurfaceManager.swift */; };
+		A315B570ECDBB171D99135D2 /* SpotifyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */; };
 		A6AD3CFF254DF9C5FD6AEB06 /* WallpaperPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */; };
 		A9000F944A81D9A45C39133A /* akane-bridge.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */; };
 		AB42C98139912D4E2C064CA3 /* WorkspaceLayoutState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */; };
 		AD1A61888BF08CF86B1D47F1 /* WorkspaceLayoutState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */; };
 		AF09B1D0DCDF3D38AB658236 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188062355388B795F360A5EF /* UpdateChecker.swift */; };
+		B012FA62A5171A28B831BB6E /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */; };
 		B45E26D8D5C3A594A913DC78 /* gruvbox-ferns.jpg in Resources */ = {isa = PBXBuildFile; fileRef = C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */; };
 		B515CCF60006105913EE07AC /* StartScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBECED94726237307F2628C /* StartScreen.swift */; };
 		BD201EDC39FA7A2460905140 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728190F85A1AE0DB60BD39AB /* TerminalView.swift */; };
@@ -155,7 +159,9 @@
 		12E6682BB366B124AFCEEB7E /* akane-bridge.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-bridge.jpg"; sourceTree = "<group>"; };
 		1448D063BC06561A433B9DEC /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-pagoda.jpg"; sourceTree = "<group>"; };
+		15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		188062355388B795F360A5EF /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
+		190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyMonitor.swift; sourceTree = "<group>"; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		1EDE19D0FBE88E948C87BF23 /* Themes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Themes; path = Blink/Resources/Themes; sourceTree = SOURCE_ROOT; };
 		20C1BBFABD047814FC91A331 /* WindowDragRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDragRegion.swift; sourceTree = "<group>"; };
@@ -226,6 +232,7 @@
 				1D3B3B23756683633A092E2E /* CoreGraphics.framework in Frameworks */,
 				FDF5F93EA033FCB7397EFDBB /* CoreText.framework in Frameworks */,
 				47FEDB0F8562D283E9CB10EF /* CoreVideo.framework in Frameworks */,
+				B012FA62A5171A28B831BB6E /* QuartzCore.framework in Frameworks */,
 				3D789F4E2AC8B0ED5FE8AA8F /* IOSurface.framework in Frameworks */,
 				300A3146CFE75C2A94DBDFCE /* Carbon.framework in Frameworks */,
 			);
@@ -241,6 +248,7 @@
 				FFE6F430E417FF7DF298E9DE /* CoreGraphics.framework in Frameworks */,
 				0D0CF9645DB57CFE7E2A99CC /* CoreText.framework in Frameworks */,
 				38A0767D5442E9D336859FEC /* CoreVideo.framework in Frameworks */,
+				4C153E196C842764C6E58F0D /* QuartzCore.framework in Frameworks */,
 				3B2C02C5617FEA03A4BE956A /* IOSurface.framework in Frameworks */,
 				0EDDE37BF54C746A6850E4BD /* Carbon.framework in Frameworks */,
 			);
@@ -254,6 +262,7 @@
 			children = (
 				1448D063BC06561A433B9DEC /* AppStore.swift */,
 				0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */,
+				190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -269,6 +278,7 @@
 				6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */,
 				B345D8C75FEDF50AD746BBAE /* IOSurface.framework */,
 				8C747FAD7B2FD821BC48474F /* Metal.framework */,
+				15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -583,6 +593,7 @@
 				41326086246AF35521615246 /* Shell.swift in Sources */,
 				3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */,
 				9DCD4AFE722A23C760E3360B /* SidebarProjectItem.swift in Sources */,
+				666B443D5962F1244391BC7E /* SpotifyMonitor.swift in Sources */,
 				B515CCF60006105913EE07AC /* StartScreen.swift in Sources */,
 				C585FA8221E4884E04FABE09 /* StartScreenActionRow.swift in Sources */,
 				0973322112C267606F0D23CC /* StartScreenLogo.swift in Sources */,
@@ -631,6 +642,7 @@
 				409BB543A7314C1BD5673A28 /* Shell.swift in Sources */,
 				E5B97668BFDCB5810D64EEA9 /* Sidebar.swift in Sources */,
 				223DE869139B404BD79E61D9 /* SidebarProjectItem.swift in Sources */,
+				A315B570ECDBB171D99135D2 /* SpotifyMonitor.swift in Sources */,
 				2A9063CE53776B7488FA3AC7 /* StartScreen.swift in Sources */,
 				67982F5A633D95E2C86BF651 /* StartScreenActionRow.swift in Sources */,
 				F6BC94F9CB07DF67E19FD00C /* StartScreenLogo.swift in Sources */,

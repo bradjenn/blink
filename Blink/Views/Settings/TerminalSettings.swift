@@ -21,6 +21,7 @@ struct TerminalSettings: View {
                 fontSizeSection
                 cursorStyleSection
                 shellSection
+                spotifyCommandSection
 
                 Spacer()
             }
@@ -123,6 +124,39 @@ struct TerminalSettings: View {
                     .pointerCursor()
                 }
             }
+        }
+    }
+
+    private var spotifyCommandSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Spotify now playing")
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
+                .foregroundStyle(theme.text)
+            Text("Show the current track in the status line and sidebar. Click it to open Spotify in a full-width tab.")
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                .foregroundStyle(theme.textMuted)
+            Text("Requires spotatui. The Spotify tab uses the current Blink theme when it opens.")
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                .foregroundStyle(theme.textMuted)
+            Text("If you change Blink themes while Spotify is open, reopen the tab to refresh its colors.")
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                .foregroundStyle(theme.textDim)
+            Text("brew install spotatui")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(theme.textDim)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+
+            StyledSegmentPicker(
+                options: [false, true],
+                selection: store.spotifyEnabled,
+                label: { $0 ? "On" : "Off" },
+                onChange: { store.spotifyEnabled = $0 }
+            )
         }
     }
 

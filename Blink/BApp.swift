@@ -65,6 +65,7 @@ struct BApp: App {
     @State private var ghosttyApp = GhosttyApp()
     @State private var surfaceManager = SurfaceManager()
     @State private var gitMonitor = GitStatusMonitor()
+    @State private var spotifyMonitor = SpotifyMonitor()
     @State private var updateChecker = UpdateChecker()
 
     var body: some Scene {
@@ -78,6 +79,7 @@ struct BApp: App {
                 .environment(store)
                 .environment(themeManager)
                 .environment(gitMonitor)
+                .environment(spotifyMonitor)
                 .environment(updateChecker)
                 .environment(\.theme, themeManager.activeTheme)
                 .frame(
@@ -87,6 +89,9 @@ struct BApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     updateChecker.checkIfNeeded()
+                    if store.spotifyEnabled {
+                        spotifyMonitor.startMonitoring()
+                    }
                     // Wire GhosttyApp to store and surface manager for callbacks
                     ghosttyApp.store = store
                     ghosttyApp.surfaceManager = surfaceManager
@@ -96,6 +101,13 @@ struct BApp: App {
                         if let tab = store.tabsById[tabId], tab.command != nil {
                             store.closeTab(tabId)
                         }
+                    }
+                }
+                .onChange(of: store.spotifyEnabled) {
+                    if store.spotifyEnabled {
+                        spotifyMonitor.startMonitoring()
+                    } else {
+                        spotifyMonitor.stopMonitoring()
                     }
                 }
         }
@@ -192,6 +204,11 @@ struct BApp: App {
                     store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
                 }
                 .keyboardShortcut("g", modifiers: .command)
+
+                Button("Open Files") {
+                    store.openOrFocusCommandTabForActiveProject(command: "yazi", label: "Yazi", fullWidth: true)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             }
 
             CommandGroup(replacing: .newItem) {
