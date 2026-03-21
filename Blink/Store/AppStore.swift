@@ -408,6 +408,10 @@ final class AppStore {
         if activeTabId == nil {
             _ = openTab(projectId: id)
         }
+        sidebarFocused = false
+        DispatchQueue.main.async { [weak self] in
+            self?.focusTerminal()
+        }
     }
 
     func resumeLastProjectSession() {
