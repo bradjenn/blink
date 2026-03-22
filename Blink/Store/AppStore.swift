@@ -73,6 +73,9 @@ final class AppStore {
     var showThemePicker = false
     var showProjectSwitcher = false
     var showNewTabMenu = false
+    var showCommandPalette = false
+    var themePickerFocusRequest = 0
+    var projectSwitcherFocusRequest = 0
 
     // Background
     var backgroundImage: String? {
@@ -130,6 +133,8 @@ final class AppStore {
     }
     var sidebarFocused: Bool = false
     var surfaceManager: SurfaceManager?
+    private var sidebarFocusProtectionDeadline: Date?
+    private var pendingSidebarFocusOnReveal = false
 
     private var lastActiveTab: [String: String] {
         didSet { Self.saveDictionary(lastActiveTab, forKey: StorageKeys.lastActiveTabs) }
@@ -142,6 +147,13 @@ final class AppStore {
         sidebarFocused = false
         if let tabId = activeTabId {
             surfaceManager?.surface(for: tabId)?.focus()
+        }
+    }
+
+    private func activateTerminalFocusSoon() {
+        sidebarFocused = false
+        DispatchQueue.main.async { [weak self] in
+            self?.focusTerminal()
         }
     }
 
@@ -197,6 +209,7 @@ final class AppStore {
     }
 
     func toggleSettings() {
+        showCommandPalette = false
         activeView = activeView == .settings ? .projects : .settings
     }
 
@@ -224,6 +237,37 @@ final class AppStore {
         }
     }
 
+    func focusSidebar() {
+        let wasHidden = !sidebarVisible
+        if wasHidden {
+            pendingSidebarFocusOnReveal = true
+            withAnimation(.snappy(duration: 0.18, extraBounce: 0)) {
+                sidebarVisible = true
+            }
+        } else {
+            pendingSidebarFocusOnReveal = false
+        }
+        // The command palette dismissal can briefly hand first responder back to
+        // the terminal, which would otherwise clear the sidebar outline.
+        sidebarFocusProtectionDeadline = Date().addingTimeInterval(0.2)
+        sidebarFocused = true
+    }
+
+    func completePendingSidebarRevealFocus() {
+        guard pendingSidebarFocusOnReveal, sidebarVisible else { return }
+        pendingSidebarFocusOnReveal = false
+        sidebarFocusProtectionDeadline = Date().addingTimeInterval(0.35)
+        sidebarFocused = true
+    }
+
+    func shouldClearSidebarFocusForTerminalInteraction() -> Bool {
+        if let deadline = sidebarFocusProtectionDeadline, deadline > Date() {
+            return false
+        }
+        sidebarFocusProtectionDeadline = nil
+        return true
+    }
+
     func selectNextProject() {
         guard !projects.isEmpty else { return }
         guard let currentId = activeProjectId,
@@ -249,21 +293,40 @@ final class AppStore {
         }
     }
 
-    func presentProjectSwitcher() {
+    func presentProjectSwitcher(focusSearch: Bool = false) {
         guard !projects.isEmpty else { return }
+        showCommandPalette = false
         showProjectSwitcher = true
+        if focusSearch {
+            projectSwitcherFocusRequest += 1
+        }
     }
 
     func dismissProjectSwitcher() {
         showProjectSwitcher = false
     }
 
-    func presentThemePicker() {
+    func presentThemePicker(focusSearch: Bool = false) {
+        showCommandPalette = false
         showThemePicker = true
+        if focusSearch {
+            themePickerFocusRequest += 1
+        }
     }
 
     func dismissThemePicker() {
         showThemePicker = false
+    }
+
+    func presentCommandPalette() {
+        sidebarFocused = false
+        showProjectSwitcher = false
+        showThemePicker = false
+        showCommandPalette = true
+    }
+
+    func dismissCommandPalette() {
+        showCommandPalette = false
     }
 
     // MARK: - Background Actions
@@ -724,6 +787,7 @@ final class AppStore {
         columns[projectId] = projectCols
 
         setActiveTab(tab.id)
+        activateTerminalFocusSoon()
         return tab
     }
 
@@ -746,6 +810,7 @@ final class AppStore {
             if maximizeColumn {
                 requestColumnMaximize(existing.id)
             }
+            activateTerminalFocusSoon()
         } else if fullWidth {
             openFullWidthTab(projectId: projectId, command: command, label: label)
         } else {

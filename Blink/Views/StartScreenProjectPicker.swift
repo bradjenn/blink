@@ -11,6 +11,13 @@ struct StartScreenProjectPicker: View {
     @State private var selectedIndex = 0
     @FocusState private var searchFocused: Bool
 
+    private func requestSearchFocus() {
+        searchFocused = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            searchFocused = true
+        }
+    }
+
     private var panelBackground: some ShapeStyle {
         if store.hasWallpaper {
             AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
@@ -122,11 +129,14 @@ struct StartScreenProjectPicker: View {
             }
         }
         .onAppear {
-            searchFocused = true
             if let preferredProjectId = store.activeProjectId ?? store.lastSelectedProjectId,
                let index = filteredProjects.firstIndex(where: { $0.id == preferredProjectId }) {
                 selectedIndex = index
             }
+            requestSearchFocus()
+        }
+        .onChange(of: store.projectSwitcherFocusRequest) {
+            requestSearchFocus()
         }
         .onChange(of: searchText) {
             selectedIndex = 0

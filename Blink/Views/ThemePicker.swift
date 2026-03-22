@@ -58,6 +58,13 @@ struct ThemePicker: View {
         store.hasWallpaper ? store.backgroundOpacity : 1.0
     }
 
+    private func requestSearchFocus() {
+        searchFocused = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            searchFocused = true
+        }
+    }
+
     var body: some View {
         ZStack {
             // Backdrop
@@ -168,11 +175,14 @@ struct ThemePicker: View {
         .onAppear {
             didCommitSelection = false
             committedThemeName = store.theme
-            searchFocused = true
             if let idx = allItems.firstIndex(of: store.theme) {
                 selectedIndex = idx
             }
+            requestSearchFocus()
             previewSelectedTheme()
+        }
+        .onChange(of: store.themePickerFocusRequest) {
+            requestSearchFocus()
         }
         .onChange(of: searchText) {
             selectedIndex = 0

@@ -72,6 +72,13 @@ struct Shell: View {
                 )
                 .zIndex(2)
             }
+
+            if store.showCommandPalette {
+                CommandPalette(
+                    onDismiss: { store.dismissCommandPalette() }
+                )
+                .zIndex(3)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(.container, edges: .top)
@@ -197,6 +204,9 @@ private struct WorkspaceSidebarPanel: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(store.sidebarFocused ? theme.accent.opacity(0.85) : theme.border, lineWidth: 1)
             )
+            .onAppear {
+                store.completePendingSidebarRevealFocus()
+            }
     }
 
     private var panelBackground: some ShapeStyle {

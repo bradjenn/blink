@@ -129,6 +129,13 @@ struct BApp: App {
             }
 
             CommandGroup(replacing: .printItem) {
+                Button("Command Palette...") {
+                    store.presentCommandPalette()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Divider()
+
                 Button("Switch Project...") {
                     store.presentProjectSwitcher()
                 }
@@ -144,7 +151,11 @@ struct BApp: App {
 
             CommandGroup(after: .toolbar) {
                 Button(store.sidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
-                    store.toggleSidebar()
+                    if store.sidebarVisible {
+                        store.toggleSidebar()
+                    } else {
+                        store.focusSidebar()
+                    }
                 }
                 .keyboardShortcut("b", modifiers: .command)
 
