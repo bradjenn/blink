@@ -21,6 +21,8 @@ private let shortcutCategories: [ShortcutCategory] = [
     ]),
     ShortcutCategory(name: "Windows", shortcuts: [
         ShortcutEntry(action: "New Window", keys: "⌘T"),
+        ShortcutEntry(action: "Split Below", keys: "⇧⌘_"),
+        ShortcutEntry(action: "Split Right", keys: "⇧⌘|"),
         ShortcutEntry(action: "Close Window", keys: "⌘W"),
         ShortcutEntry(action: "Window 1–9", keys: "⌘1–9"),
     ]),

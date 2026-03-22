@@ -168,6 +168,28 @@ struct CommandPalette: View {
                 }
             },
             PaletteCommand(
+                id: "split-below",
+                title: "Split Below",
+                subtitle: "Open a new terminal beneath the active pane",
+                category: "Windows",
+                shortcut: "Cmd-Shift-_",
+                keywords: ["split", "below", "under", "pane", "terminal"],
+                isEnabled: hasProject
+            ) {
+                store.splitActivePaneWithNewTab()
+            },
+            PaletteCommand(
+                id: "split-right",
+                title: "Split Right",
+                subtitle: "Open a new terminal to the right of the active column",
+                category: "Windows",
+                shortcut: "Cmd-Shift-|",
+                keywords: ["split", "right", "column", "pane", "terminal"],
+                isEnabled: hasProject
+            ) {
+                store.splitActiveColumnWithNewTab()
+            },
+            PaletteCommand(
                 id: "close-window",
                 title: "Close Window",
                 subtitle: "Close the active window",

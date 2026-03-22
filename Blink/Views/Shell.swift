@@ -10,6 +10,7 @@ struct Shell: View {
     let surfaceManager: SurfaceManager
 
     @State private var escapeMonitor: Any?
+    @State private var shortcutMonitor: Any?
 
     private var isSettingsActive: Bool {
         store.activeView == .settings
@@ -93,11 +94,39 @@ struct Shell: View {
                 DispatchQueue.main.async { store.toggleSettings() }
                 return nil
             }
+            shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
+                let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                guard modifiers == [.command, .shift],
+                      store.activeProjectId != nil,
+                      !store.showProjectSwitcher,
+                      !store.showThemePicker,
+                      !store.showCommandPalette,
+                      store.activeView == .projects else { return event }
+
+                switch event.charactersIgnoringModifiers {
+                case "-":
+                    DispatchQueue.main.async {
+                        store.splitActivePaneWithNewTab()
+                    }
+                    return nil
+                case "\\":
+                    DispatchQueue.main.async {
+                        store.splitActiveColumnWithNewTab()
+                    }
+                    return nil
+                default:
+                    return event
+                }
+            }
         }
         .onDisappear {
             if let monitor = escapeMonitor {
                 NSEvent.removeMonitor(monitor)
                 escapeMonitor = nil
+            }
+            if let monitor = shortcutMonitor {
+                NSEvent.removeMonitor(monitor)
+                shortcutMonitor = nil
             }
         }
     }

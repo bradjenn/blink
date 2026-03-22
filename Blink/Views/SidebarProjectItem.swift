@@ -67,14 +67,16 @@ struct SidebarProjectItem: View {
                 .animation(.easeInOut(duration: 0.1), value: isHovered)
                 .onHover { isRemoveHovered = $0 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Layout.sidebarItemPadding)
+            .background(
+                isActive
+                    ? theme.accent.opacity(0.04)
+                    : (isHovered ? theme.accent2.opacity(0.04) : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(Layout.sidebarItemPadding)
-        .background(
-            isActive
-                ? theme.accent.opacity(0.04)
-                : (isHovered ? theme.accent2.opacity(0.04) : Color.clear)
-        )
         // Left border indicator — flush to edge, outside padding (matches CSS border-left)
         .overlay(alignment: .leading) {
             theme.accent

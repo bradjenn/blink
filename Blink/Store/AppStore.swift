@@ -768,17 +768,8 @@ final class AppStore {
     /// Create a new shell tab for a project.
     @discardableResult
     func openTab(projectId: String, command: String? = nil, label: String? = nil) -> AppTab {
-        let count = projectTabs(for: projectId).count + 1
-        let defaultLabel = label ?? "Terminal \(count)"
-        let tab = AppTab(
-            id: UUID().uuidString,
-            type: "shell",
-            label: defaultLabel,
-            defaultLabel: defaultLabel,
-            projectId: projectId,
-            command: command
-        )
-        tabs.append(tab)
+        let tab = makeShellTab(projectId: projectId, command: command, label: label)
+        insertTab(tab, for: projectId, after: nil)
 
         // Create a new single-tab column
         let column = Column(id: UUID().uuidString, tabIds: [tab.id])
@@ -786,9 +777,64 @@ final class AppStore {
         projectCols.append(column)
         columns[projectId] = projectCols
 
+        reindexTabs(for: projectId)
         setActiveTab(tab.id)
         activateTerminalFocusSoon()
         return tab
+    }
+
+    func splitActivePaneWithNewTab() {
+        guard let projectId = activeProjectId else { return }
+
+        guard let currentCol = activeColumn,
+              let activeTabId else {
+            _ = openTab(projectId: projectId)
+            return
+        }
+
+        var cols = projectColumns(for: projectId)
+        guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }),
+              let tabIdx = cols[colIdx].tabIds.firstIndex(of: activeTabId) else {
+            _ = openTab(projectId: projectId)
+            return
+        }
+
+        let tab = makeShellTab(projectId: projectId, command: nil, label: nil)
+        insertTab(tab, for: projectId, after: activeTabId)
+        cols[colIdx].tabIds.insert(tab.id, at: cols[colIdx].tabIds.index(after: tabIdx))
+        columns[projectId] = cols
+
+        reindexTabs(for: projectId)
+        setActiveTab(tab.id)
+        activateTerminalFocusSoon()
+    }
+
+    func splitActiveColumnWithNewTab() {
+        guard let projectId = activeProjectId else { return }
+
+        guard let currentCol = activeColumn,
+              let anchorTabId = currentCol.tabIds.last else {
+            _ = openTab(projectId: projectId)
+            return
+        }
+
+        var cols = projectColumns(for: projectId)
+        guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else {
+            _ = openTab(projectId: projectId)
+            return
+        }
+
+        let tab = makeShellTab(projectId: projectId, command: nil, label: nil)
+        insertTab(tab, for: projectId, after: anchorTabId)
+        cols.insert(
+            Column(id: UUID().uuidString, tabIds: [tab.id]),
+            at: cols.index(after: colIdx)
+        )
+        columns[projectId] = cols
+
+        reindexTabs(for: projectId)
+        setActiveTab(tab.id)
+        activateTerminalFocusSoon()
     }
 
     func openOrFocusCommandTab(
@@ -1051,6 +1097,33 @@ final class AppStore {
     func closeActiveTab() {
         guard let activeTabId else { return }
         closeTab(activeTabId)
+    }
+
+    private func makeShellTab(projectId: String, command: String?, label: String?) -> AppTab {
+        let count = projectTabs(for: projectId).count + 1
+        let defaultLabel = label ?? "Terminal \(count)"
+        return AppTab(
+            id: UUID().uuidString,
+            type: "shell",
+            label: defaultLabel,
+            defaultLabel: defaultLabel,
+            projectId: projectId,
+            command: command
+        )
+    }
+
+    private func insertTab(_ tab: AppTab, for projectId: String, after anchorTabId: String?) {
+        guard let anchorTabId,
+              let anchorIndex = tabs.firstIndex(where: { $0.id == anchorTabId }) else {
+            if let projectLastIndex = tabs.lastIndex(where: { $0.projectId == projectId }) {
+                tabs.insert(tab, at: tabs.index(after: projectLastIndex))
+            } else {
+                tabs.append(tab)
+            }
+            return
+        }
+
+        tabs.insert(tab, at: tabs.index(after: anchorIndex))
     }
 
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.

@@ -1,8 +1,8 @@
 name: Blink
 settings:
   base:
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: 2
+    MARKETING_VERSION: "0.3.1"
+    CURRENT_PROJECT_VERSION: 3
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
@@ -14,11 +14,15 @@ targets:
       - path: Blink
         excludes:
           - Resources/Themes
+          - Resources/NvimThemes
       - path: Blink/Resources/Themes
         type: folder
         buildPhase: resources
     resources:
       - path: Blink/Resources/Wallpapers
+        buildPhase: resources
+      - path: Blink/Resources/NvimThemes
+        type: folder
         buildPhase: resources
     dependencies:
       - framework: Frameworks/GhosttyKit.xcframework
@@ -46,11 +50,15 @@ targets:
       - path: Blink
         excludes:
           - Resources/Themes
+          - Resources/NvimThemes
       - path: Blink/Resources/Themes
         type: folder
         buildPhase: resources
     resources:
       - path: Blink/Resources/Wallpapers
+        buildPhase: resources
+      - path: Blink/Resources/NvimThemes
+        type: folder
         buildPhase: resources
     dependencies:
       - framework: Frameworks/GhosttyKit.xcframework

@@ -246,6 +246,18 @@ struct BApp: App {
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
+                Button("Split Below") {
+                    store.splitActivePaneWithNewTab()
+                }
+                .keyboardShortcut("-", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Split Right") {
+                    store.splitActiveColumnWithNewTab()
+                }
+                .keyboardShortcut("\\", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
                 Button("Close Window") {
                     store.closeActiveTab()
                 }

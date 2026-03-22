@@ -332,6 +332,49 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(cols.last?.tabIds, [tab.id])
     }
 
+    func testSplitActivePaneWithNewTabInsertsBelowActivePane() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.columns["1"] = [Column(id: "c1", tabIds: ["t1", "t2"])]
+        store.setActiveTab("t1")
+
+        store.splitActivePaneWithNewTab()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 1)
+        XCTAssertEqual(cols[0].tabIds.count, 3)
+        XCTAssertEqual(cols[0].tabIds[0], "t1")
+        XCTAssertEqual(cols[0].tabIds[2], "t2")
+        XCTAssertEqual(store.activeTabId, cols[0].tabIds[1])
+    }
+
+    func testSplitActivePaneWithNewTabFallsBackToOpenTabWithoutActivePane() {
+        let store = makeStore()
+        store.setActiveProject("4")
+
+        store.splitActivePaneWithNewTab()
+
+        let cols = store.projectColumns(for: "4")
+        XCTAssertEqual(cols.count, 1)
+        XCTAssertEqual(cols[0].tabIds.count, 1)
+        XCTAssertEqual(store.activeTabId, cols[0].tabIds[0])
+    }
+
+    func testSplitActiveColumnWithNewTabInsertsColumnToRight() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.setActiveTab("t1")
+
+        store.splitActiveColumnWithNewTab()
+
+        let cols = store.projectColumns(for: "1")
+        XCTAssertEqual(cols.count, 3)
+        XCTAssertEqual(cols[0].tabIds, ["t1"])
+        XCTAssertEqual(cols[2].tabIds, ["t2"])
+        XCTAssertEqual(cols[1].tabIds.count, 1)
+        XCTAssertEqual(store.activeTabId, cols[1].tabIds[0])
+    }
+
     func testCloseTabInMultiPaneColumnFocusesNext() {
         let store = makeStore()
         store.setActiveProject("1")
