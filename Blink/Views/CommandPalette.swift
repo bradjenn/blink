@@ -10,12 +10,65 @@ struct CommandPalette: View {
 
     @State private var searchText = ""
     @State private var selectedIndex = 0
+    @State private var keyMonitor: Any?
     @FocusState private var searchFocused: Bool
 
     private func requestSearchFocus() {
         searchFocused = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
             searchFocused = true
+        }
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !filteredCommands.isEmpty else { return }
+        let count = filteredCommands.count
+        selectedIndex = (selectedIndex + delta + count) % count
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let hasOnlyShiftModifier = modifiers == [.shift]
+
+            switch event.keyCode {
+            case 126 where modifiers.isEmpty: // Up arrow
+                moveSelection(by: -1)
+                return nil
+            case 125 where modifiers.isEmpty: // Down arrow
+                moveSelection(by: 1)
+                return nil
+            case 36 where modifiers.isEmpty: // Return
+                guard filteredCommands.indices.contains(selectedIndex) else { return nil }
+                run(filteredCommands[selectedIndex])
+                return nil
+            case 53 where modifiers.isEmpty: // Escape
+                onDismiss()
+                return nil
+            default:
+                break
+            }
+
+            guard modifiers.isEmpty || hasOnlyShiftModifier else { return event }
+
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "j":
+                moveSelection(by: 1)
+                return nil
+            case "k":
+                moveSelection(by: -1)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
         }
     }
 
@@ -46,7 +99,7 @@ struct CommandPalette: View {
                 id: "switch-project",
                 title: "Switch Project",
                 subtitle: "Open the project switcher",
-                category: "Navigation",
+                category: "Workspace",
                 shortcut: "Cmd-P",
                 keywords: ["project", "workspace", "switch", "open"],
                 isEnabled: !store.projects.isEmpty
@@ -135,6 +188,53 @@ struct CommandPalette: View {
                 isEnabled: hasProject
             ) {
                 store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
+            },
+            PaletteCommand(
+                id: "open-claude",
+                title: "Open Claude Code",
+                subtitle: "Open Claude Code for the active project",
+                category: "Agents",
+                shortcut: nil,
+                keywords: ["claude", "anthropic", "ai", "assistant", "agent"],
+                isEnabled: hasProject
+            ) {
+                store.openOrFocusCommandTabForActiveProject(command: "claude", label: "Claude Code")
+            },
+            PaletteCommand(
+                id: "open-claude-yolo",
+                title: "Open Claude Code Yolo",
+                subtitle: "Open Claude Code with dangerous permissions",
+                category: "Agents",
+                shortcut: nil,
+                keywords: ["claude", "yolo", "anthropic", "ai", "assistant", "agent"],
+                isEnabled: hasProject
+            ) {
+                store.openOrFocusCommandTabForActiveProject(
+                    command: "claude --dangerously-skip-permissions",
+                    label: "Claude Code"
+                )
+            },
+            PaletteCommand(
+                id: "open-codex",
+                title: "Open Codex",
+                subtitle: "Open Codex for the active project",
+                category: "Agents",
+                shortcut: nil,
+                keywords: ["codex", "openai", "ai", "assistant", "agent"],
+                isEnabled: hasProject
+            ) {
+                store.openOrFocusCommandTabForActiveProject(command: "codex", label: "Codex")
+            },
+            PaletteCommand(
+                id: "open-open-code",
+                title: "Open Open Code",
+                subtitle: "Open Open Code for the active project",
+                category: "Agents",
+                shortcut: nil,
+                keywords: ["open code", "opencode", "ai", "assistant", "agent"],
+                isEnabled: hasProject
+            ) {
+                store.openOrFocusCommandTabForActiveProject(command: "opencode", label: "Open Code")
             },
             PaletteCommand(
                 id: "open-files",
@@ -316,7 +416,7 @@ struct CommandPalette: View {
 
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
                             if filteredCommands.isEmpty {
                                 Text("No matching commands")
                                     .font(Fonts.primary(size: 13))
@@ -337,7 +437,7 @@ struct CommandPalette: View {
                         scrollSelection(in: proxy, animated: false)
                     }
                     .onChange(of: selectedIndex) {
-                        scrollSelection(in: proxy)
+                        scrollSelection(in: proxy, animated: false)
                     }
                     .onChange(of: filteredCommands.map(\.id)) {
                         scrollSelection(in: proxy, animated: false)
@@ -363,44 +463,13 @@ struct CommandPalette: View {
                     .stroke(theme.border, lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
-            .onKeyPress(.upArrow) {
-                guard !filteredCommands.isEmpty else { return .ignored }
-                selectedIndex = max(0, selectedIndex - 1)
-                return .handled
-            }
-            .onKeyPress(.downArrow) {
-                guard !filteredCommands.isEmpty else { return .ignored }
-                selectedIndex = min(filteredCommands.count - 1, selectedIndex + 1)
-                return .handled
-            }
-            .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
-                guard !filteredCommands.isEmpty else { return .ignored }
-
-                switch keyPress.characters.lowercased() {
-                case "j":
-                    selectedIndex = min(filteredCommands.count - 1, selectedIndex + 1)
-                    return .handled
-                case "k":
-                    selectedIndex = max(0, selectedIndex - 1)
-                    return .handled
-                default:
-                    return .ignored
-                }
-            }
-            .onKeyPress(.return) {
-                guard filteredCommands.indices.contains(selectedIndex) else { return .ignored }
-                run(filteredCommands[selectedIndex])
-                return .handled
-            }
-            .onKeyPress(.escape) {
-                onDismiss()
-                return .handled
-            }
         }
         .onAppear {
             selectedIndex = 0
             requestSearchFocus()
+            installKeyMonitor()
         }
+        .onDisappear { removeKeyMonitor() }
         .onChange(of: searchText) {
             selectedIndex = 0
         }
@@ -466,15 +535,12 @@ struct CommandPalette: View {
     private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {
         guard filteredCommands.indices.contains(selectedIndex) else { return }
         let commandId = filteredCommands[selectedIndex].id
-
-        DispatchQueue.main.async {
-            if animated {
-                withAnimation(.snappy(duration: 0.18)) {
-                    proxy.scrollTo(commandId, anchor: .center)
-                }
-            } else {
+        if animated {
+            withAnimation(.snappy(duration: 0.18)) {
                 proxy.scrollTo(commandId, anchor: .center)
             }
+        } else {
+            proxy.scrollTo(commandId, anchor: .center)
         }
     }
 

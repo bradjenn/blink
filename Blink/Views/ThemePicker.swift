@@ -58,6 +58,14 @@ struct ThemePicker: View {
         store.hasWallpaper ? store.backgroundOpacity : 1.0
     }
 
+    private var panelBackground: some ShapeStyle {
+        if store.hasWallpaper {
+            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
+        } else {
+            AnyShapeStyle(theme.bg.opacity(0.97))
+        }
+    }
+
     private func requestSearchFocus() {
         searchFocused = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
@@ -65,18 +73,21 @@ struct ThemePicker: View {
         }
     }
 
+    private func moveSelection(by delta: Int) {
+        guard !allItems.isEmpty else { return }
+        let count = allItems.count
+        selectedIndex = (selectedIndex + delta + count) % count
+    }
+
     var body: some View {
         ZStack {
-            // Backdrop
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .onTapGesture { dismissPicker() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Dismiss")
 
-            // Panel
             VStack(spacing: 0) {
-                // Search input
                 HStack(spacing: 8) {
                     Text(">")
                         .font(Fonts.primary(size: 14))
@@ -90,10 +101,8 @@ struct ThemePicker: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-                // Divider
                 theme.border.frame(height: 1)
 
-                // Scrollable list
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
@@ -129,23 +138,32 @@ struct ThemePicker: View {
                         scrollSelection(in: proxy)
                     }
                 }
+
+                theme.border.frame(height: 1)
+
+                HStack(spacing: 14) {
+                    hint("↑↓ j/k", label: "navigate")
+                    hint("↵", label: "select")
+                    hint("esc", label: "close")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 500, height: 450)
-            .background(theme.bg)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(width: 500, height: 480)
+            .background(panelBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(theme.border, lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
+            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
-                guard !allItems.isEmpty else { return .ignored }
-                selectedIndex = max(0, selectedIndex - 1)
+                moveSelection(by: -1)
                 return .handled
             }
             .onKeyPress(.downArrow) {
-                guard !allItems.isEmpty else { return .ignored }
-                selectedIndex = min(allItems.count - 1, selectedIndex + 1)
+                moveSelection(by: 1)
                 return .handled
             }
             .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
@@ -153,10 +171,10 @@ struct ThemePicker: View {
 
                 switch keyPress.characters.lowercased() {
                 case "j":
-                    selectedIndex = min(allItems.count - 1, selectedIndex + 1)
+                    moveSelection(by: 1)
                     return .handled
                 case "k":
-                    selectedIndex = max(0, selectedIndex - 1)
+                    moveSelection(by: -1)
                     return .handled
                 default:
                     return .ignored
@@ -253,7 +271,7 @@ struct ThemePicker: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(isSelected ? theme.accent.opacity(0.1) : Color.clear)
+            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
         }
         .buttonStyle(.plain)
         .id(name)
@@ -326,5 +344,17 @@ struct ThemePicker: View {
             terminalTheme: termTheme,
             backgroundOpacity: effectiveBackgroundOpacity
         )
+    }
+
+    private func hint(_ key: String, label: String) -> some View {
+        HStack(spacing: 6) {
+            Text(key)
+                .font(Fonts.primary(size: 10))
+                .foregroundStyle(theme.textMuted)
+
+            Text(label)
+                .font(Fonts.primary(size: 10))
+                .foregroundStyle(theme.textDim)
+        }
     }
 }

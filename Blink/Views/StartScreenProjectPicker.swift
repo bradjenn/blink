@@ -22,8 +22,14 @@ struct StartScreenProjectPicker: View {
         if store.hasWallpaper {
             AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
         } else {
-            AnyShapeStyle(theme.bg.opacity(0.96))
+            AnyShapeStyle(theme.bg.opacity(0.97))
         }
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !filteredProjects.isEmpty else { return }
+        let count = filteredProjects.count
+        selectedIndex = (selectedIndex + delta + count) % count
     }
 
     private var filteredProjects: [Project] {
@@ -36,7 +42,7 @@ struct StartScreenProjectPicker: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.48)
+            Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
                 .accessibilityAddTraits(.isButton)
@@ -92,7 +98,7 @@ struct StartScreenProjectPicker: View {
                 theme.border.frame(height: 1)
 
                 HStack(spacing: 14) {
-                    hint("\u{2191}\u{2193}", label: "navigate")
+                    hint("↑↓ j/k", label: "navigate")
                     hint("\u{21B5}", label: "select")
                     hint("esc", label: "close")
                 }
@@ -102,29 +108,41 @@ struct StartScreenProjectPicker: View {
             }
             .frame(width: 500)
             .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(theme.border, lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
-                guard !filteredProjects.isEmpty else { return .ignored }
-                selectedIndex = max(0, selectedIndex - 1)
+                moveSelection(by: -1)
                 return .handled
             }
             .onKeyPress(.downArrow) {
+                moveSelection(by: 1)
+                return .handled
+            }
+            .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
                 guard !filteredProjects.isEmpty else { return .ignored }
-                selectedIndex = min(filteredProjects.count - 1, selectedIndex + 1)
+
+                switch keyPress.characters.lowercased() {
+                case "j":
+                    moveSelection(by: 1)
+                    return .handled
+                case "k":
+                    moveSelection(by: -1)
+                    return .handled
+                default:
+                    return .ignored
+                }
+            }
+            .onKeyPress(.escape) {
+                onDismiss()
                 return .handled
             }
             .onKeyPress(.return) {
                 guard filteredProjects.indices.contains(selectedIndex) else { return .ignored }
                 selectProject(filteredProjects[selectedIndex].id)
-                return .handled
-            }
-            .onKeyPress(.escape) {
-                onDismiss()
                 return .handled
             }
         }
@@ -183,7 +201,7 @@ struct StartScreenProjectPicker: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(isSelected ? theme.accent.opacity(0.1) : Color.clear)
+            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
         }
         .buttonStyle(.plain)
     }
