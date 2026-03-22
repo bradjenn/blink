@@ -42,6 +42,7 @@ final class AppStore {
     // Tabs
     var tabs: [AppTab] = []
     var activeTabId: String?
+    var pendingMaximizedTabId: String?
 
     /// O(1) tab lookup by ID. Rebuilt on access when tabs change.
     var tabsById: [String: AppTab] {
@@ -726,7 +727,13 @@ final class AppStore {
         return tab
     }
 
-    func openOrFocusCommandTab(projectId: String, command: String, label: String, fullWidth: Bool = false) {
+    func openOrFocusCommandTab(
+        projectId: String,
+        command: String,
+        label: String,
+        fullWidth: Bool = false,
+        maximizeColumn: Bool = false
+    ) {
         if let existing = projectTabs(for: projectId).first(where: { $0.command == command }) {
             if fullWidth, !fullWidthTabIds.contains(existing.id) {
                 // Existing tab found but not in full-width mode — make it full-width
@@ -736,16 +743,43 @@ final class AppStore {
                 fullWidthTabIds.insert(existing.id)
             }
             setActiveTab(existing.id)
+            if maximizeColumn {
+                requestColumnMaximize(existing.id)
+            }
         } else if fullWidth {
             openFullWidthTab(projectId: projectId, command: command, label: label)
         } else {
-            openTab(projectId: projectId, command: command, label: label)
+            let tab = openTab(projectId: projectId, command: command, label: label)
+            if maximizeColumn {
+                requestColumnMaximize(tab.id)
+            }
         }
     }
 
-    func openOrFocusCommandTabForActiveProject(command: String, label: String, fullWidth: Bool = false) {
+    func openOrFocusCommandTabForActiveProject(
+        command: String,
+        label: String,
+        fullWidth: Bool = false,
+        maximizeColumn: Bool = false
+    ) {
         guard let projectId = activeProjectId else { return }
-        openOrFocusCommandTab(projectId: projectId, command: command, label: label, fullWidth: fullWidth)
+        openOrFocusCommandTab(
+            projectId: projectId,
+            command: command,
+            label: label,
+            fullWidth: fullWidth,
+            maximizeColumn: maximizeColumn
+        )
+    }
+
+    func requestColumnMaximize(_ tabId: String) {
+        pendingMaximizedTabId = tabId
+    }
+
+    func consumePendingColumnMaximize(for tabId: String) -> Bool {
+        guard pendingMaximizedTabId == tabId else { return false }
+        pendingMaximizedTabId = nil
+        return true
     }
 
     func isFullWidthTab(_ tabId: String) -> Bool {

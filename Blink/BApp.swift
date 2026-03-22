@@ -90,7 +90,7 @@ struct BApp: App {
                 .onAppear {
                     updateChecker.checkIfNeeded()
                     if store.spotifyEnabled {
-                        spotifyMonitor.startMonitoring()
+                        spotifyMonitor.startMonitoring(performInitialRefresh: false)
                     }
                     // Wire GhosttyApp to store and surface manager for callbacks
                     ghosttyApp.store = store
@@ -206,9 +206,25 @@ struct BApp: App {
                 .keyboardShortcut("g", modifiers: .command)
 
                 Button("Open Files") {
-                    store.openOrFocusCommandTabForActiveProject(command: "yazi", label: "Yazi", fullWidth: true)
+                    let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
+                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Yazi")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+
+                Button("Open Neovim") {
+                    let command = NvimLauncher.command(
+                        theme: themeManager.activeTerminalTheme,
+                        backgroundOpacity: store.backgroundOpacity
+                    )
+                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Neovim")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Button("Open Spotify") {
+                    let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
+                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             }
 
             CommandGroup(replacing: .newItem) {

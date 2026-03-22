@@ -80,6 +80,23 @@ final class WorkspaceLayoutState {
         }
     }
 
+    /// Maximize a column without removing other columns from the workspace.
+    /// If the column is already maximized, this is a no-op.
+    func maximize(for columnId: String, projectId: String, viewportWidth: CGFloat) -> CGFloat {
+        let currentFraction = columnFractions[projectId]?[columnId] ?? Layout.workspaceColumnDefaultFraction
+        let tolerance: CGFloat = 0.02
+
+        guard abs(currentFraction - 1.0) >= tolerance else {
+            return viewportWidth
+        }
+
+        var saved = preMaximizeFractions[projectId] ?? [:]
+        saved[columnId] = currentFraction
+        preMaximizeFractions[projectId] = saved
+        setFraction(1.0, for: columnId, projectId: projectId)
+        return viewportWidth
+    }
+
     func isInitialized(projectId: String) -> Bool {
         initializedProjects.contains(projectId)
     }

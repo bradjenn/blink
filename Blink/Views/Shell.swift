@@ -285,9 +285,14 @@ private struct WorkspaceColumnsView: View {
                         syncColumns(viewportWidth: geometry.size.width)
                         restoreViewport(viewportWidth: geometry.size.width)
                         alignActiveTab(viewportWidth: geometry.size.width, animated: false)
+                        applyPendingColumnMaximize(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: store.activeTabId, initial: false) {
                         alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
+                        applyPendingColumnMaximize(viewportWidth: geometry.size.width)
+                    }
+                    .onChange(of: store.pendingMaximizedTabId, initial: false) {
+                        applyPendingColumnMaximize(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                         currentViewportWidth = newWidth
@@ -714,6 +719,20 @@ private struct WorkspaceColumnsView: View {
         }
 
         layoutState.markInitialized(projectId: project.id)
+    }
+
+    private func applyPendingColumnMaximize(viewportWidth: CGFloat) {
+        guard viewportWidth > 0,
+              let activeTabId = store.activeTabId,
+              tabs.contains(where: { $0.id == activeTabId }),
+              let colId = store.activeColumn?.id,
+              store.consumePendingColumnMaximize(for: activeTabId) else { return }
+
+        cachedLayoutKey = ""
+        withAnimation(workspaceAnimation) {
+            let _ = layoutState.maximize(for: colId, projectId: project.id, viewportWidth: viewportWidth)
+            ensureActiveColumnVisible(viewportWidth: viewportWidth)
+        }
     }
 
     private func clampViewportOffset(viewportWidth: CGFloat, animated: Bool) {

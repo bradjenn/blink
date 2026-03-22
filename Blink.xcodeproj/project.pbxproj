@@ -34,6 +34,7 @@
 		30803CC48C90EFDF88A7C8D2 /* GhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A27927A4E6F40E0D7B67BD /* GhosttyApp.swift */; };
 		324134D47FCF4719C7416A98 /* pink-lakeside.png in Resources */ = {isa = PBXBuildFile; fileRef = 6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */; };
 		35EA33C9B1B23682BB31DCED /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BF5F1BD395AB638696B46E9 /* Assets.xcassets */; };
+		36289D10A8D4463BA2E1C001 /* NvimThemes in Resources */ = {isa = PBXBuildFile; fileRef = 36289D10A8D4463BA2E1C000 /* NvimThemes */; };
 		35FD8570404CB6C03CBC0D5A /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
 		3896092C306A1F2211524895 /* akane-cliff.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 47B2C73311A57D7F5BD1F356 /* akane-cliff.jpg */; };
 		38A0767D5442E9D336859FEC /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */; };
@@ -116,6 +117,7 @@
 		D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */; };
 		D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
 		D3B4A974951999D948C6CAF6 /* Themes in Resources */ = {isa = PBXBuildFile; fileRef = 1EDE19D0FBE88E948C87BF23 /* Themes */; };
+		D3B4A974951999D948C6CAF7 /* NvimThemes in Resources */ = {isa = PBXBuildFile; fileRef = 36289D10A8D4463BA2E1C000 /* NvimThemes */; };
 		D6312D6BE98B204DA7C19BE2 /* KeyboardShortcutsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B05A07DC5BFA43BAF15661C /* KeyboardShortcutsSettings.swift */; };
 		D7BEEB525112792927C78AAC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BF5F1BD395AB638696B46E9 /* Assets.xcassets */; };
 		DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
@@ -164,6 +166,7 @@
 		190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyMonitor.swift; sourceTree = "<group>"; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		1EDE19D0FBE88E948C87BF23 /* Themes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Themes; path = Blink/Resources/Themes; sourceTree = SOURCE_ROOT; };
+		36289D10A8D4463BA2E1C000 /* NvimThemes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = NvimThemes; path = Blink/Resources/NvimThemes; sourceTree = SOURCE_ROOT; };
 		20C1BBFABD047814FC91A331 /* WindowDragRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDragRegion.swift; sourceTree = "<group>"; };
 		2274695175C0DE6DE69BAB30 /* WallpaperPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreset.swift; sourceTree = "<group>"; };
 		24588121A0A9DB5D03163B12 /* codex-icon.svg */ = {isa = PBXFileReference; path = "codex-icon.svg"; sourceTree = "<group>"; };
@@ -310,6 +313,7 @@
 			children = (
 				36A28D3024E66E791B9C5C7B /* claude-icon.svg */,
 				24588121A0A9DB5D03163B12 /* codex-icon.svg */,
+				36289D10A8D4463BA2E1C000 /* NvimThemes */,
 				9171B8B51379166A5ACB405E /* opencode-icon.svg */,
 				D7424EF33D43F3F399A45970 /* Wallpapers */,
 			);
@@ -533,6 +537,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				35EA33C9B1B23682BB31DCED /* Assets.xcassets in Resources */,
+				36289D10A8D4463BA2E1C001 /* NvimThemes in Resources */,
 				E9EB070FE40F8B8A43A5F6A6 /* Themes in Resources */,
 				9D7653F138E03F29AA3979D0 /* akane-bridge.jpg in Resources */,
 				3896092C306A1F2211524895 /* akane-cliff.jpg in Resources */,
@@ -553,6 +558,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D7BEEB525112792927C78AAC /* Assets.xcassets in Resources */,
+				D3B4A974951999D948C6CAF7 /* NvimThemes in Resources */,
 				D3B4A974951999D948C6CAF6 /* Themes in Resources */,
 				A9000F944A81D9A45C39133A /* akane-bridge.jpg in Resources */,
 				53D2D8744DBFAF6B2DCF3085 /* akane-cliff.jpg in Resources */,

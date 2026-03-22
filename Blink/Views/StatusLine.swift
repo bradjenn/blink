@@ -310,6 +310,6 @@ private struct SpotifyNowPlaying: View {
 
     private func openSpotifyTUI() {
         let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", fullWidth: true)
+        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
     }
 }

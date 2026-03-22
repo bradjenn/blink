@@ -14,13 +14,20 @@ struct SpotifyStatus: Equatable {
 
 @MainActor @Observable
 final class SpotifyMonitor {
+    private static let pausedVisibilityDuration: TimeInterval = 20
+
     var status: SpotifyStatus = .empty
     private var timer: Timer?
     private var refreshTask: Task<Void, Never>?
+    private var hasSeenPlaybackThisSession = false
+    private var pausedStatus: SpotifyStatus?
+    private var pauseStartedAt: Date?
 
-    func startMonitoring() {
+    func startMonitoring(performInitialRefresh: Bool = true) {
         stopMonitoring()
-        refresh()
+        if performInitialRefresh {
+            refresh()
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
@@ -33,18 +40,57 @@ final class SpotifyMonitor {
         refreshTask = nil
         timer?.invalidate()
         timer = nil
+        hasSeenPlaybackThisSession = false
+        pausedStatus = nil
+        pauseStartedAt = nil
         status = .empty
     }
 
     private func refresh() {
         refreshTask?.cancel()
-        refreshTask = Task.detached(priority: .utility) { [weak self] in
-            let newStatus = fetchSpotifyStatus()
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            let newStatus = await Task.detached(priority: .utility) {
+                fetchSpotifyStatus()
+            }.value
             guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self?.status = newStatus
-            }
+            self.applyStatus(newStatus)
         }
+    }
+
+    private func applyStatus(_ newStatus: SpotifyStatus) {
+        guard newStatus.hasTrack else {
+            pausedStatus = nil
+            pauseStartedAt = nil
+            status = .empty
+            return
+        }
+
+        guard !newStatus.isPlaying else {
+            hasSeenPlaybackThisSession = true
+            pausedStatus = nil
+            pauseStartedAt = nil
+            status = newStatus
+            return
+        }
+
+        guard hasSeenPlaybackThisSession else {
+            status = .empty
+            return
+        }
+
+        if pausedStatus != newStatus {
+            pausedStatus = newStatus
+            pauseStartedAt = Date()
+        }
+
+        guard let pauseStartedAt,
+              Date().timeIntervalSince(pauseStartedAt) < Self.pausedVisibilityDuration else {
+            status = .empty
+            return
+        }
+
+        status = newStatus
     }
 }
 

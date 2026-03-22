@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, claude, claudeYolo, codex, openCode, lazygit, yazi
+    case terminal, claude, claudeYolo, codex, openCode, lazygit, yazi, neovim
 }
 
 struct NewTabMenu: View {
@@ -91,6 +91,8 @@ struct NewTabMenu: View {
             menuRow("lazygit", icon: "point.3.connected.trianglepath.dotted") { onAction(.lazygit) }
             Divider().overlay(theme.border)
             menuRow("Yazi", icon: "folder") { onAction(.yazi) }
+            Divider().overlay(theme.border)
+            menuRow("Neovim", icon: "chevron.left.forwardslash.chevron.right") { onAction(.neovim) }
         }
         .frame(width: 200)
         .background(theme.bg)

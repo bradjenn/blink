@@ -5,6 +5,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
+    @Environment(ThemeManager.self) private var themeManager
 
     @State private var isAddHovered = false
     @State private var isNewWindowHovered = false
@@ -143,7 +144,14 @@ struct SidebarView: View {
         case .lazygit:
             store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
         case .yazi:
-            store.openOrFocusCommandTab(projectId: projectId, command: "yazi", label: "Yazi", fullWidth: true)
+            let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
+            store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Yazi")
+        case .neovim:
+            let command = NvimLauncher.command(
+                theme: themeManager.activeTerminalTheme,
+                backgroundOpacity: store.backgroundOpacity
+            )
+            store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Neovim")
         }
     }
 
@@ -275,6 +283,6 @@ private struct SidebarNowPlaying: View {
 
     private func openSpotifyTUI() {
         let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", fullWidth: true)
+        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
     }
 }
