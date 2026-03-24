@@ -62,6 +62,7 @@ struct BApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var themeManager = ThemeManager()
     @State private var store = AppStore()
+    @State private var chatStore = ChatStore()
     @State private var ghosttyApp = GhosttyApp()
     @State private var surfaceManager = SurfaceManager()
     @State private var gitMonitor = GitStatusMonitor()
@@ -77,6 +78,7 @@ struct BApp: App {
                     )
                 )
                 .environment(store)
+                .environment(chatStore)
                 .environment(themeManager)
                 .environment(gitMonitor)
                 .environment(spotifyMonitor)
@@ -88,6 +90,7 @@ struct BApp: App {
                 )
                 .preferredColorScheme(.dark)
                 .onAppear {
+                    Task { await chatStore.load() }
                     updateChecker.checkIfNeeded()
                     if store.spotifyEnabled {
                         spotifyMonitor.startMonitoring(performInitialRefresh: false)
@@ -134,6 +137,12 @@ struct BApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
 
+                Button("Agent Palette...") {
+                    store.presentCommandPalette(mode: .agents)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(store.activeProjectId == nil)
+
                 Divider()
 
                 Button("Switch Project...") {
@@ -162,12 +171,12 @@ struct BApp: App {
                 Button("Focus Left") {
                     store.focusLeft()
                 }
-                .keyboardShortcut("h", modifiers: .command)
+                .keyboardShortcut(.leftArrow, modifiers: .command)
 
                 Button("Focus Right") {
                     store.focusRight()
                 }
-                .keyboardShortcut("l", modifiers: .command)
+                .keyboardShortcut(.rightArrow, modifiers: .command)
 
                 Button("Focus Down") {
                     store.focusDown()
@@ -216,6 +225,35 @@ struct BApp: App {
                 }
                 .keyboardShortcut("g", modifiers: .command)
 
+                Button("Open Project Chat") {
+                    openProjectChat()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Planning Session") {
+                    openSecondOpinion()
+                }
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Codex") {
+                    openActiveCommandTab(command: "codex", label: "Codex")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Claude Code") {
+                    openActiveCommandTab(command: "claude", label: "Claude Code")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Open Code") {
+                    openActiveCommandTab(command: "opencode", label: "Open Code")
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
                 Button("Open Files") {
                     let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
                     store.openOrFocusCommandTabForActiveProject(command: command, label: "Yazi")
@@ -223,10 +261,7 @@ struct BApp: App {
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Button("Open Neovim") {
-                    let command = NvimLauncher.command(
-                        theme: themeManager.activeTerminalTheme,
-                        backgroundOpacity: store.backgroundOpacity
-                    )
+                    let command = NvimLauncher.command()
                     store.openOrFocusCommandTabForActiveProject(command: command, label: "Neovim")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -277,6 +312,92 @@ struct BApp: App {
                     .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
                 }
             }
+
+            CommandMenu("Agents") {
+                Button("Agent Palette...") {
+                    store.presentCommandPalette(mode: .agents)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(store.activeProjectId == nil)
+
+                Divider()
+
+                Button("Open Project Chat") {
+                    openProjectChat()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Planning Session") {
+                    openSecondOpinion()
+                }
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Codex") {
+                    openActiveCommandTab(command: "codex", label: "Codex")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Claude Code") {
+                    openActiveCommandTab(command: "claude", label: "Claude Code")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Open Code") {
+                    openActiveCommandTab(command: "opencode", label: "Open Code")
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+            }
         }
+    }
+
+    private func openProjectChat() {
+        guard let projectId = store.activeProjectId,
+              let project = store.projects.first(where: { $0.id == projectId }) else {
+            return
+        }
+
+        Task {
+            let thread = await chatStore.ensureThread(
+                for: project,
+                model: store.chatModel,
+                provider: .codex
+            )
+            store.openOrFocusChatTab(
+                projectId: projectId,
+                threadId: thread.id,
+                label: thread.title,
+                maximizeColumn: true
+            )
+        }
+    }
+
+    private func openSecondOpinion() {
+        guard let projectId = store.activeProjectId,
+              let project = store.projects.first(where: { $0.id == projectId }) else {
+            return
+        }
+
+        Task {
+            let thread = await chatStore.ensureThread(
+                for: project,
+                model: store.chatModel,
+                provider: .secondOpinion
+            )
+            store.openOrFocusChatTab(
+                projectId: projectId,
+                threadId: thread.id,
+                label: thread.title,
+                maximizeColumn: true
+            )
+        }
+    }
+
+    private func openActiveCommandTab(command: String, label: String) {
+        guard store.activeProjectId != nil else { return }
+        store.openOrFocusCommandTabForActiveProject(command: command, label: label)
     }
 }

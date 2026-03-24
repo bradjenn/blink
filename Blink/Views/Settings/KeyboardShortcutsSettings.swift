@@ -14,8 +14,8 @@ private struct ShortcutCategory: Identifiable {
 
 private let shortcutCategories: [ShortcutCategory] = [
     ShortcutCategory(name: "Navigation", shortcuts: [
-        ShortcutEntry(action: "Focus Left", keys: "⌘H"),
-        ShortcutEntry(action: "Focus Right", keys: "⌘L"),
+        ShortcutEntry(action: "Focus Left", keys: "⌘H / ⌘←"),
+        ShortcutEntry(action: "Focus Right", keys: "⌘L / ⌘→"),
         ShortcutEntry(action: "Focus Down", keys: "⌘J"),
         ShortcutEntry(action: "Focus Up", keys: "⌘K"),
     ]),

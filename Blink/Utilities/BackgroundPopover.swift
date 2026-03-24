@@ -1,9 +1,15 @@
 import SwiftUI
 
+enum BackgroundPopoverPlacement {
+    case belowLeading
+    case aboveLeading
+}
+
 /// A dropdown modifier that shows a borderless panel anchored at the
 /// bottom-leading edge of the source view. No arrow, no centering.
 struct BackgroundPopoverModifier<PopoverContent: View>: ViewModifier {
     @Binding var isPresented: Bool
+    let placement: BackgroundPopoverPlacement
     @ViewBuilder let popoverContent: () -> PopoverContent
 
     func body(content: Content) -> some View {
@@ -11,6 +17,7 @@ struct BackgroundPopoverModifier<PopoverContent: View>: ViewModifier {
             .background(
                 BackgroundPopoverAnchor(
                     isPresented: $isPresented,
+                    placement: placement,
                     popoverContent: popoverContent
                 )
             )
@@ -19,6 +26,7 @@ struct BackgroundPopoverModifier<PopoverContent: View>: ViewModifier {
 
 private struct BackgroundPopoverAnchor<PopoverContent: View>: NSViewRepresentable {
     @Binding var isPresented: Bool
+    let placement: BackgroundPopoverPlacement
     @ViewBuilder let popoverContent: () -> PopoverContent
 
     func makeNSView(context: Context) -> NSView {
@@ -56,18 +64,31 @@ private struct BackgroundPopoverAnchor<PopoverContent: View>: NSViewRepresentabl
 
                 DispatchQueue.main.async {
                     guard let window = nsView.window else { return }
-                    // Convert the view's bottom-left to screen coordinates
                     let viewFrame = nsView.convert(nsView.bounds, to: nil)
-                    let screenPoint = window.convertPoint(toScreen: NSPoint(
-                        x: viewFrame.minX,
-                        y: viewFrame.minY
-                    ))
-                    // Position panel: left-aligned, below the button
-                    // +3 right, -2 down (screen coords are flipped: lower y = down)
-                    panel.setFrameTopLeftPoint(NSPoint(
-                        x: screenPoint.x + 3,
-                        y: screenPoint.y - 2
-                    ))
+                    let panelOrigin: NSPoint
+
+                    switch placement {
+                    case .belowLeading:
+                        let screenPoint = window.convertPoint(toScreen: NSPoint(
+                            x: viewFrame.minX,
+                            y: viewFrame.minY
+                        ))
+                        panelOrigin = NSPoint(
+                            x: screenPoint.x + 3,
+                            y: screenPoint.y - 2
+                        )
+                    case .aboveLeading:
+                        let screenPoint = window.convertPoint(toScreen: NSPoint(
+                            x: viewFrame.minX,
+                            y: viewFrame.maxY
+                        ))
+                        panelOrigin = NSPoint(
+                            x: screenPoint.x + 3,
+                            y: screenPoint.y + fittingSize.height + 2
+                        )
+                    }
+
+                    panel.setFrameTopLeftPoint(panelOrigin)
                     window.addChildWindow(panel, ordered: .above)
                 }
             }
@@ -106,8 +127,15 @@ private struct BackgroundPopoverAnchor<PopoverContent: View>: NSViewRepresentabl
 extension View {
     func backgroundPopover<Content: View>(
         isPresented: Binding<Bool>,
+        placement: BackgroundPopoverPlacement = .belowLeading,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        modifier(BackgroundPopoverModifier(isPresented: isPresented, popoverContent: content))
+        modifier(
+            BackgroundPopoverModifier(
+                isPresented: isPresented,
+                placement: placement,
+                popoverContent: content
+            )
+        )
     }
 }

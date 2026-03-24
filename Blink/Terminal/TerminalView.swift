@@ -21,6 +21,8 @@ class TerminalContainerView: NSView {
 
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
         guard tabId != currentTabId else {
+            surfaceView.frame = bounds
+            currentSurface = surfaceView
             if shouldFocus {
                 surfaceView.focus()
             }

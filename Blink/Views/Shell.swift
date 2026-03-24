@@ -76,6 +76,7 @@ struct Shell: View {
 
             if store.showCommandPalette {
                 CommandPalette(
+                    mode: store.commandPaletteMode,
                     onDismiss: { store.dismissCommandPalette() }
                 )
                 .zIndex(3)
@@ -96,24 +97,56 @@ struct Shell: View {
             }
             shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
                 let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                guard modifiers == [.command, .shift],
-                      store.activeProjectId != nil,
+                guard store.activeProjectId != nil,
                       !store.showProjectSwitcher,
                       !store.showThemePicker,
                       !store.showCommandPalette,
                       store.activeView == .projects else { return event }
 
-                switch event.charactersIgnoringModifiers {
-                case "-":
-                    DispatchQueue.main.async {
-                        store.splitActivePaneWithNewTab()
+                switch modifiers {
+                case [.command]:
+                    switch event.keyCode {
+                    case 123: // Left arrow
+                        DispatchQueue.main.async {
+                            store.focusLeft()
+                        }
+                        return nil
+                    case 124: // Right arrow
+                        DispatchQueue.main.async {
+                            store.focusRight()
+                        }
+                        return nil
+                    default:
+                        switch event.charactersIgnoringModifiers?.lowercased() {
+                        case "h":
+                            DispatchQueue.main.async {
+                                store.focusLeft()
+                            }
+                            return nil
+                        case "l":
+                            DispatchQueue.main.async {
+                                store.focusRight()
+                            }
+                            return nil
+                        default:
+                            return event
+                        }
                     }
-                    return nil
-                case "\\":
-                    DispatchQueue.main.async {
-                        store.splitActiveColumnWithNewTab()
+                case [.command, .shift]:
+                    switch event.charactersIgnoringModifiers {
+                    case "-":
+                        DispatchQueue.main.async {
+                            store.splitActivePaneWithNewTab()
+                        }
+                        return nil
+                    case "\\":
+                        DispatchQueue.main.async {
+                            store.splitActiveColumnWithNewTab()
+                        }
+                        return nil
+                    default:
+                        return event
                     }
-                    return nil
                 default:
                     return event
                 }
@@ -313,7 +346,7 @@ private struct WorkspaceColumnsView: View {
                     Text("No windows in this workspace")
                         .font(Fonts.primary(size: 16))
                         .foregroundStyle(theme.text)
-                    Text("Use the sidebar controls to open a terminal or tool window")
+                    Text("Use the sidebar controls to open a terminal, chat, or tool window")
                         .font(Fonts.primary(size: 13))
                         .foregroundStyle(theme.textDim)
                 }
@@ -332,6 +365,9 @@ private struct WorkspaceColumnsView: View {
                     }
                     .onChange(of: store.pendingMaximizedTabId, initial: false) {
                         applyPendingColumnMaximize(viewportWidth: geometry.size.width)
+                    }
+                    .onChange(of: store.sidebarVisible, initial: false) {
+                        handleViewportChange(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: geometry.size.width, initial: true) { _, newWidth in
                         currentViewportWidth = newWidth
@@ -702,8 +738,19 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func handleViewportChange(viewportWidth: CGFloat) {
-        if layoutState.isInitialized(projectId: project.id) {
+        guard viewportWidth > 0 else { return }
+
+        if store.isOverviewMode {
             clampViewportOffset(viewportWidth: viewportWidth, animated: false)
+            return
+        }
+
+        if layoutState.isInitialized(projectId: project.id) {
+            if store.activeColumn != nil {
+                alignActiveTab(viewportWidth: viewportWidth, animated: false)
+            } else {
+                clampViewportOffset(viewportWidth: viewportWidth, animated: false)
+            }
         } else {
             restoreViewport(viewportWidth: viewportWidth)
         }
@@ -961,14 +1008,18 @@ private struct WorkspaceColumnView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.clear)
 
-                    TerminalView(
-                        tabId: tab.id,
-                        ghosttyApp: ghosttyApp,
-                        surfaceManager: surfaceManager,
-                        workingDirectory: project.path,
-                        isFocused: isFocused,
-                        command: tab.command
-                    )
+                    if tab.isChat, let threadId = tab.chatThreadId {
+                        ProjectChatView(tabId: tab.id, threadId: threadId, project: project)
+                    } else {
+                        TerminalView(
+                            tabId: tab.id,
+                            ghosttyApp: ghosttyApp,
+                            surfaceManager: surfaceManager,
+                            workingDirectory: project.path,
+                            isFocused: isFocused,
+                            command: tab.command
+                        )
+                    }
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)

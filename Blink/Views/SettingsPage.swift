@@ -9,6 +9,7 @@ struct SettingsPage: View {
     enum SettingsTab: String, CaseIterable {
         case appearance = "Appearance"
         case terminal = "Terminal"
+        case ai = "AI"
         case keyboardShortcuts = "Keyboard Shortcuts"
     }
 
@@ -40,6 +41,8 @@ struct SettingsPage: View {
                     AppearanceSettings(ghosttyApp: ghosttyApp)
                 case .terminal:
                     TerminalSettings(ghosttyApp: ghosttyApp)
+                case .ai:
+                    AISettings()
                 case .keyboardShortcuts:
                     KeyboardShortcutsSettings()
                 }

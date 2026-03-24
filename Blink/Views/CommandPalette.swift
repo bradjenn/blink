@@ -4,8 +4,10 @@ import AppKit
 struct CommandPalette: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
+    @Environment(ChatStore.self) private var chatStore
     @Environment(ThemeManager.self) private var themeManager
 
+    let mode: CommandPaletteMode
     let onDismiss: () -> Void
 
     @State private var searchText = ""
@@ -38,6 +40,12 @@ struct CommandPalette: View {
                 return nil
             case 125 where modifiers.isEmpty: // Down arrow
                 moveSelection(by: 1)
+                return nil
+            case 48 where modifiers.isEmpty: // Tab
+                moveSelection(by: 1)
+                return nil
+            case 48 where hasOnlyShiftModifier: // Shift-Tab
+                moveSelection(by: -1)
                 return nil
             case 36 where modifiers.isEmpty: // Return
                 guard filteredCommands.indices.contains(selectedIndex) else { return nil }
@@ -212,11 +220,33 @@ struct CommandPalette: View {
                 store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
             },
             PaletteCommand(
+                id: "open-project-chat",
+                title: "Open Project Chat",
+                subtitle: "Open the native chat for the active project",
+                category: "Agents",
+                shortcut: "Cmd-Shift-A",
+                keywords: ["chat", "project", "ai", "assistant", "openai"],
+                isEnabled: hasProject
+            ) {
+                openProjectChat()
+            },
+            PaletteCommand(
+                id: "open-second-opinion",
+                title: "Open Planning Session",
+                subtitle: "Open a planning session for the active project",
+                category: "Agents",
+                shortcut: nil,
+                keywords: ["planning", "session", "claude", "codex", "plan"],
+                isEnabled: hasProject
+            ) {
+                openSecondOpinion()
+            },
+            PaletteCommand(
                 id: "open-claude",
                 title: "Open Claude Code",
                 subtitle: "Open Claude Code for the active project",
                 category: "Agents",
-                shortcut: nil,
+                shortcut: "Cmd-Option-C",
                 keywords: ["claude", "anthropic", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
@@ -241,7 +271,7 @@ struct CommandPalette: View {
                 title: "Open Codex",
                 subtitle: "Open Codex for the active project",
                 category: "Agents",
-                shortcut: nil,
+                shortcut: "Cmd-Shift-C",
                 keywords: ["codex", "openai", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
@@ -252,7 +282,7 @@ struct CommandPalette: View {
                 title: "Open Open Code",
                 subtitle: "Open Open Code for the active project",
                 category: "Agents",
-                shortcut: nil,
+                shortcut: "Cmd-Shift-O",
                 keywords: ["open code", "opencode", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
@@ -279,10 +309,7 @@ struct CommandPalette: View {
                 keywords: ["neovim", "nvim", "vim", "editor"],
                 isEnabled: hasProject
             ) {
-                let command = NvimLauncher.command(
-                    theme: themeManager.activeTerminalTheme,
-                    backgroundOpacity: store.backgroundOpacity
-                )
+                let command = NvimLauncher.command()
                 store.openOrFocusCommandTabForActiveProject(command: command, label: "Neovim")
             },
             PaletteCommand(
@@ -302,7 +329,7 @@ struct CommandPalette: View {
                 title: "Focus Left",
                 subtitle: "Move focus to the window on the left",
                 category: "Navigation",
-                shortcut: "Cmd-H",
+                shortcut: "Cmd-H / Cmd-←",
                 keywords: ["focus", "left", "window", "pane"],
                 isEnabled: hasProject
             ) {
@@ -313,7 +340,7 @@ struct CommandPalette: View {
                 title: "Focus Right",
                 subtitle: "Move focus to the window on the right",
                 category: "Navigation",
-                shortcut: "Cmd-L",
+                shortcut: "Cmd-L / Cmd-→",
                 keywords: ["focus", "right", "window", "pane"],
                 isEnabled: hasProject
             ) {
@@ -399,15 +426,51 @@ struct CommandPalette: View {
         ]
     }
 
+    private var scopedCommands: [PaletteCommand] {
+        switch mode {
+        case .all:
+            commands
+        case .agents:
+            commands.filter { $0.category == "Agents" }
+        }
+    }
+
     private var filteredCommands: [PaletteCommand] {
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return commands }
+        guard !needle.isEmpty else { return scopedCommands }
 
-        return commands.filter { command in
+        return scopedCommands.filter { command in
             command.title.localizedStandardContains(needle)
             || command.subtitle.localizedStandardContains(needle)
             || command.category.localizedStandardContains(needle)
             || command.keywords.contains(where: { $0.localizedStandardContains(needle) })
+        }
+    }
+
+    private var paletteTitle: String {
+        switch mode {
+        case .all:
+            "Command Palette"
+        case .agents:
+            "Agent Palette"
+        }
+    }
+
+    private var searchPlaceholder: String {
+        switch mode {
+        case .all:
+            "Run a command..."
+        case .agents:
+            "Open an AI tool..."
+        }
+    }
+
+    private var headerIconName: String {
+        switch mode {
+        case .all:
+            "command"
+        case .agents:
+            "sparkles"
         }
     }
 
@@ -421,15 +484,21 @@ struct CommandPalette: View {
 
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Image(systemName: "command")
+                    Image(systemName: headerIconName)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(theme.accent)
 
-                    TextField("Run a command...", text: $searchText)
+                    TextField(searchPlaceholder, text: $searchText)
                         .font(Fonts.primary(size: 14))
                         .textFieldStyle(.plain)
                         .foregroundStyle(theme.text)
                         .focused($searchFocused)
+
+                    Spacer(minLength: 8)
+
+                    Text(paletteTitle)
+                        .font(Fonts.primary(size: 11, weight: .medium))
+                        .foregroundStyle(theme.textDim)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -469,7 +538,7 @@ struct CommandPalette: View {
                 theme.border.frame(height: 1)
 
                 HStack(spacing: 14) {
-                    hint("↑↓", label: "navigate")
+                    hint("↑↓ / tab", label: "cycle")
                     hint("↵", label: "run")
                     hint("esc", label: "close")
                 }
@@ -485,6 +554,37 @@ struct CommandPalette: View {
                     .stroke(theme.border, lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
+            .onKeyPress(.upArrow) {
+                moveSelection(by: -1)
+                return .handled
+            }
+            .onKeyPress(.downArrow) {
+                moveSelection(by: 1)
+                return .handled
+            }
+            .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
+                guard !filteredCommands.isEmpty else { return .ignored }
+
+                switch keyPress.characters.lowercased() {
+                case "j":
+                    moveSelection(by: 1)
+                    return .handled
+                case "k":
+                    moveSelection(by: -1)
+                    return .handled
+                default:
+                    return .ignored
+                }
+            }
+            .onKeyPress(.return) {
+                guard filteredCommands.indices.contains(selectedIndex) else { return .ignored }
+                run(filteredCommands[selectedIndex])
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                onDismiss()
+                return .handled
+            }
         }
         .onAppear {
             selectedIndex = 0
@@ -505,6 +605,14 @@ struct CommandPalette: View {
     }
 
     private func commandRow(_ command: PaletteCommand, isSelected: Bool) -> some View {
+        if mode == .agents {
+            return AnyView(agentCommandRow(command, isSelected: isSelected))
+        }
+
+        return AnyView(defaultCommandRow(command, isSelected: isSelected))
+    }
+
+    private func defaultCommandRow(_ command: PaletteCommand, isSelected: Bool) -> some View {
         Button {
             run(command)
         } label: {
@@ -544,6 +652,67 @@ struct CommandPalette: View {
         .disabled(!command.isEnabled)
     }
 
+    private func agentCommandRow(_ command: PaletteCommand, isSelected: Bool) -> some View {
+        Button {
+            run(command)
+        } label: {
+            HStack(spacing: 12) {
+                agentIcon(for: command)
+                    .frame(width: 18, height: 18)
+
+                Text(agentDisplayTitle(for: command))
+                    .font(Fonts.primary(size: 13, weight: .bold))
+                    .foregroundStyle(command.isEnabled ? theme.text : theme.textDim)
+
+                Spacer(minLength: 12)
+
+                if let shortcut = command.shortcut {
+                    Text(shortcut)
+                        .font(Fonts.primary(size: 10))
+                        .foregroundStyle(theme.textMuted)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+            .opacity(command.isEnabled ? 1 : 0.55)
+        }
+        .buttonStyle(.plain)
+        .disabled(!command.isEnabled)
+    }
+
+    @ViewBuilder
+    private func agentIcon(for command: PaletteCommand) -> some View {
+        switch command.id {
+        case "open-project-chat":
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(theme.accent)
+        case "open-second-opinion":
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(theme.accent)
+        case "open-claude", "open-claude-yolo":
+            ClaudeIcon()
+        case "open-codex":
+            BundledSVGIcon(name: "codex-icon")
+        case "open-open-code":
+            BundledSVGIcon(name: "opencode-icon")
+        default:
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(theme.accent)
+        }
+    }
+
+    private func agentDisplayTitle(for command: PaletteCommand) -> String {
+        if command.title.hasPrefix("Open ") {
+            return String(command.title.dropFirst(5))
+        }
+        return command.title
+    }
+
     private func run(_ command: PaletteCommand) {
         guard command.isEnabled else { return }
         searchFocused = false
@@ -575,6 +744,48 @@ struct CommandPalette: View {
             Text(label)
                 .font(Fonts.primary(size: 10))
                 .foregroundStyle(theme.textDim)
+        }
+    }
+
+    private func openProjectChat() {
+        guard let projectId = store.activeProjectId,
+              let project = store.projects.first(where: { $0.id == projectId }) else {
+            return
+        }
+
+        Task {
+            let thread = await chatStore.ensureThread(
+                for: project,
+                model: store.chatModel,
+                provider: .codex
+            )
+            store.openOrFocusChatTab(
+                projectId: projectId,
+                threadId: thread.id,
+                label: thread.title,
+                maximizeColumn: true
+            )
+        }
+    }
+
+    private func openSecondOpinion() {
+        guard let projectId = store.activeProjectId,
+              let project = store.projects.first(where: { $0.id == projectId }) else {
+            return
+        }
+
+        Task {
+            let thread = await chatStore.ensureThread(
+                for: project,
+                model: store.chatModel,
+                provider: .secondOpinion
+            )
+            store.openOrFocusChatTab(
+                projectId: projectId,
+                threadId: thread.id,
+                label: thread.title,
+                maximizeColumn: true
+            )
         }
     }
 }

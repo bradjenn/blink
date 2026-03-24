@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, claude, claudeYolo, codex, openCode, lazygit, yazi, neovim
+    case terminal, projectChat, secondOpinion, claude, claudeYolo, codex, openCode, lazygit, yazi, neovim
 }
 
 struct NewTabMenu: View {
@@ -61,6 +61,10 @@ struct NewTabMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             menuRow("Terminal", icon: "terminal") { onAction(.terminal) }
+            Divider().overlay(theme.border)
+            menuRow("Project Chat", icon: "bubble.left.and.bubble.right") { onAction(.projectChat) }
+            Divider().overlay(theme.border)
+            menuRow("Planning Session", icon: "person.2.fill") { onAction(.secondOpinion) }
             Divider().overlay(theme.border)
 
             HStack(spacing: 0) {

@@ -5,6 +5,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
+    @Environment(ChatStore.self) private var chatStore
     @Environment(ThemeManager.self) private var themeManager
 
     @State private var isAddHovered = false
@@ -133,6 +134,36 @@ struct SidebarView: View {
         switch action {
         case .terminal:
             store.openTab(projectId: projectId)
+        case .projectChat:
+            guard let project = store.projects.first(where: { $0.id == projectId }) else { return }
+            Task {
+                let thread = await chatStore.ensureThread(
+                    for: project,
+                    model: store.chatModel,
+                    provider: .codex
+                )
+                store.openOrFocusChatTab(
+                    projectId: projectId,
+                    threadId: thread.id,
+                    label: thread.title,
+                    maximizeColumn: true
+                )
+            }
+        case .secondOpinion:
+            guard let project = store.projects.first(where: { $0.id == projectId }) else { return }
+            Task {
+                let thread = await chatStore.ensureThread(
+                    for: project,
+                    model: store.chatModel,
+                    provider: .secondOpinion
+                )
+                store.openOrFocusChatTab(
+                    projectId: projectId,
+                    threadId: thread.id,
+                    label: thread.title,
+                    maximizeColumn: true
+                )
+            }
         case .claude:
             store.openOrFocusCommandTab(projectId: projectId, command: "claude", label: "Claude Code")
         case .claudeYolo:
@@ -147,10 +178,7 @@ struct SidebarView: View {
             let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
             store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Yazi")
         case .neovim:
-            let command = NvimLauncher.command(
-                theme: themeManager.activeTerminalTheme,
-                backgroundOpacity: store.backgroundOpacity
-            )
+            let command = NvimLauncher.command()
             store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Neovim")
         }
     }

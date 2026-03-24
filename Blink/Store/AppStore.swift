@@ -7,6 +7,11 @@ enum ActiveView {
     case settings
 }
 
+enum CommandPaletteMode {
+    case all
+    case agents
+}
+
 private enum StorageKeys {
     static let theme = "blink.theme"
     static let backgroundImage = "blink.backgroundImage"
@@ -26,6 +31,8 @@ private enum StorageKeys {
     static let shell = "blink.shell"
     static let focusCenteringMode = "blink.focusCenteringMode"
     static let spotifyEnabled = "blink.spotifyEnabled"
+    static let chatModel = "blink.chatModel"
+    static let claudeChatModel = "blink.claudeChatModel"
 }
 
 @MainActor @Observable
@@ -74,6 +81,7 @@ final class AppStore {
     var showProjectSwitcher = false
     var showNewTabMenu = false
     var showCommandPalette = false
+    var commandPaletteMode: CommandPaletteMode = .all
     var themePickerFocusRequest = 0
     var projectSwitcherFocusRequest = 0
 
@@ -117,6 +125,12 @@ final class AppStore {
     var spotifyEnabled: Bool {
         didSet { UserDefaults.standard.set(spotifyEnabled, forKey: StorageKeys.spotifyEnabled) }
     }
+    var chatModel: String {
+        didSet { UserDefaults.standard.set(chatModel, forKey: StorageKeys.chatModel) }
+    }
+    var claudeChatModel: String {
+        didSet { UserDefaults.standard.set(claudeChatModel, forKey: StorageKeys.claudeChatModel) }
+    }
     // Focus centering
     var focusCenteringMode: FocusCenteringMode {
         didSet { UserDefaults.standard.set(focusCenteringMode.rawValue, forKey: StorageKeys.focusCenteringMode) }
@@ -125,7 +139,6 @@ final class AppStore {
     static var defaultShell: String {
         ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     }
-
 
     // Sidebar
     var sidebarVisible: Bool {
@@ -174,6 +187,8 @@ final class AppStore {
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
         self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
         self.spotifyEnabled = defaults.object(forKey: StorageKeys.spotifyEnabled) as? Bool ?? false
+        self.chatModel = defaults.string(forKey: StorageKeys.chatModel) ?? ""
+        self.claudeChatModel = defaults.string(forKey: StorageKeys.claudeChatModel) ?? ""
         self.focusCenteringMode = FocusCenteringMode(rawValue: defaults.string(forKey: StorageKeys.focusCenteringMode) ?? "") ?? .never
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
@@ -318,15 +333,17 @@ final class AppStore {
         showThemePicker = false
     }
 
-    func presentCommandPalette() {
+    func presentCommandPalette(mode: CommandPaletteMode = .all) {
         sidebarFocused = false
         showProjectSwitcher = false
         showThemePicker = false
+        commandPaletteMode = mode
         showCommandPalette = true
     }
 
     func dismissCommandPalette() {
         showCommandPalette = false
+        commandPaletteMode = .all
     }
 
     // MARK: - Background Actions
@@ -883,6 +900,50 @@ final class AppStore {
         )
     }
 
+    func openOrFocusChatTab(
+        projectId: String,
+        threadId: String,
+        label: String,
+        maximizeColumn: Bool = false
+    ) {
+        if let existing = projectTabs(for: projectId).first(where: { $0.chatThreadId == threadId }) {
+            setActiveTab(existing.id)
+            if maximizeColumn {
+                requestColumnMaximize(existing.id)
+            }
+            sidebarFocused = false
+            return
+        }
+
+        let tab = makeChatTab(projectId: projectId, threadId: threadId, label: label)
+        insertTab(tab, for: projectId, after: nil)
+
+        let column = Column(id: UUID().uuidString, tabIds: [tab.id])
+        var projectCols = columns[projectId] ?? []
+        projectCols.append(column)
+        columns[projectId] = projectCols
+
+        setActiveTab(tab.id)
+        if maximizeColumn {
+            requestColumnMaximize(tab.id)
+        }
+        sidebarFocused = false
+    }
+
+    func openOrFocusChatTabForActiveProject(
+        threadId: String,
+        label: String,
+        maximizeColumn: Bool = false
+    ) {
+        guard let projectId = activeProjectId else { return }
+        openOrFocusChatTab(
+            projectId: projectId,
+            threadId: threadId,
+            label: label,
+            maximizeColumn: maximizeColumn
+        )
+    }
+
     func requestColumnMaximize(_ tabId: String) {
         pendingMaximizedTabId = tabId
     }
@@ -895,6 +956,28 @@ final class AppStore {
 
     func isFullWidthTab(_ tabId: String) -> Bool {
         fullWidthTabIds.contains(tabId)
+    }
+
+    func setChatTabTitle(_ threadId: String, title: String) {
+        for index in tabs.indices where tabs[index].chatThreadId == threadId {
+            tabs[index].label = title
+            tabs[index].defaultLabel = title
+        }
+    }
+
+    func replaceChatThread(in tabId: String, with threadId: String, label: String) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId && $0.isChat }) else { return }
+        guard tabs[index].chatThreadId != threadId else {
+            setActiveTab(tabId)
+            sidebarFocused = false
+            return
+        }
+
+        tabs[index].chatThreadId = threadId
+        tabs[index].label = label
+        tabs[index].defaultLabel = label
+        setActiveTab(tabId)
+        sidebarFocused = false
     }
 
     // MARK: - Full Width Tabs
@@ -913,7 +996,8 @@ final class AppStore {
             label: label,
             defaultLabel: label,
             projectId: projectId,
-            command: command
+            command: command,
+            chatThreadId: nil
         )
         tabs.append(tab)
 
@@ -970,7 +1054,7 @@ final class AppStore {
     }
 
     func terminalCount(for projectId: String) -> Int {
-        tabs.filter { $0.projectId == projectId && $0.type == "shell" }.count
+        tabs.filter { $0.projectId == projectId && $0.isShell }.count
     }
 
     func removeProject(_ id: String) {
@@ -1100,7 +1184,7 @@ final class AppStore {
     }
 
     private func makeShellTab(projectId: String, command: String?, label: String?) -> AppTab {
-        let count = projectTabs(for: projectId).count + 1
+        let count = tabs.filter { $0.projectId == projectId && $0.isShell && $0.command == nil }.count + 1
         let defaultLabel = label ?? "Terminal \(count)"
         return AppTab(
             id: UUID().uuidString,
@@ -1108,7 +1192,20 @@ final class AppStore {
             label: defaultLabel,
             defaultLabel: defaultLabel,
             projectId: projectId,
-            command: command
+            command: command,
+            chatThreadId: nil
+        )
+    }
+
+    private func makeChatTab(projectId: String, threadId: String, label: String) -> AppTab {
+        AppTab(
+            id: UUID().uuidString,
+            type: "chat",
+            label: label,
+            defaultLabel: label,
+            projectId: projectId,
+            command: nil,
+            chatThreadId: threadId
         )
     }
 
@@ -1129,7 +1226,7 @@ final class AppStore {
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
     private func reindexTabs(for projectId: String) {
         var counter = 0
-        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].type == "shell" && tabs[i].command == nil {
+        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].isShell && tabs[i].command == nil {
             counter += 1
             let newDefault = "Terminal \(counter)"
             if tabs[i].label == tabs[i].defaultLabel {
