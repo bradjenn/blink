@@ -305,7 +305,7 @@ private struct WorkspaceColumnsView: View {
     }
 
     private var workspaceAnimation: Animation {
-        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.18)
+        reduceMotion ? .linear(duration: 0.01) : .smooth(duration: 0.4)
     }
 
     private var overviewAnimation: Animation {
@@ -335,7 +335,7 @@ private struct WorkspaceColumnsView: View {
                 .combined(with: .opacity)
                 .combined(with: .scale(scale: 0.985, anchor: .trailing)),
             removal: .opacity
-                .combined(with: .scale(scale: 0.96))
+                .combined(with: .scale(scale: 0.8))
         )
     }
 
