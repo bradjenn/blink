@@ -1019,7 +1019,7 @@ private struct WorkspaceColumnView: View {
                             surfaceManager: surfaceManager,
                             workingDirectory: tab.workingDirectory ?? project.path,
                             isFocused: isFocused,
-                            command: tab.command
+                            command: store.terminalLaunchCommand(for: tab, project: project)
                         )
                     }
                 }

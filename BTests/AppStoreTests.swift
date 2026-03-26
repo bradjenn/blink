@@ -526,6 +526,31 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(cols.last?.tabIds, [tab.id])
     }
 
+    func testNewShellTabsGetStableProjectPaneIds() {
+        let store = makeStore()
+        store.setActiveProject("1")
+
+        let tab = store.openTab(projectId: "1")
+        let paneId = try! XCTUnwrap(tab.projectSetupPaneId)
+        let setup = try! XCTUnwrap(store.projectSetup(for: "1"))
+
+        XCTAssertTrue(setup.panes.contains(where: { $0.id == paneId }))
+    }
+
+    func testPlainShellTabsLaunchThroughTmuxWhenPaneIdExists() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let tab = store.openTab(projectId: "1")
+        let project = try! XCTUnwrap(store.projects.first(where: { $0.id == "1" }))
+
+        let command = store.terminalLaunchCommand(for: tab, project: project)
+
+        XCTAssertNotNil(command)
+        XCTAssertTrue(command?.contains("tmux -L") == true)
+        XCTAssertTrue(command?.contains("attach-session") == true)
+        XCTAssertTrue(command?.contains("new-session -d -t") == true)
+    }
+
     func testSplitActivePaneWithNewTabInsertsBelowActivePane() {
         let store = makeStore()
         store.setActiveProject("1")

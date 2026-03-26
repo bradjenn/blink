@@ -172,6 +172,10 @@ final class AppStore {
     private var shellDetectedAIPaneKinds: [String: ManagedAIPaneKind] = [:]
     @ObservationIgnored
     private var shellDetectedAIPaneTabsSkippingLaunchCommand: Set<String> = []
+    @ObservationIgnored
+    private let tmuxIntegrationEnabled: Bool
+    @ObservationIgnored
+    private let tmuxSocketName: String
     private var suppressProjectSessionAutosave = true
 
     func focusTerminal() {
@@ -192,6 +196,8 @@ final class AppStore {
         let defaults = UserDefaults.standard
         let loadedProjects = Self.loadProjects()
         let storedLastProjectId = defaults.string(forKey: StorageKeys.lastSelectedProjectId)
+        self.tmuxIntegrationEnabled = Self.detectTmuxAvailability()
+        self.tmuxSocketName = Self.tmuxSocketName()
 
         self.projects = loadedProjects
         self.projectSetups = Self.loadProjectSetups()
@@ -584,6 +590,18 @@ final class AppStore {
         guard let kind = ManagedAIPaneKind(submittedLine: line) else { return }
 
         registerShellDetectedAIPane(kind, for: tabId)
+    }
+
+    func terminalLaunchCommand(for tab: AppTab, project: Project) -> String? {
+        if tab.isShell, tab.command == nil, let paneId = tab.projectSetupPaneId, tmuxIntegrationEnabled {
+            return tmuxAttachCommand(
+                project: project,
+                paneId: paneId,
+                workingDirectory: tab.workingDirectory ?? project.path
+            )
+        }
+
+        return tab.command
     }
 
     // MARK: - Actions
@@ -1318,6 +1336,7 @@ final class AppStore {
 
     func removeProject(_ id: String) {
         let tabIds = tabs.filter { $0.projectId == id }.map(\.id)
+        let paneIds = tabs.filter { $0.projectId == id }.compactMap(\.projectSetupPaneId)
         projects.removeAll { $0.id == id }
         projectSetups[id] = nil
         tabs.removeAll { $0.projectId == id }
@@ -1347,11 +1366,13 @@ final class AppStore {
         DispatchQueue.main.async {
             surfaceManager?.destroySurfaces(tabIds: tabIds)
         }
+        destroyTmuxProjectSession(projectId: id, paneIds: paneIds)
     }
 
     func closeTab(_ id: String) {
         guard let tab = tabsById[id] else { return }
         let projectId = tab.projectId
+        let paneId = tab.projectSetupPaneId
 
         // If this was a full-width tab, restore the saved layout and clean up
         if fullWidthTabIds.contains(id) {
@@ -1370,6 +1391,9 @@ final class AppStore {
                 } else {
                     activeTabId = nil
                 }
+            }
+            if let paneId, shouldUseTmux(for: tab) {
+                destroyTmuxPane(projectId: projectId, paneId: paneId)
             }
             return
         }
@@ -1442,6 +1466,9 @@ final class AppStore {
         let surfaceManager = surfaceManager
         DispatchQueue.main.async {
             surfaceManager?.destroySurface(tabId: id)
+        }
+        if let paneId, shouldUseTmux(for: tab) {
+            destroyTmuxPane(projectId: projectId, paneId: paneId)
         }
     }
 
@@ -1556,7 +1583,7 @@ final class AppStore {
         for column in cols {
             for tabId in column.tabIds {
                 guard let tab = lookup[tabId] else { continue }
-                let paneId = "pane-\(nextPaneIndex)"
+                let paneId = tab.projectSetupPaneId ?? "pane-\(nextPaneIndex)"
                 nextPaneIndex += 1
                 panes.append(
                     ProjectSetupPane(
@@ -1704,7 +1731,7 @@ final class AppStore {
             chatThreadId: nil,
             role: role,
             workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId
+            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
         )
     }
 
@@ -1726,7 +1753,7 @@ final class AppStore {
             chatThreadId: threadId,
             role: role,
             workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId
+            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
         )
     }
 
@@ -1774,6 +1801,101 @@ final class AppStore {
             shellDetectedAIPaneKinds.removeValue(forKey: tabId)
             shellDetectedAIPaneTabsSkippingLaunchCommand.remove(tabId)
         }
+    }
+
+    private func shouldUseTmux(for tab: AppTab) -> Bool {
+        tmuxIntegrationEnabled && tab.isShell && tab.command == nil && tab.projectSetupPaneId != nil
+    }
+
+    private func makeProjectSetupPaneId() -> String {
+        UUID().uuidString.lowercased()
+    }
+
+    private func tmuxAttachCommand(project: Project, paneId: String, workingDirectory: String) -> String {
+        let baseSession = tmuxBaseSessionName(for: project.id)
+        let clientSession = tmuxClientSessionName(projectId: project.id, paneId: paneId)
+        let windowName = tmuxWindowName(for: paneId)
+        let tmuxPrefix = "TMUX='' tmux -L \(shellQuote(tmuxSocketName))"
+        let loginShell = shellQuote(shell)
+        let shellCommand = "env -u TMUX \(loginShell) -l"
+        let baseTarget = shellQuote(baseSession)
+        let clientTarget = shellQuote(clientSession)
+        let windowTarget = shellQuote(windowName)
+        let sessionWindowTarget = shellQuote("\(clientSession):\(windowName)")
+        let workingDirectoryArg = shellQuote(workingDirectory)
+
+        let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
+        let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
+        let ensureClientSession = "\(tmuxPrefix) has-session -t \(clientTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -t \(baseTarget) -s \(clientTarget)"
+        let configureClient = "\(tmuxPrefix) set-option -t \(clientTarget) status off >/dev/null 2>&1; \(tmuxPrefix) set-option -t \(clientTarget) allow-rename off >/dev/null 2>&1"
+        let selectWindow = "\(tmuxPrefix) select-window -t \(sessionWindowTarget) >/dev/null 2>&1"
+        let attachClient = "exec \(tmuxPrefix) attach-session -t \(clientTarget)"
+
+        return [ensureBaseSession, ensureWindow, ensureClientSession, configureClient, selectWindow, attachClient]
+            .joined(separator: "; ")
+    }
+
+    private func destroyTmuxPane(projectId: String, paneId: String) {
+        guard tmuxIntegrationEnabled else { return }
+        let baseSession = tmuxBaseSessionName(for: projectId)
+        let clientSession = tmuxClientSessionName(projectId: projectId, paneId: paneId)
+        let windowName = tmuxWindowName(for: paneId)
+
+        runDetachedShellCommand("""
+        TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(clientSession)) >/dev/null 2>&1 || true
+        TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-window -t \(shellQuote("\(baseSession):\(windowName)")) >/dev/null 2>&1 || true
+        """)
+    }
+
+    private func destroyTmuxProjectSession(projectId: String, paneIds: [String]) {
+        guard tmuxIntegrationEnabled else { return }
+        let baseSession = tmuxBaseSessionName(for: projectId)
+        let clientKills = paneIds.map {
+            "TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
+        }
+
+        runDetachedShellCommand((clientKills + [
+            "TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(baseSession)) >/dev/null 2>&1 || true",
+        ]).joined(separator: "\n"))
+    }
+
+    private func runDetachedShellCommand(_ command: String) {
+        let shellPath = "/bin/zsh"
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: shellPath)
+        task.arguments = ["-lc", command]
+        try? task.run()
+    }
+
+    private func tmuxBaseSessionName(for projectId: String) -> String {
+        "blink-\(projectId)"
+    }
+
+    private func tmuxClientSessionName(projectId: String, paneId: String) -> String {
+        "blink-\(projectId)-\(paneId)"
+    }
+
+    private func tmuxWindowName(for paneId: String) -> String {
+        "pane-\(paneId)"
+    }
+
+    private static func tmuxSocketName() -> String {
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.blink.app"
+        return bundleId.replacingOccurrences(of: ".", with: "-")
+    }
+
+    private static func detectTmuxAvailability() -> Bool {
+        let candidates = [
+            "/opt/homebrew/bin/tmux",
+            "/usr/local/bin/tmux",
+            "/usr/bin/tmux",
+        ]
+
+        return candidates.contains { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 
     private func registerShellDetectedAIPane(_ kind: ManagedAIPaneKind, for tabId: String) {
