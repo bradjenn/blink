@@ -250,7 +250,7 @@ struct CommandPalette: View {
                 keywords: ["claude", "anthropic", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
-                store.openOrFocusCommandTabForActiveProject(command: "claude", label: "Claude Code")
+                store.openManagedAIPane(.claude)
             },
             PaletteCommand(
                 id: "open-claude-yolo",
@@ -261,10 +261,7 @@ struct CommandPalette: View {
                 keywords: ["claude", "yolo", "anthropic", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
-                store.openOrFocusCommandTabForActiveProject(
-                    command: "claude --dangerously-skip-permissions",
-                    label: "Claude Code"
-                )
+                store.openManagedAIPane(.claudeYolo)
             },
             PaletteCommand(
                 id: "open-codex",
@@ -275,7 +272,7 @@ struct CommandPalette: View {
                 keywords: ["codex", "openai", "ai", "assistant", "agent"],
                 isEnabled: hasProject
             ) {
-                store.openOrFocusCommandTabForActiveProject(command: "codex", label: "Codex")
+                store.openManagedAIPane(.codex)
             },
             PaletteCommand(
                 id: "open-open-code",

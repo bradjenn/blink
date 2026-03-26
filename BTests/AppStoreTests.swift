@@ -16,6 +16,7 @@ final class AppStoreTests: XCTestCase {
         "blink.lastActiveTabs",
         "blink.workspaceViewportOffsets",
         "blink.columns",
+        "blink.projectSetups",
     ]
 
     private var savedDefaults: [String: Any?] = [:]
@@ -44,6 +45,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNil(store.activeProjectId)
         XCTAssertNil(store.activeTabId)
         XCTAssertTrue(store.sidebarVisible)
+        XCTAssertTrue(store.expandedProjectIds.isEmpty)
     }
 
     func testSetActiveProjectActivatesFirstTab() {
@@ -133,6 +135,149 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.tabs.count, 2)
     }
 
+    func testManagedCommandTabStartsRunning() {
+        let store = makeStore()
+
+        store.openOrFocusCommandTab(projectId: "1", command: "npm run dev", label: "Dev Server")
+
+        let commandTabs = store.projectTabs(for: "1").filter { $0.command == "npm run dev" }
+        XCTAssertEqual(commandTabs.count, 1)
+        XCTAssertEqual(store.managedCommandStatus(for: commandTabs[0].id), .running)
+    }
+
+    func testManagedCommandExitStopsTabInsteadOfClosingIt() {
+        let store = makeStore()
+        store.openOrFocusCommandTab(projectId: "1", command: "npm run dev", label: "Dev Server")
+        let tabId = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "npm run dev" })?.id)
+
+        let handled = store.handleProcessExit(for: tabId)
+
+        XCTAssertTrue(handled)
+        XCTAssertNotNil(store.tabsById[tabId])
+        XCTAssertEqual(store.managedCommandStatus(for: tabId), .stopped)
+    }
+
+    func testOpenOrFocusCommandTabRestartsStoppedPaneWithoutDuplicatingIt() {
+        let store = makeStore()
+        store.openOrFocusCommandTab(projectId: "1", command: "npm run dev", label: "Dev Server")
+        let tabId = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "npm run dev" })?.id)
+        _ = store.handleProcessExit(for: tabId)
+
+        store.openOrFocusCommandTab(projectId: "1", command: "npm run dev", label: "Dev Server")
+
+        let commandTabs = store.projectTabs(for: "1").filter { $0.command == "npm run dev" }
+        XCTAssertEqual(commandTabs.count, 1)
+        XCTAssertEqual(commandTabs[0].id, tabId)
+        XCTAssertEqual(store.managedCommandStatus(for: tabId), .running)
+    }
+
+    func testOpenManagedAIPaneUsesProviderNameUntilFirstPromptIsSubmitted() {
+        let store = makeStore()
+        store.openManagedAIPane(.codex, projectId: "1")
+
+        let tab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "codex" }))
+        XCTAssertEqual(tab.label, "Codex")
+        XCTAssertEqual(tab.defaultLabel, "Codex")
+
+        let applied = store.applyManagedAIPromptTitleIfNeeded("Fix autosave restore", for: tab.id)
+
+        XCTAssertTrue(applied)
+        let updatedTab = try! XCTUnwrap(store.tabsById[tab.id])
+        XCTAssertEqual(updatedTab.label, "Fix autosave restore")
+        XCTAssertEqual(updatedTab.defaultLabel, "Fix autosave restore")
+    }
+
+    func testManagedAIPromptTitleIsOnlyAppliedOnce() {
+        let store = makeStore()
+        store.activeProjectId = "2"
+        store.openManagedAIPane(.claude)
+
+        let tab = try! XCTUnwrap(store.projectTabs(for: "2").first(where: { $0.command == "claude" }))
+        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Review workspace restore", for: tab.id))
+        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("Something else", for: tab.id))
+
+        let updatedTab = try! XCTUnwrap(store.tabsById[tab.id])
+        XCTAssertEqual(updatedTab.label, "Review workspace restore")
+        XCTAssertEqual(updatedTab.defaultLabel, "Review workspace restore")
+    }
+
+    func testShellStartedCodexAdoptsFirstPromptTitleAndRevertsOnShellPrompt() {
+        let store = makeStore()
+        let tabId = "t1"
+
+        store.handleTerminalLineSubmission("codex", for: tabId)
+
+        var updatedTab = try! XCTUnwrap(store.tabsById[tabId])
+        XCTAssertEqual(updatedTab.label, "Codex")
+        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
+
+        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("codex", for: tabId))
+        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Fix autosave restore", for: tabId))
+
+        updatedTab = try! XCTUnwrap(store.tabsById[tabId])
+        XCTAssertEqual(updatedTab.label, "Fix autosave restore")
+        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
+
+        store.handleTerminalTitleUpdate("zsh", for: tabId)
+
+        updatedTab = try! XCTUnwrap(store.tabsById[tabId])
+        XCTAssertEqual(updatedTab.label, "Terminal 1")
+        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
+    }
+
+    func testShellStartedClaudePromptTitleIsNotClobberedByLaterProviderTitles() {
+        let store = makeStore()
+        let tabId = "t1"
+
+        store.handleTerminalLineSubmission("claude", for: tabId)
+        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("claude", for: tabId))
+        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Review the sidebar tree", for: tabId))
+
+        store.handleTerminalTitleUpdate("claude", for: tabId)
+
+        let updatedTab = try! XCTUnwrap(store.tabsById[tabId])
+        XCTAssertEqual(updatedTab.label, "Review the sidebar tree")
+        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
+    }
+
+    func testShellStartedClaudeYoloIsDetectedFromSubmittedLine() {
+        let store = makeStore()
+        let tabId = "t1"
+
+        store.handleTerminalLineSubmission("claude --dangerously-skip-permissions", for: tabId)
+
+        let updatedTab = try! XCTUnwrap(store.tabsById[tabId])
+        XCTAssertEqual(updatedTab.label, "Claude Code")
+        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
+    }
+
+    func testRestoredManagedAIPaneCanStillAdoptFirstPromptTitle() {
+        let store = makeStore()
+        store.openManagedAIPane(.claude, projectId: "1")
+
+        let originalTab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "claude" }))
+        let originalSetup = try! XCTUnwrap(store.projectSetup(for: "1"))
+
+        store.tabs.removeAll()
+        store.columns["1"] = []
+        store.activeProjectId = "1"
+        store.activeTabId = nil
+        store.projectSetups["1"] = originalSetup
+
+        store.restoreProjectSetup(for: "1")
+
+        let restoredTab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "claude" }))
+        XCTAssertNotEqual(restoredTab.id, originalTab.id)
+        XCTAssertEqual(restoredTab.label, "Claude Code")
+
+        let applied = store.applyManagedAIPromptTitleIfNeeded("Audit the window resizing regression", for: restoredTab.id)
+
+        XCTAssertTrue(applied)
+        let updatedTab = try! XCTUnwrap(store.tabsById[restoredTab.id])
+        XCTAssertEqual(updatedTab.label, "Audit the window resizing regression")
+        XCTAssertEqual(updatedTab.defaultLabel, "Audit the window resizing regression")
+    }
+
     func testHideTitleBarPersists() {
         XCTAssertFalse(AppStore().hideTitleBar)
 
@@ -161,6 +306,55 @@ final class AppStoreTests: XCTestCase {
         store.setWorkspaceViewportOffset(184, for: "1")
 
         XCTAssertEqual(AppStore().workspaceViewportOffset(for: "1"), 184, accuracy: 0.001)
+    }
+
+    func testProjectSessionAutosavesCurrentLayout() {
+        let store = makeStore()
+        let setup = store.projectSetup(for: "1")
+
+        XCTAssertNotNil(setup)
+        XCTAssertEqual(setup?.columns.count, 2)
+        XCTAssertEqual(setup?.panes.count, 2)
+        XCTAssertEqual(setup?.panes.map(\.label), ["Terminal 1", "Terminal 2"])
+    }
+
+    func testRestoreProjectSetupRebuildsTabsAndColumns() {
+        let store = makeStore()
+        XCTAssertNotNil(store.projectSetup(for: "1"))
+
+        store.tabs.removeAll { $0.projectId == "1" }
+        store.columns["1"] = []
+        store.activeProjectId = "1"
+        store.activeTabId = nil
+
+        store.restoreProjectSetup(for: "1")
+
+        XCTAssertEqual(store.projectTabs(for: "1").count, 2)
+        XCTAssertEqual(store.projectColumns(for: "1").count, 2)
+        XCTAssertNotNil(store.activeTabId)
+    }
+
+    func testOpenProjectSessionRestoresAutosavedSessionWhenNoLiveTabs() {
+        let store = makeStore()
+        XCTAssertNotNil(store.projectSetup(for: "1"))
+
+        store.tabs.removeAll { $0.projectId == "1" }
+        store.columns["1"] = []
+
+        store.openProjectSession("1")
+
+        XCTAssertEqual(store.projectTabs(for: "1").count, 2)
+        XCTAssertEqual(store.projectColumns(for: "1").count, 2)
+    }
+
+    func testEmptyRuntimeDoesNotEraseAutosavedProjectSession() {
+        let store = makeStore()
+        let savedSetup = try! XCTUnwrap(store.projectSetup(for: "1"))
+
+        store.tabs.removeAll { $0.projectId == "1" }
+        store.columns["1"] = []
+
+        XCTAssertEqual(store.projectSetup(for: "1"), savedSetup)
     }
 
     func testFocusLeftFromFirstColumnGoesToSidebar() {

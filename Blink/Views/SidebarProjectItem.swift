@@ -5,87 +5,284 @@ struct SidebarProjectItem: View {
 
     let project: Project
     let isActive: Bool
+    let isSelected: Bool
+    let isExpanded: Bool
     let terminalCount: Int
     let hasUnread: Bool
-    let onSelect: () -> Void
+    let tabs: [AppTab]
+    let selectedTabId: String?
+    let activeTabId: String?
+    let onSelect: (Bool) -> Void
+    let onToggleExpansion: () -> Void
+    let onSelectTab: (String, Bool) -> Void
     let onRemove: () -> Void
 
     @State private var isHovered = false
-    @State private var isRemoveHovered = false
+    @State private var showContextMenu = false
 
     var body: some View {
-        Button(action: onSelect) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: Layout.sidebarItemGap) {
-                // Project avatar
-                ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
-                    .scaleEffect(isHovered ? 1.1 : 1.0)
-                    .animation(.easeInOut(duration: 0.15), value: isHovered)
+                Button(action: { onSelect(true) }) {
+                    HStack(spacing: Layout.sidebarItemGap) {
+                        ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
+                            .scaleEffect(isHovered ? 1.1 : 1.0)
+                            .animation(.easeInOut(duration: 0.15), value: isHovered)
 
-                // Name + path
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(project.name)
-                        .font(Fonts.primary(size: 15, weight: .medium))
-                        .foregroundStyle(isActive ? theme.text : theme.textMuted)
-                        .lineLimit(1)
-
-                    Text(project.displayPath)
-                        .font(Fonts.primary(size: 13))
-                        .foregroundStyle(theme.textDim)
-                        .lineLimit(1)
+                        Text(project.name)
+                            .font(Fonts.primary(size: 15, weight: .medium))
+                            .foregroundStyle(isSelected ? theme.text : (isActive ? theme.text : theme.textMuted))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
 
-                // Terminal count + pulse dot (pulses when unread activity)
-                if terminalCount > 0 {
-                    HStack(spacing: 4) {
-                        if hasUnread {
-                            PulseDot(color: theme.accent, glowColor: theme.accentGlow)
-                        } else {
-                            Circle()
-                                .fill(theme.accent)
-                                .frame(width: 6, height: 6)
+                HStack(spacing: 8) {
+                    if hasUnread {
+                        PulseDot(color: theme.accent, glowColor: theme.accentGlow)
+                    }
+
+                    if !tabs.isEmpty {
+                        Button(action: onToggleExpansion) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.textDim)
+                                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                                .frame(width: 14, height: 14)
+                                .contentShape(Rectangle())
                         }
-                        if terminalCount > 1 {
-                            Text("\(terminalCount)")
-                                .font(Fonts.primary(size: 12))
-                                .foregroundStyle(theme.accent)
-                        }
+                        .buttonStyle(.plain)
+                        .pointerCursor()
                     }
                 }
-
-                // Remove button — only visible on hover
-                Button(action: onRemove) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textDim)
-                        .padding(4)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Remove Project")
-                .buttonStyle(.plain)
-                .opacity(isHovered ? 1 : 0)
-                .animation(.easeInOut(duration: 0.1), value: isHovered)
-                .onHover { isRemoveHovered = $0 }
+                .frame(minWidth: 14, alignment: .trailing)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Layout.sidebarItemPadding)
             .background(
-                isActive
-                    ? theme.accent.opacity(0.04)
-                    : (isHovered ? theme.accent2.opacity(0.04) : Color.clear)
+                isSelected
+                    ? theme.accent.opacity(0.10)
+                    : (isActive ? theme.accent.opacity(0.04) : (isHovered ? theme.accent2.opacity(0.04) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? theme.accent.opacity(0.32) : Color.clear, lineWidth: 1)
+                    .padding(.leading, Layout.sidebarItemBorderWidth + 6)
             )
             .contentShape(Rectangle())
+            .background(
+                SecondaryClickTrigger {
+                    showContextMenu = true
+                }
+            )
+            .backgroundPopover(isPresented: $showContextMenu) {
+                SidebarProjectContextMenu {
+                    showContextMenu = false
+                    onRemove()
+                }
+            }
+
+            if isExpanded && !tabs.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    Rectangle()
+                        .fill(theme.border.opacity(0.45))
+                        .frame(width: 1)
+                        .padding(.leading, 11)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(tabs) { tab in
+                            SidebarProjectWindowItem(
+                                tab: tab,
+                                isActive: activeTabId == tab.id,
+                                isSelected: selectedTabId == tab.id,
+                                onSelect: { onSelectTab(tab.id, true) }
+                            )
+                        }
+                    }
+                }
+                .padding(.leading, 17)
+                .padding(.trailing, 10)
+                .padding(.bottom, 8)
+            }
         }
-        .buttonStyle(.plain)
-        // Left border indicator — flush to edge, outside padding (matches CSS border-left)
+        .clipped()
         .overlay(alignment: .leading) {
             theme.accent
                 .frame(width: Layout.sidebarItemBorderWidth)
-                .opacity(isActive ? 1 : 0)
+                .opacity(isActive || (activeTabId != nil && !isExpanded) ? 1 : 0)
         }
         .animation(.easeInOut(duration: 0.1), value: isHovered)
         .onHover { isHovered = $0 }
         .pointerCursor()
+    }
+}
+
+private struct SidebarProjectContextMenu: View {
+    @Environment(\.theme) private var theme
+
+    let onRemove: () -> Void
+
+    @State private var isRemoveHovered = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onRemove) {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textDim)
+                        .frame(width: 16)
+                    Text("Remove Project")
+                        .font(Fonts.primary(size: 13))
+                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textMuted)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(isRemoveHovered ? theme.danger.opacity(0.10) : Color.clear)
+            .onHover { isRemoveHovered = $0 }
+            .pointerCursor()
+        }
+        .frame(width: 180)
+        .background(theme.bg)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
+        .padding(.top, 4)
+    }
+}
+
+private struct SecondaryClickTrigger: NSViewRepresentable {
+    let onSecondaryClick: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.postsFrameChangedNotifications = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onSecondaryClick = onSecondaryClick
+        context.coordinator.installIfNeeded(from: nsView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSecondaryClick: onSecondaryClick)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    final class Coordinator: NSObject {
+        var onSecondaryClick: () -> Void
+        weak var attachedView: NSView?
+        var monitor: Any?
+
+        init(onSecondaryClick: @escaping () -> Void) {
+            self.onSecondaryClick = onSecondaryClick
+        }
+
+        func installIfNeeded(from anchorView: NSView) {
+            DispatchQueue.main.async { [weak self, weak anchorView] in
+                guard let self, let anchorView else { return }
+                guard let hostView = anchorView.superview else { return }
+
+                if self.attachedView !== hostView {
+                    self.detach()
+                    self.attachedView = hostView
+                    self.monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
+                        guard let self,
+                              let attachedView = self.attachedView,
+                              event.window === attachedView.window else {
+                            return event
+                        }
+
+                        let location = attachedView.convert(event.locationInWindow, from: nil)
+                        guard attachedView.bounds.contains(location) else {
+                            return event
+                        }
+
+                        self.onSecondaryClick()
+                        return nil
+                    }
+                }
+            }
+        }
+
+        func detach() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+            monitor = nil
+            attachedView = nil
+        }
+    }
+}
+
+private struct SidebarProjectWindowItem: View {
+    @Environment(\.theme) private var theme
+
+    let tab: AppTab
+    let isActive: Bool
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                leadingIcon
+                    .frame(width: 12, height: 12)
+
+                Text(tab.label)
+                    .font(Fonts.primary(size: 12.5))
+                    .foregroundStyle(isSelected ? theme.text : (isActive ? theme.accent : (isHovered ? theme.textMuted : theme.textDim)))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isSelected ? theme.accent.opacity(0.10) : (isActive ? theme.accent.opacity(0.05) : Color.clear))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+    }
+
+    @ViewBuilder
+    private var leadingIcon: some View {
+        if let aiKind = tab.managedAIPaneKind {
+            switch aiKind {
+            case .codex:
+                BundledSVGIcon(name: "codex-icon")
+                    .opacity(isActive ? 1 : 0.82)
+            case .claude, .claudeYolo:
+                ClaudeIcon()
+                    .opacity(isActive ? 1 : 0.82)
+            }
+        } else if tab.isChat {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        } else if tab.command == nil {
+            Image(systemName: "terminal")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        } else {
+            Image(systemName: "play.rectangle")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        }
     }
 }
 

@@ -146,15 +146,7 @@ final class GhosttyApp {
                     ghostty.titleDebounceTimers[tabId] = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak ghostty] _ in
                         DispatchQueue.main.async {
                             guard let store = ghostty?.store else { return }
-                            let isCommandTab = store.tabsById[tabId]?.command != nil
-                            if !isCommandTab {
-                                if let displayName = TabTitleFilter.displayName(for: titleStr) {
-                                    store.setTabTitle(tabId, title: displayName)
-                                } else if TabTitleFilter.isShellPrompt(titleStr) {
-                                    store.revertTabTitle(tabId)
-                                }
-                            }
-                            store.markUnread(tabId)
+                            store.handleTerminalTitleUpdate(titleStr, for: tabId)
                         }
                     }
                 }

@@ -81,6 +81,7 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
     let projectId: String
     var title: String
     var provider: ChatProvider
+    var lastChatProvider: ChatProvider
     var planningFormat: PlanningFormat
     var secondOpinionStrategy: SecondOpinionStrategy
     var selectedPlanningRoute: PlanningRoute?
@@ -88,6 +89,8 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
     var providerModels: [String: String]
     var providerSessionIds: [String: String]
     var providerBootstrapSummaries: [String: String]
+    var permissionLevel: PermissionLevel
+    var effortLevel: EffortLevel
     var lastError: String?
     let createdAt: Date
     var updatedAt: Date
@@ -97,6 +100,7 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         projectId: String,
         title: String,
         provider: ChatProvider = .codex,
+        lastChatProvider: ChatProvider? = nil,
         planningFormat: PlanningFormat = .independent,
         secondOpinionStrategy: SecondOpinionStrategy = .independentFirst,
         selectedPlanningRoute: PlanningRoute? = nil,
@@ -104,6 +108,8 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         providerModels: [String: String] = [:],
         providerSessionIds: [String: String] = [:],
         providerBootstrapSummaries: [String: String] = [:],
+        permissionLevel: PermissionLevel = .readOnly,
+        effortLevel: EffortLevel = .high,
         lastError: String?,
         createdAt: Date,
         updatedAt: Date
@@ -112,6 +118,7 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         self.projectId = projectId
         self.title = title
         self.provider = provider
+        self.lastChatProvider = Self.resolveChatProvider(lastChatProvider ?? provider)
         self.planningFormat = planningFormat
         self.secondOpinionStrategy = secondOpinionStrategy
         self.selectedPlanningRoute = selectedPlanningRoute
@@ -119,6 +126,8 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         self.providerModels = providerModels
         self.providerSessionIds = providerSessionIds
         self.providerBootstrapSummaries = providerBootstrapSummaries
+        self.permissionLevel = permissionLevel
+        self.effortLevel = effortLevel
         self.lastError = lastError
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -129,6 +138,7 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         case projectId
         case title
         case provider
+        case lastChatProvider
         case planningFormat
         case secondOpinionStrategy
         case selectedPlanningRoute
@@ -136,6 +146,8 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         case providerModels
         case providerSessionIds
         case providerBootstrapSummaries
+        case permissionLevel
+        case effortLevel
         case providerSessionId
         case lastError
         case createdAt
@@ -151,6 +163,10 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         provider = ChatProvider(
             rawValue: try container.decodeIfPresent(String.self, forKey: .provider) ?? ChatProvider.codex.rawValue
         ) ?? .codex
+        lastChatProvider = Self.resolveChatProvider(
+            ChatProvider(rawValue: try container.decodeIfPresent(String.self, forKey: .lastChatProvider) ?? "")
+                ?? provider
+        )
         let decodedLegacyStrategy =
             try container.decodeIfPresent(SecondOpinionStrategy.self, forKey: .secondOpinionStrategy)
             ?? (provider == .secondOpinion ? .codexFirst : .independentFirst)
@@ -174,6 +190,12 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         providerBootstrapSummaries =
             try container.decodeIfPresent([String: String].self, forKey: .providerBootstrapSummaries)
             ?? [:]
+        permissionLevel =
+            try container.decodeIfPresent(PermissionLevel.self, forKey: .permissionLevel)
+            ?? .readOnly
+        effortLevel =
+            try container.decodeIfPresent(EffortLevel.self, forKey: .effortLevel)
+            ?? .high
         let legacySessionId =
             try container.decodeIfPresent(String.self, forKey: .providerSessionId)
             ?? container.decodeIfPresent(String.self, forKey: .lastResponseId)
@@ -191,6 +213,7 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         try container.encode(projectId, forKey: .projectId)
         try container.encode(title, forKey: .title)
         try container.encode(provider.rawValue, forKey: .provider)
+        try container.encode(lastChatProvider.rawValue, forKey: .lastChatProvider)
         try container.encode(planningFormat, forKey: .planningFormat)
         try container.encode(secondOpinionStrategy, forKey: .secondOpinionStrategy)
         try container.encodeIfPresent(selectedPlanningRoute, forKey: .selectedPlanningRoute)
@@ -198,6 +221,8 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         try container.encode(providerModels, forKey: .providerModels)
         try container.encode(providerSessionIds, forKey: .providerSessionIds)
         try container.encode(providerBootstrapSummaries, forKey: .providerBootstrapSummaries)
+        try container.encode(permissionLevel, forKey: .permissionLevel)
+        try container.encode(effortLevel, forKey: .effortLevel)
         try container.encodeIfPresent(lastError, forKey: .lastError)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
@@ -238,9 +263,21 @@ struct ChatThread: Identifiable, Equatable, Hashable, Codable {
         providerBootstrapSummaries[provider.rawValue] = summary
     }
 
+    mutating func setActiveProvider(_ provider: ChatProvider) {
+        self.provider = provider
+        if provider != .secondOpinion {
+            lastChatProvider = provider
+        }
+        model = Self.legacyModelValue(for: self.provider, providerModels: providerModels)
+    }
+
     private static func legacyModelValue(for provider: ChatProvider, providerModels: [String: String]) -> String {
         let legacyProvider = provider == .secondOpinion ? ChatProvider.codex : provider
         return providerModels[legacyProvider.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func resolveChatProvider(_ provider: ChatProvider) -> ChatProvider {
+        provider == .secondOpinion ? .codex : provider
     }
 
     private static func legacyPlanningFormat(for strategy: SecondOpinionStrategy) -> PlanningFormat {

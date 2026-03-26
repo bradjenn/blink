@@ -140,6 +140,7 @@ struct ChatTurnActivity: Equatable {
 final class ChatStore {
     private(set) var threads: [ChatThread] = []
     private(set) var messagesByThreadId: [String: [ChatMessage]] = [:]
+    private(set) var runtimeEventsByMessageId: [String: [ChatMessageRuntimeEvent]] = [:]
     private(set) var sendingThreadIds: Set<String> = []
     private(set) var activityByThreadId: [String: ChatTurnActivity] = [:]
     private(set) var loaded = false
@@ -163,9 +164,19 @@ final class ChatStore {
             for threadId in messagesByThreadId.keys {
                 messagesByThreadId[threadId]?.sort { $0.createdAt < $1.createdAt }
             }
+            runtimeEventsByMessageId = Dictionary(grouping: snapshot.runtimeEvents, by: \.messageId)
+            for messageId in runtimeEventsByMessageId.keys {
+                runtimeEventsByMessageId[messageId]?.sort { left, right in
+                    if left.createdAt == right.createdAt {
+                        return left.id < right.id
+                    }
+                    return left.createdAt < right.createdAt
+                }
+            }
         } catch {
             threads = []
             messagesByThreadId = [:]
+            runtimeEventsByMessageId = [:]
         }
 
         loaded = true
@@ -177,6 +188,14 @@ final class ChatStore {
 
     func messages(for threadId: String) -> [ChatMessage] {
         messagesByThreadId[threadId] ?? []
+    }
+
+    func workItems(for messageId: String) -> [ChatMessageWorkItem] {
+        runtimeEvents(for: messageId).compactMap(\.workItem)
+    }
+
+    func runtimeEvents(for messageId: String) -> [ChatMessageRuntimeEvent] {
+        runtimeEventsByMessageId[messageId] ?? []
     }
 
     func activity(for threadId: String) -> ChatTurnActivity? {
@@ -215,7 +234,8 @@ final class ChatStore {
     func createThread(
         project: Project,
         model: String,
-        provider: ChatProvider = .codex
+        provider: ChatProvider = .codex,
+        permissionLevel: PermissionLevel = .readOnly
     ) async -> ChatThread {
         let now = Date()
         var thread = ChatThread(
@@ -223,12 +243,14 @@ final class ChatStore {
             projectId: project.id,
             title: defaultTitle(for: provider),
             provider: provider,
+            lastChatProvider: provider == .secondOpinion ? .codex : provider,
             planningFormat: .independent,
             secondOpinionStrategy: .independentFirst,
             model: model,
             providerModels: [:],
             providerSessionIds: [:],
             providerBootstrapSummaries: [:],
+            permissionLevel: permissionLevel,
             lastError: nil,
             createdAt: now,
             updatedAt: now
@@ -240,9 +262,14 @@ final class ChatStore {
     }
 
     func deleteThread(_ threadId: String) async {
+        let messageIds = Set(messages(for: threadId).map(\.id))
         threads.removeAll { $0.id == threadId }
         messagesByThreadId[threadId] = nil
+        for messageId in messageIds {
+            runtimeEventsByMessageId[messageId] = nil
+        }
         sendingThreadIds.remove(threadId)
+        activityByThreadId[threadId] = nil
         await persist()
     }
 
@@ -253,6 +280,24 @@ final class ChatStore {
         guard threads[index].model(for: provider) != trimmedModel else { return }
 
         threads[index].setModel(trimmedModel, for: provider)
+        await persist()
+    }
+
+    func updateThreadEffortLevel(_ level: EffortLevel, for threadId: String) async {
+        guard let index = threads.firstIndex(where: { $0.id == threadId }) else { return }
+        guard threads[index].effortLevel != level else { return }
+
+        threads[index].effortLevel = level
+        threads[index].updatedAt = Date()
+        await persist()
+    }
+
+    func updateThreadPermissionLevel(_ level: PermissionLevel, for threadId: String) async {
+        guard let index = threads.firstIndex(where: { $0.id == threadId }) else { return }
+        guard threads[index].permissionLevel != level else { return }
+
+        threads[index].permissionLevel = level
+        threads[index].updatedAt = Date()
         await persist()
     }
 
@@ -307,7 +352,12 @@ final class ChatStore {
             provider: provider,
             fallbackModel: fallbackModel.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        let executionThread = await createThread(project: project, model: resolvedModel, provider: provider)
+        let executionThread = await createThread(
+            project: project,
+            model: resolvedModel,
+            provider: provider,
+            permissionLevel: planningThread.permissionLevel
+        )
 
         if let executionIndex = threads.firstIndex(where: { $0.id == executionThread.id }) {
             let bootstrap = buildImplementationBootstrapSummary(
@@ -336,10 +386,9 @@ final class ChatStore {
             threads[index].setBootstrapSummary(summary.isEmpty ? nil : summary, for: provider)
         }
 
-        threads[index].provider = provider
-        threads[index].model = threads[index].model(for: provider == .secondOpinion ? .codex : provider)
+        threads[index].setActiveProvider(provider)
         threads[index].lastError = nil
-        if threads[index].title == defaultTitle(for: .codex) || threads[index].title == defaultTitle(for: .secondOpinion) {
+        if isDefaultTitle(threads[index].title) {
             threads[index].title = defaultTitle(for: provider)
         }
         await persist()
@@ -349,6 +398,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment] = [],
         fallbackModel: String,
         fallbackClaudeModel: String = ""
     ) async throws -> ChatThread {
@@ -360,7 +410,7 @@ final class ChatStore {
         }
 
         let prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty else {
+        guard !prompt.isEmpty || !attachments.isEmpty else {
             throw ChatProviderError.invalidRequest("Message cannot be empty.")
         }
 
@@ -408,8 +458,13 @@ final class ChatStore {
             activityByThreadId[threadId] = nil
         }
 
-        let userMessage = appendMessage(threadId: threadId, role: .user, content: prompt)
-        if threads[index].title == defaultTitle(for: threads[index].provider) {
+        let userMessage = appendMessage(
+            threadId: threadId,
+            role: .user,
+            content: prompt,
+            attachments: attachments
+        )
+        if !prompt.isEmpty, threads[index].title == defaultTitle(for: threads[index].provider) {
             threads[index].title = Self.title(from: prompt)
         }
         threads[index].updatedAt = userMessage.createdAt
@@ -423,13 +478,15 @@ final class ChatStore {
                     threadId: threadId,
                     project: project,
                     prompt: prompt,
-                    model: resolvedModel
+                    model: resolvedModel,
+                    attachments: attachments
                 )
             case .secondOpinion:
                 return try await runSecondOpinionTurn(
                     threadId: threadId,
                     project: project,
                     prompt: prompt,
+                    attachments: attachments,
                     codexModel: resolvedModel,
                     claudeModel: resolvedClaudeModel,
                     format: threads[index].planningFormat,
@@ -461,7 +518,8 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
-        model: String
+        model: String,
+        attachments: [ChatAttachment]
     ) async throws -> ChatThread {
         guard let currentThread = thread(threadId) else {
             throw ChatProviderError.invalidRequest("Chat thread not found.")
@@ -470,15 +528,20 @@ final class ChatStore {
         let effectivePrompt = bootstrapPromptIfNeeded(
             thread: currentThread,
             provider: provider,
-            prompt: prompt
+            prompt: promptWithAttachmentContext(prompt, attachments: attachments)
         )
+
+        let effort = provider.supportsEffort ? currentThread.effortLevel.cliValue : nil
 
         let result = try await sendTurn(
             provider: provider,
             projectPath: project.path,
             model: model,
             sessionId: currentThread.providerSessionId,
-            prompt: effectivePrompt
+            prompt: effectivePrompt,
+            effort: effort,
+            permissionLevel: currentThread.permissionLevel,
+            attachments: attachments
         )
 
         return try await applyProviderResult(
@@ -492,6 +555,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment],
         codexModel: String,
         claudeModel: String,
         format: PlanningFormat,
@@ -504,7 +568,8 @@ final class ChatStore {
             return try await runIndependentSecondOpinionTurn(
                 threadId: threadId,
                 project: project,
-                prompt: prompt,
+                prompt: promptWithAttachmentContext(prompt, attachments: attachments),
+                attachments: attachments,
                 codexModel: codexModel,
                 claudeModel: claudeModel,
                 turnId: turnId
@@ -513,7 +578,8 @@ final class ChatStore {
             return try await runSequentialCritiqueTurn(
                 threadId: threadId,
                 project: project,
-                prompt: prompt,
+                prompt: promptWithAttachmentContext(prompt, attachments: attachments),
+                attachments: attachments,
                 turnId: turnId,
                 strategy: strategy,
                 codexModel: codexModel,
@@ -523,7 +589,8 @@ final class ChatStore {
             return try await runDebateTurn(
                 threadId: threadId,
                 project: project,
-                prompt: prompt,
+                prompt: promptWithAttachmentContext(prompt, attachments: attachments),
+                attachments: attachments,
                 turnId: turnId,
                 strategy: strategy,
                 codexModel: codexModel,
@@ -533,7 +600,8 @@ final class ChatStore {
             return try await runSynthesisTurn(
                 threadId: threadId,
                 project: project,
-                prompt: prompt,
+                prompt: promptWithAttachmentContext(prompt, attachments: attachments),
+                attachments: attachments,
                 turnId: turnId,
                 strategy: strategy,
                 codexModel: codexModel,
@@ -546,6 +614,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment],
         codexModel: String,
         claudeModel: String,
         turnId: String
@@ -584,7 +653,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: .codex,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: "Codex", task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
         } catch {
             codexError = error
@@ -611,7 +683,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: .claude,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: "Claude", task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
         } catch {
             claudeError = error
@@ -680,6 +755,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment],
         turnId: String,
         strategy: SecondOpinionStrategy,
         codexModel: String,
@@ -725,7 +801,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: primaryProvider,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: primaryName, task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
             gotAtLeastOneResponse = true
             primaryResponse = result.text
@@ -784,7 +863,10 @@ final class ChatStore {
                 projectPath: project.path,
                 model: secondaryModel,
                 sessionId: currentThread.sessionId(for: secondaryProvider),
-                prompt: secondOpinionPrompt
+                prompt: secondOpinionPrompt,
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
             gotAtLeastOneResponse = true
             _ = try await applyProviderResult(
@@ -816,6 +898,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment],
         turnId: String,
         strategy: SecondOpinionStrategy,
         codexModel: String,
@@ -862,7 +945,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: primaryProvider,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: primaryName, task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
             gotAtLeastOneResponse = true
             primaryResponse = result.text
@@ -921,7 +1007,10 @@ final class ChatStore {
                 projectPath: project.path,
                 model: secondaryModel,
                 sessionId: currentThread.sessionId(for: secondaryProvider),
-                prompt: critiquePrompt
+                prompt: critiquePrompt,
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
             gotAtLeastOneResponse = true
             secondaryResponse = result.text
@@ -969,7 +1058,10 @@ final class ChatStore {
                             criticAgentName: secondaryName,
                             criticMessage: secondaryResponse
                         )
-                    )
+                    ),
+                    effort: currentThread.effortLevel.cliValue,
+                    permissionLevel: .readOnly,
+                    attachments: attachments
                 )
                 gotAtLeastOneResponse = true
                 _ = try await applyProviderResult(
@@ -1002,6 +1094,7 @@ final class ChatStore {
         threadId: String,
         project: Project,
         prompt: String,
+        attachments: [ChatAttachment],
         turnId: String,
         strategy: SecondOpinionStrategy,
         codexModel: String,
@@ -1046,7 +1139,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: .codex,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: "Codex", task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
         } catch {
             codexError = error
@@ -1073,7 +1169,10 @@ final class ChatStore {
                     thread: currentThread,
                     provider: .claude,
                     prompt: SecondOpinionPrompts.primaryPrompt(agentName: "Claude", task: prompt)
-                )
+                ),
+                effort: currentThread.effortLevel.cliValue,
+                permissionLevel: .readOnly,
+                attachments: attachments
             )
         } catch {
             claudeError = error
@@ -1156,7 +1255,10 @@ final class ChatStore {
                             codexMessage: codexPlan,
                             claudeMessage: claudePlan
                         )
-                    )
+                    ),
+                    effort: currentThread.effortLevel.cliValue,
+                    permissionLevel: .readOnly,
+                    attachments: attachments
                 )
                 gotAtLeastOneResponse = true
                 _ = try await applyProviderResult(
@@ -1224,6 +1326,7 @@ final class ChatStore {
             turnId: turnId,
             layoutHint: layoutHint
         )
+        attachRuntimeEvents(result.runtimeEvents, to: message)
 
         guard let index = threads.firstIndex(where: { $0.id == threadId }) else {
             throw ChatProviderError.invalidRequest("Chat thread not found.")
@@ -1242,6 +1345,7 @@ final class ChatStore {
         threadId: String,
         role: ChatMessageRole,
         content: String,
+        attachments: [ChatAttachment] = [],
         participant: String? = nil,
         turnId: String? = nil,
         layoutHint: ChatMessageLayoutHint? = nil
@@ -1251,6 +1355,7 @@ final class ChatStore {
             threadId: threadId,
             role: role,
             content: content,
+            attachments: attachments,
             participant: participant,
             turnId: turnId,
             layoutHint: layoutHint,
@@ -1258,6 +1363,33 @@ final class ChatStore {
         )
         messagesByThreadId[threadId, default: []].append(message)
         return message
+    }
+
+    private func attachRuntimeEvents(_ runtimeEvents: [ChatTurnRuntimeEvent], to message: ChatMessage) {
+        guard !runtimeEvents.isEmpty else {
+            runtimeEventsByMessageId[message.id] = nil
+            return
+        }
+
+        let attachedEvents = runtimeEvents.enumerated().map { index, event in
+            ChatMessageRuntimeEvent(
+                id: event.id.isEmpty ? "\(message.id)-runtime-\(index)" : event.id,
+                threadId: message.threadId,
+                messageId: message.id,
+                kind: event.kind,
+                title: event.title,
+                detail: event.detail,
+                output: event.output,
+                status: event.status,
+                exitCode: event.exitCode,
+                requestId: event.requestId,
+                questions: event.questions,
+                changedFiles: event.changedFiles,
+                createdAt: message.createdAt.addingTimeInterval(Double(index) * 0.001)
+            )
+        }
+
+        runtimeEventsByMessageId[message.id] = attachedEvents
     }
 
     private func resolvedModelForSend(
@@ -1269,6 +1401,32 @@ final class ChatStore {
         return trimmedThreadModel.isEmpty ? fallbackModel : trimmedThreadModel
     }
 
+    private func promptWithAttachmentContext(_ prompt: String, attachments: [ChatAttachment]) -> String {
+        guard !attachments.isEmpty else { return prompt }
+
+        let attachmentLines = attachments.map { attachment in
+            let kind = attachment.isImage ? "image" : "file"
+            return "- \(attachment.name) (\(kind)) at \(attachment.path)"
+        }
+
+        let attachmentContext = """
+        Attached context:
+        \(attachmentLines.joined(separator: "\n"))
+
+        Use these workspace files when relevant.
+        """
+
+        if prompt.isEmpty {
+            return attachmentContext
+        }
+
+        return """
+        \(prompt)
+
+        \(attachmentContext)
+        """
+    }
+
     private func defaultTitle(for provider: ChatProvider) -> String {
         switch provider {
         case .secondOpinion:
@@ -1276,6 +1434,10 @@ final class ChatStore {
         case .codex, .claude:
             "New Chat"
         }
+    }
+
+    private func isDefaultTitle(_ title: String) -> Bool {
+        title == defaultTitle(for: .codex) || title == defaultTitle(for: .secondOpinion)
     }
 
     private func bootstrapPromptIfNeeded(
@@ -1523,6 +1685,12 @@ final class ChatStore {
                     return left.id < right.id
                 }
                 return left.createdAt < right.createdAt
+            },
+            runtimeEvents: runtimeEventsByMessageId.values.flatMap { $0 }.sorted { left, right in
+                if left.createdAt == right.createdAt {
+                    return left.id < right.id
+                }
+                return left.createdAt < right.createdAt
             }
         )
 
@@ -1545,7 +1713,10 @@ final class ChatStore {
         projectPath: String,
         model: String,
         sessionId: String?,
-        prompt: String
+        prompt: String,
+        effort: String? = nil,
+        permissionLevel: PermissionLevel = .readOnly,
+        attachments: [ChatAttachment] = []
     ) async throws -> ChatTurnResult {
         switch provider {
         case .codex:
@@ -1553,14 +1724,20 @@ final class ChatStore {
                 projectPath: projectPath,
                 model: model,
                 sessionId: sessionId,
-                prompt: prompt
+                prompt: prompt,
+                effort: effort,
+                permissionLevel: permissionLevel,
+                attachments: attachments
             )
         case .claude:
             try await claudeService.sendTurn(
                 projectPath: projectPath,
                 model: model,
                 sessionId: sessionId,
-                prompt: prompt
+                prompt: prompt,
+                effort: effort,
+                permissionLevel: permissionLevel,
+                attachments: attachments
             )
         case .secondOpinion:
             throw ChatProviderError.invalidRequest("Planning Session is an orchestration mode, not a direct CLI provider.")

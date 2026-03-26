@@ -12,3 +12,31 @@ struct Project: Identifiable, Equatable, Hashable, Codable {
         path.replacing("/Users/\(NSUserName())", with: "~")
     }
 }
+
+enum ProjectSetupPaneKind: String, Codable, Hashable {
+    case shell
+    case command
+    case chat
+}
+
+struct ProjectSetupPane: Identifiable, Equatable, Hashable, Codable {
+    let id: String
+    let kind: ProjectSetupPaneKind
+    var label: String
+    var role: String?
+    var command: String?
+    var chatThreadId: String?
+    var workingDirectory: String?
+}
+
+struct ProjectSetupColumn: Identifiable, Equatable, Hashable, Codable {
+    let id: String
+    var paneIds: [String]
+}
+
+struct ProjectSetup: Equatable, Hashable, Codable {
+    let projectId: String
+    var updatedAt: Date
+    var columns: [ProjectSetupColumn]
+    var panes: [ProjectSetupPane]
+}

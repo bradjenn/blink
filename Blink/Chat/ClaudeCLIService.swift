@@ -11,9 +11,17 @@ actor ClaudeCLIService {
         projectPath: String,
         model: String,
         sessionId: String?,
-        prompt: String
+        prompt: String,
+        effort: String? = nil,
+        permissionLevel: PermissionLevel = .readOnly,
+        attachments: [ChatAttachment] = []
     ) async throws -> ChatTurnResult {
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachmentContext = attachmentPromptContext(for: attachments)
+        let effectivePrompt = [attachmentContext, prompt]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPrompt = effectivePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             throw ChatProviderError.invalidRequest("Message cannot be empty.")
         }
@@ -46,18 +54,32 @@ actor ClaudeCLIService {
         process.standardOutput = stdoutHandle
         process.standardError = stderrHandle
 
-        var arguments = [
-            "claude",
-            "-p",
-            "--output-format", "text",
-            "--permission-mode", "dontAsk",
-            "--tools", "",
-            "--session-id", resolvedSessionId
-        ]
+        var arguments = ["claude"]
 
         if !model.isEmpty {
-            arguments.insert(contentsOf: ["--model", model], at: 1)
+            arguments.append(contentsOf: ["--model", model])
         }
+
+        if let effort, !effort.isEmpty {
+            arguments.append(contentsOf: ["--effort", effort])
+        }
+
+        arguments.append(contentsOf: ["-p", "--output-format", "text"])
+
+        switch permissionLevel {
+        case .readOnly:
+            arguments.append(contentsOf: ["--permission-mode", "dontAsk", "--tools", ""])
+        case .workspaceWrite:
+            arguments.append(contentsOf: ["--permission-mode", "acceptEdits", "--tools", "default"])
+        case .fullAccess:
+            arguments.append(contentsOf: [
+                "--permission-mode", "bypassPermissions",
+                "--dangerously-skip-permissions",
+                "--tools", "default"
+            ])
+        }
+
+        arguments.append(contentsOf: ["--session-id", resolvedSessionId])
 
         arguments.append(trimmedPrompt)
 
@@ -105,5 +127,21 @@ actor ClaudeCLIService {
             }
         }
         return ""
+    }
+
+    private func attachmentPromptContext(for attachments: [ChatAttachment]) -> String {
+        guard !attachments.isEmpty else { return "" }
+
+        let lines = attachments.map { attachment in
+            let kind = attachment.isImage ? "image" : "file"
+            return "- \(attachment.name) (\(kind)) at \(attachment.path)"
+        }
+
+        return """
+        Attached context:
+        \(lines.joined(separator: "\n"))
+
+        Use these workspace files as part of the request when relevant.
+        """
     }
 }

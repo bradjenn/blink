@@ -29,10 +29,15 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     var onSwipeNavigation: ((SwipeNavigationDirection) -> Void)?
     /// Called when the user interacts with the surface directly.
     var onInteraction: (() -> Void)?
+    /// Called whenever the user submits a line in the terminal.
+    var onSubmittedLine: ((String) -> Void)?
+    /// Called once when a managed AI pane submits its first prompt.
+    var onManagedAIPromptSubmitted: ((String) -> Bool)?
 
     private var swipeNavigationAccumulatedX: CGFloat = 0
     private var swipeNavigationDirection: SwipeNavigationDirection?
     private var lastSwipeNavigationTimestamp: TimeInterval = 0
+    private var managedAIPromptBuffer = ""
 
     private static let defaultShellPATHEntries = [
         ".local/bin",
@@ -290,6 +295,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             key_ev.composing = markedText.length > 0
             _ = ghostty_surface_key(surface, key_ev)
         }
+
+        if event.keyCode == 36 || event.keyCode == 76 {
+            submitManagedAIPromptIfNeeded()
+        }
     }
 
     override func keyUp(with event: NSEvent) {
@@ -398,10 +407,12 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         // If in keyDown flow, accumulate text — it will be sent via ghostty_surface_key
         if keyTextAccumulator != nil {
             keyTextAccumulator?.append(chars)
+            recordManagedAIPromptText(chars)
             return
         }
 
         // Outside keyDown (e.g. paste), send text directly
+        recordManagedAIPromptText(chars)
         guard let surface else { return }
         chars.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(chars.utf8.count))
@@ -583,9 +594,35 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     /// Send a string to the terminal as if it were typed.
     func sendText(_ text: String) {
+        recordManagedAIPromptText(text)
         guard let surface else { return }
         text.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
+        }
+    }
+
+    private func recordManagedAIPromptText(_ text: String) {
+        guard onSubmittedLine != nil || onManagedAIPromptSubmitted != nil, !text.isEmpty else { return }
+        managedAIPromptBuffer.append(text)
+        if text.contains(where: \.isNewline) {
+            submitManagedAIPromptIfNeeded()
+        }
+    }
+
+    private func submitManagedAIPromptIfNeeded() {
+        guard onSubmittedLine != nil || onManagedAIPromptSubmitted != nil else {
+            managedAIPromptBuffer = ""
+            return
+        }
+
+        let prompt = managedAIPromptBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        managedAIPromptBuffer = ""
+        guard !prompt.isEmpty else { return }
+
+        onSubmittedLine?(prompt)
+
+        if let onManagedAIPromptSubmitted, onManagedAIPromptSubmitted(prompt) {
+            self.onManagedAIPromptSubmitted = nil
         }
     }
 
@@ -629,6 +666,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         onClose = nil
         onSwipeNavigation = nil
         onInteraction = nil
+        onSubmittedLine = nil
+        onManagedAIPromptSubmitted = nil
 
         if window?.firstResponder === self {
             window?.makeFirstResponder(nil)

@@ -1010,12 +1010,14 @@ private struct WorkspaceColumnView: View {
 
                     if tab.isChat, let threadId = tab.chatThreadId {
                         ProjectChatView(tabId: tab.id, threadId: threadId, project: project)
+                    } else if tab.isManagedCommand && store.isManagedCommandStopped(tab.id) {
+                        StoppedCommandPaneView(tab: tab)
                     } else {
                         TerminalView(
                             tabId: tab.id,
                             ghosttyApp: ghosttyApp,
                             surfaceManager: surfaceManager,
-                            workingDirectory: project.path,
+                            workingDirectory: tab.workingDirectory ?? project.path,
                             isFocused: isFocused,
                             command: tab.command
                         )
@@ -1028,5 +1030,61 @@ private struct WorkspaceColumnView: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: activeTabId)
+    }
+}
+
+private struct StoppedCommandPaneView: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let tab: AppTab
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "stop.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.danger)
+
+                Text("Command stopped")
+                    .font(Fonts.primary(size: 13, weight: .medium))
+                    .foregroundStyle(theme.text)
+            }
+
+            if let command = tab.command, !command.isEmpty {
+                Text(command)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(theme.textDim)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button(action: {
+                store.restartManagedCommandTab(tab.id, focusAfterLaunch: true)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Restart")
+                        .font(Fonts.primary(size: 12, weight: .medium))
+                }
+                .foregroundStyle(theme.bg)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(theme.accent)
+                )
+            }
+            .buttonStyle(.plain)
+            .pointerCursor()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(theme.bg.opacity(0.18))
+        )
     }
 }

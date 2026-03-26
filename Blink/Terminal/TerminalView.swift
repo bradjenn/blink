@@ -20,7 +20,7 @@ class TerminalContainerView: NSView {
     }
 
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
-        guard tabId != currentTabId else {
+        if tabId == currentTabId, currentSurface === surfaceView {
             surfaceView.frame = bounds
             currentSurface = surfaceView
             if shouldFocus {
@@ -104,6 +104,16 @@ struct TerminalView: NSViewRepresentable {
                     store.setActiveTab(coordinator.tabId)
                 }
             }
+        }
+
+        surfaceView.onSubmittedLine = { [weak coordinator] prompt in
+            guard let coordinator, let store = coordinator.store else { return }
+            store.handleTerminalLineSubmission(prompt, for: coordinator.tabId)
+        }
+
+        surfaceView.onManagedAIPromptSubmitted = { [weak coordinator] prompt in
+            guard let coordinator, let store = coordinator.store else { return false }
+            return store.applyManagedAIPromptTitleIfNeeded(prompt, for: coordinator.tabId)
         }
 
         container.showSurface(surfaceView, tabId: tabId, shouldFocus: isFocused)

@@ -117,6 +117,7 @@ struct MarkdownText: View {
     @Environment(AppStore.self) private var store
 
     let content: String
+    let project: Project?
 
     private var blocks: [MarkdownBlock] {
         parseMarkdownBlocks(content)
@@ -144,6 +145,7 @@ struct MarkdownText: View {
 
         case .paragraph(let text):
             inlineMarkdownText(text)
+                .padding(.bottom, 4)
 
         case .codeBlock(let language, let code):
             codeBlockView(language: language, code: code)
@@ -171,9 +173,14 @@ struct MarkdownText: View {
             }
         }
         .font(Fonts.primary(size: 13, family: store.uiFontFamily))
+        .lineSpacing(2)
         .foregroundStyle(theme.text)
+        .tint(theme.accent)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
+        .environment(\.openURL, OpenURLAction { url in
+            handleOpenURL(url)
+        })
     }
 
     private func codeBlockView(language: String?, code: String) -> some View {
@@ -204,5 +211,74 @@ struct MarkdownText: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(theme.border, lineWidth: 1)
         )
+    }
+
+    private func handleOpenURL(_ url: URL) -> OpenURLAction.Result {
+        guard let project,
+              let filePath = resolvedFilePath(from: url) else {
+            return .systemAction(url)
+        }
+
+        let command = nvimCommand(for: filePath, line: resolvedLineNumber(from: url))
+        let label = URL(fileURLWithPath: filePath).lastPathComponent
+        store.openTab(projectId: project.id, command: command, label: label)
+        return .handled
+    }
+
+    private func resolvedFilePath(from url: URL) -> String? {
+        if url.isFileURL {
+            return url.path.isEmpty ? nil : url.path
+        }
+
+        guard url.scheme == nil else {
+            return nil
+        }
+
+        let path = url.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard path.hasPrefix("/") else {
+            return nil
+        }
+
+        return path
+    }
+
+    private func resolvedLineNumber(from url: URL) -> Int? {
+        if let fragment = url.fragment,
+           let line = parseLineNumber(from: fragment) {
+            return line
+        }
+
+        return parseLineNumber(from: url.lastPathComponent)
+    }
+
+    private func parseLineNumber(from value: String) -> Int? {
+        if let match = value.range(of: #"L(\d+)"#, options: .regularExpression) {
+            let digits = value[match].drop(while: { !$0.isNumber })
+            return Int(digits)
+        }
+
+        if let match = value.range(of: #":(\d+)(?::\d+)?$"#, options: .regularExpression) {
+            let digits = value[match]
+                .dropFirst()
+                .prefix(while: \.isNumber)
+            return Int(digits)
+        }
+
+        return nil
+    }
+
+    private func nvimCommand(for path: String, line: Int?) -> String {
+        var components = ["env", "EDITOR=nvim", "VISUAL=nvim", "nvim"]
+
+        if let line {
+            components.append("+\(line)")
+        }
+
+        components.append(shellQuote(path))
+        return components.joined(separator: " ")
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 }

@@ -100,9 +100,8 @@ struct BApp: App {
                     ghosttyApp.surfaceManager = surfaceManager
                     store.surfaceManager = surfaceManager
                     surfaceManager.onProcessExit = { tabId in
-                        // Auto-close tabs that ran a command (e.g. lazygit)
-                        if let tab = store.tabsById[tabId], tab.command != nil {
-                            store.closeTab(tabId)
+                        if store.handleProcessExit(for: tabId) {
+                            surfaceManager.destroySurface(tabId: tabId)
                         }
                     }
                 }
@@ -167,6 +166,11 @@ struct BApp: App {
                     }
                 }
                 .keyboardShortcut("b", modifiers: .command)
+
+                Button("Focus Sidebar") {
+                    store.focusSidebar()
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
 
                 Button("Focus Left") {
                     store.focusLeft()
@@ -237,13 +241,13 @@ struct BApp: App {
                 .disabled(store.activeProjectId == nil)
 
                 Button("Open Codex") {
-                    openActiveCommandTab(command: "codex", label: "Codex")
+                    store.openManagedAIPane(.codex)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(store.activeProjectId == nil)
 
                 Button("Open Claude Code") {
-                    openActiveCommandTab(command: "claude", label: "Claude Code")
+                    store.openManagedAIPane(.claude)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)
@@ -334,13 +338,13 @@ struct BApp: App {
                 .disabled(store.activeProjectId == nil)
 
                 Button("Open Codex") {
-                    openActiveCommandTab(command: "codex", label: "Codex")
+                    store.openManagedAIPane(.codex)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(store.activeProjectId == nil)
 
                 Button("Open Claude Code") {
-                    openActiveCommandTab(command: "claude", label: "Claude Code")
+                    store.openManagedAIPane(.claude)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)

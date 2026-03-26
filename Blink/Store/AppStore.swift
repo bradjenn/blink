@@ -24,6 +24,7 @@ private enum StorageKeys {
     static let lastActiveTabs = "blink.lastActiveTabs"
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
     static let columns = "blink.columns"
+    static let projectSetups = "blink.projectSetups"
     static let fontFamily = "blink.fontFamily"
     static let uiFontFamily = "blink.uiFontFamily"
     static let fontSize = "blink.fontSize"
@@ -41,15 +42,21 @@ final class AppStore {
     var projects: [Project] {
         didSet { Self.saveProjects(projects) }
     }
+    var projectSetups: [String: ProjectSetup] {
+        didSet { Self.saveProjectSetups(projectSetups) }
+    }
     var activeProjectId: String?
     var lastSelectedProjectId: String? {
         didSet { UserDefaults.standard.set(lastSelectedProjectId, forKey: StorageKeys.lastSelectedProjectId) }
     }
 
     // Tabs
-    var tabs: [AppTab] = []
+    var tabs: [AppTab] = [] {
+        didSet { autosaveProjectSessionsIfNeeded() }
+    }
     var activeTabId: String?
     var pendingMaximizedTabId: String?
+    var managedCommandStates: [String: ManagedCommandState] = [:]
 
     /// O(1) tab lookup by ID. Rebuilt on access when tabs change.
     var tabsById: [String: AppTab] {
@@ -66,7 +73,10 @@ final class AppStore {
 
     // Columns — source of truth for spatial layout (left-to-right order)
     var columns: [String: [Column]] = [:] {
-        didSet { Self.saveColumns(columns) }
+        didSet {
+            Self.saveColumns(columns)
+            autosaveProjectSessionsIfNeeded()
+        }
     }
     var columnFocusedTab: [String: String] = [:]
 
@@ -144,6 +154,7 @@ final class AppStore {
     var sidebarVisible: Bool {
         didSet { UserDefaults.standard.set(sidebarVisible, forKey: StorageKeys.sidebarVisible) }
     }
+    var expandedProjectIds: Set<String> = []
     var sidebarFocused: Bool = false
     var surfaceManager: SurfaceManager?
     private var sidebarFocusProtectionDeadline: Date?
@@ -155,6 +166,13 @@ final class AppStore {
     private var workspaceViewportOffsets: [String: Double] {
         didSet { Self.saveDictionary(workspaceViewportOffsets, forKey: StorageKeys.workspaceViewportOffsets) }
     }
+    @ObservationIgnored
+    private var managedAIPaneTabsAwaitingInitialPromptTitle: Set<String> = []
+    @ObservationIgnored
+    private var shellDetectedAIPaneKinds: [String: ManagedAIPaneKind] = [:]
+    @ObservationIgnored
+    private var shellDetectedAIPaneTabsSkippingLaunchCommand: Set<String> = []
+    private var suppressProjectSessionAutosave = true
 
     func focusTerminal() {
         sidebarFocused = false
@@ -176,10 +194,12 @@ final class AppStore {
         let storedLastProjectId = defaults.string(forKey: StorageKeys.lastSelectedProjectId)
 
         self.projects = loadedProjects
+        self.projectSetups = Self.loadProjectSetups()
         self.theme = defaults.string(forKey: StorageKeys.theme) ?? "Josean"
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
         self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
+        self.expandedProjectIds = Set(loadedProjects.map(\.id))
         self.fontFamily = defaults.string(forKey: StorageKeys.fontFamily) ?? "MesloLGS Nerd Font Mono"
         self.uiFontFamily = defaults.string(forKey: StorageKeys.uiFontFamily) ?? "MesloLGS Nerd Font Mono"
         self.fontSize = defaults.object(forKey: StorageKeys.fontSize) != nil
@@ -215,6 +235,7 @@ final class AppStore {
 
         // Pre-render blurred wallpaper from persisted settings
         updateBlurredWallpaper()
+        suppressProjectSessionAutosave = false
     }
 
     // MARK: - View Actions
@@ -236,6 +257,26 @@ final class AppStore {
             } else if !sidebarVisible {
                 sidebarFocused = false
             }
+        }
+    }
+
+    func isProjectExpanded(_ id: String) -> Bool {
+        expandedProjectIds.contains(id)
+    }
+
+    func expandProject(_ id: String) {
+        expandedProjectIds.insert(id)
+    }
+
+    func collapseProject(_ id: String) {
+        expandedProjectIds.remove(id)
+    }
+
+    func toggleProjectExpansion(_ id: String) {
+        if isProjectExpanded(id) {
+            collapseProject(id)
+        } else {
+            expandProject(id)
         }
     }
 
@@ -427,6 +468,124 @@ final class AppStore {
         }
     }
 
+    func projectSetup(for projectId: String) -> ProjectSetup? {
+        projectSetups[projectId]
+    }
+
+    func hasProjectSetup(for projectId: String) -> Bool {
+        projectSetups[projectId] != nil
+    }
+
+    func projectSetupDisplayPath(for tab: AppTab, project: Project) -> String {
+        let path = tab.workingDirectory ?? project.path
+        return path.replacing("/Users/\(NSUserName())", with: "~")
+    }
+
+    func managedCommandState(for tabId: String) -> ManagedCommandState? {
+        managedCommandStates[tabId]
+    }
+
+    func managedCommandStatus(for tabId: String) -> ManagedCommandStatus? {
+        managedCommandStates[tabId]?.status
+    }
+
+    func isManagedCommandStopped(_ tabId: String) -> Bool {
+        managedCommandStates[tabId]?.status == .stopped
+    }
+
+    @discardableResult
+    func handleProcessExit(for tabId: String) -> Bool {
+        guard let tab = tabsById[tabId], tab.isManagedCommand else {
+            return false
+        }
+
+        managedCommandStates[tabId] = ManagedCommandState(status: .stopped)
+        return true
+    }
+
+    func restartManagedCommandTab(_ tabId: String, focusAfterLaunch: Bool = false) {
+        guard let tab = tabsById[tabId], tab.isManagedCommand else { return }
+
+        surfaceManager?.destroySurface(tabId: tabId)
+        managedCommandStates[tabId] = ManagedCommandState(status: .running)
+
+        if focusAfterLaunch {
+            setActiveTab(tabId)
+            activateTerminalFocusSoon()
+        }
+    }
+
+    func openManagedAIPane(_ kind: ManagedAIPaneKind, projectId: String? = nil) {
+        guard let resolvedProjectId = projectId ?? activeProjectId else { return }
+        let tab = openOrFocusCommandTab(
+            projectId: resolvedProjectId,
+            command: kind.command,
+            label: kind.displayName
+        )
+
+        registerManagedAIPromptTitleCaptureIfNeeded(for: tab)
+    }
+
+    @discardableResult
+    func applyManagedAIPromptTitleIfNeeded(_ prompt: String, for tabId: String) -> Bool {
+        guard managedAIPaneTabsAwaitingInitialPromptTitle.contains(tabId),
+              let tab = tabsById[tabId],
+              let kind = tab.managedAIPaneKind ?? shellDetectedAIPaneKinds[tabId] else {
+            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
+            return false
+        }
+
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return false }
+
+        if shellDetectedAIPaneTabsSkippingLaunchCommand.remove(tabId) != nil {
+            return false
+        }
+
+        setTabTitle(
+            tabId,
+            title: managedAIPaneTitle(from: trimmedPrompt, fallback: kind.displayName),
+            updateDefaultLabel: tab.managedAIPaneKind != nil
+        )
+        managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
+        return true
+    }
+
+    func handleTerminalTitleUpdate(_ title: String, for tabId: String) {
+        guard let tab = tabsById[tabId] else { return }
+
+        defer { markUnread(tabId) }
+
+        guard !tab.isManagedCommand else { return }
+
+        if let kind = TabTitleFilter.managedAIKind(for: title), tab.isShell {
+            registerShellDetectedAIPane(kind, for: tabId)
+            return
+        }
+
+        if shellDetectedAIPaneKinds[tabId] != nil {
+            if TabTitleFilter.isShellPrompt(title) {
+                clearManagedAIPromptCapture(for: [tabId])
+                revertTabTitle(tabId)
+            }
+            return
+        }
+
+        if let displayName = TabTitleFilter.displayName(for: title) {
+            setTabTitle(tabId, title: displayName)
+        } else if TabTitleFilter.isShellPrompt(title) {
+            revertTabTitle(tabId)
+        }
+    }
+
+    func handleTerminalLineSubmission(_ line: String, for tabId: String) {
+        guard let tab = tabsById[tabId], tab.isShell, !tab.isManagedCommand else { return }
+        guard shellDetectedAIPaneKinds[tabId] == nil else { return }
+        guard let kind = ManagedAIPaneKind(submittedLine: line) else { return }
+
+        registerShellDetectedAIPane(kind, for: tabId)
+    }
+
     // MARK: - Actions
 
     func setActiveProject(_ id: String?) {
@@ -487,7 +646,11 @@ final class AppStore {
     func openProjectSession(_ id: String) {
         setActiveProject(id)
         if activeTabId == nil {
-            _ = openTab(projectId: id)
+            if hasProjectSetup(for: id) {
+                restoreProjectSetup(for: id)
+            } else {
+                _ = openTab(projectId: id)
+            }
         }
         sidebarFocused = false
         DispatchQueue.main.async { [weak self] in
@@ -503,6 +666,7 @@ final class AppStore {
     func setActiveTab(_ id: String) {
         activeTabId = id
         if let tab = tabsById[id] {
+            expandProject(tab.projectId)
             lastActiveTab[tab.projectId] = id
         }
         clearUnread(id)
@@ -520,8 +684,11 @@ final class AppStore {
         }
 
         let nextIndex = ordered.index(after: currentIndex)
-        guard nextIndex < ordered.endIndex else { return }
-        setActiveTab(ordered[nextIndex].id)
+        if nextIndex < ordered.endIndex {
+            setActiveTab(ordered[nextIndex].id)
+        } else {
+            setActiveTab(ordered[ordered.startIndex].id)
+        }
     }
 
     func selectPreviousTab() {
@@ -535,8 +702,11 @@ final class AppStore {
             return
         }
 
-        guard currentIndex > ordered.startIndex else { return }
-        setActiveTab(ordered[ordered.index(before: currentIndex)].id)
+        if currentIndex > ordered.startIndex {
+            setActiveTab(ordered[ordered.index(before: currentIndex)].id)
+        } else {
+            setActiveTab(ordered[ordered.index(before: ordered.endIndex)].id)
+        }
     }
 
     func focusLeft() {
@@ -729,7 +899,13 @@ final class AppStore {
 
     func exitOverview(selecting tabId: String?) {
         if let tabId {
-            setActiveTab(tabId)
+            if tabsById[tabId] != nil {
+                setActiveTab(tabId)
+            } else if let projectId = activeProjectId,
+                      let column = projectColumns(for: projectId).first(where: { $0.id == tabId }),
+                      let fallback = column.tabIds.first {
+                setActiveTab(fallback)
+            }
         }
         isOverviewMode = false
         overviewHighlightedColumnId = nil
@@ -784,8 +960,23 @@ final class AppStore {
 
     /// Create a new shell tab for a project.
     @discardableResult
-    func openTab(projectId: String, command: String? = nil, label: String? = nil) -> AppTab {
-        let tab = makeShellTab(projectId: projectId, command: command, label: label)
+    func openTab(
+        projectId: String,
+        command: String? = nil,
+        label: String? = nil,
+        workingDirectory: String? = nil,
+        role: String? = nil,
+        projectSetupPaneId: String? = nil
+    ) -> AppTab {
+        let tab = makeShellTab(
+            projectId: projectId,
+            command: command,
+            label: label,
+            workingDirectory: workingDirectory,
+            role: role,
+            projectSetupPaneId: projectSetupPaneId
+        )
+        registerManagedCommandStateIfNeeded(for: tab)
         insertTab(tab, for: projectId, after: nil)
 
         // Create a new single-tab column
@@ -854,14 +1045,27 @@ final class AppStore {
         activateTerminalFocusSoon()
     }
 
+    @discardableResult
     func openOrFocusCommandTab(
         projectId: String,
         command: String,
         label: String,
+        workingDirectory: String? = nil,
+        role: String? = nil,
+        projectSetupPaneId: String? = nil,
         fullWidth: Bool = false,
         maximizeColumn: Bool = false
-    ) {
-        if let existing = projectTabs(for: projectId).first(where: { $0.command == command }) {
+    ) -> AppTab {
+        if let existing = projectTabs(for: projectId).first(where: {
+            $0.command == command
+                && effectiveWorkingDirectory($0.workingDirectory, projectId: projectId)
+                    == effectiveWorkingDirectory(workingDirectory, projectId: projectId)
+        }) {
+            if existing.isManagedCommand && isManagedCommandStopped(existing.id) {
+                restartManagedCommandTab(existing.id)
+            } else if existing.isManagedCommand {
+                registerManagedCommandStateIfNeeded(for: existing)
+            }
             if fullWidth, !fullWidthTabIds.contains(existing.id) {
                 // Existing tab found but not in full-width mode — make it full-width
                 savedColumns[projectId] = columns[projectId] ?? []
@@ -874,27 +1078,50 @@ final class AppStore {
                 requestColumnMaximize(existing.id)
             }
             activateTerminalFocusSoon()
+            return tabsById[existing.id] ?? existing
         } else if fullWidth {
-            openFullWidthTab(projectId: projectId, command: command, label: label)
+            return openFullWidthTab(
+                projectId: projectId,
+                command: command,
+                label: label,
+                workingDirectory: workingDirectory,
+                role: role,
+                projectSetupPaneId: projectSetupPaneId
+            )
         } else {
-            let tab = openTab(projectId: projectId, command: command, label: label)
+            let tab = openTab(
+                projectId: projectId,
+                command: command,
+                label: label,
+                workingDirectory: workingDirectory,
+                role: role,
+                projectSetupPaneId: projectSetupPaneId
+            )
             if maximizeColumn {
                 requestColumnMaximize(tab.id)
             }
+            return tab
         }
     }
 
+    @discardableResult
     func openOrFocusCommandTabForActiveProject(
         command: String,
         label: String,
+        workingDirectory: String? = nil,
+        role: String? = nil,
+        projectSetupPaneId: String? = nil,
         fullWidth: Bool = false,
         maximizeColumn: Bool = false
-    ) {
-        guard let projectId = activeProjectId else { return }
-        openOrFocusCommandTab(
+    ) -> AppTab? {
+        guard let projectId = activeProjectId else { return nil }
+        return openOrFocusCommandTab(
             projectId: projectId,
             command: command,
             label: label,
+            workingDirectory: workingDirectory,
+            role: role,
+            projectSetupPaneId: projectSetupPaneId,
             fullWidth: fullWidth,
             maximizeColumn: maximizeColumn
         )
@@ -904,6 +1131,9 @@ final class AppStore {
         projectId: String,
         threadId: String,
         label: String,
+        role: String? = nil,
+        workingDirectory: String? = nil,
+        projectSetupPaneId: String? = nil,
         maximizeColumn: Bool = false
     ) {
         if let existing = projectTabs(for: projectId).first(where: { $0.chatThreadId == threadId }) {
@@ -915,7 +1145,14 @@ final class AppStore {
             return
         }
 
-        let tab = makeChatTab(projectId: projectId, threadId: threadId, label: label)
+        let tab = makeChatTab(
+            projectId: projectId,
+            threadId: threadId,
+            label: label,
+            role: role,
+            workingDirectory: workingDirectory,
+            projectSetupPaneId: projectSetupPaneId
+        )
         insertTab(tab, for: projectId, after: nil)
 
         let column = Column(id: UUID().uuidString, tabIds: [tab.id])
@@ -933,6 +1170,9 @@ final class AppStore {
     func openOrFocusChatTabForActiveProject(
         threadId: String,
         label: String,
+        role: String? = nil,
+        workingDirectory: String? = nil,
+        projectSetupPaneId: String? = nil,
         maximizeColumn: Bool = false
     ) {
         guard let projectId = activeProjectId else { return }
@@ -940,6 +1180,9 @@ final class AppStore {
             projectId: projectId,
             threadId: threadId,
             label: label,
+            role: role,
+            workingDirectory: workingDirectory,
+            projectSetupPaneId: projectSetupPaneId,
             maximizeColumn: maximizeColumn
         )
     }
@@ -989,7 +1232,15 @@ final class AppStore {
 
     /// Open a tab that replaces all columns, taking the full workspace width.
     /// The previous layout is saved and restored when the tab closes.
-    private func openFullWidthTab(projectId: String, command: String, label: String) {
+    @discardableResult
+    private func openFullWidthTab(
+        projectId: String,
+        command: String,
+        label: String,
+        workingDirectory: String? = nil,
+        role: String? = nil,
+        projectSetupPaneId: String? = nil
+    ) -> AppTab {
         let tab = AppTab(
             id: UUID().uuidString,
             type: "shell",
@@ -997,9 +1248,13 @@ final class AppStore {
             defaultLabel: label,
             projectId: projectId,
             command: command,
-            chatThreadId: nil
+            chatThreadId: nil,
+            role: role,
+            workingDirectory: workingDirectory,
+            projectSetupPaneId: projectSetupPaneId
         )
         tabs.append(tab)
+        registerManagedCommandStateIfNeeded(for: tab)
 
         // Save current columns and replace with just this tab
         savedColumns[projectId] = columns[projectId] ?? []
@@ -1008,6 +1263,7 @@ final class AppStore {
         fullWidthTabIds.insert(tab.id)
 
         setActiveTab(tab.id)
+        return tab
     }
 
     /// Restore columns after a full-width tab closes. Called from closeTab.
@@ -1018,9 +1274,12 @@ final class AppStore {
     }
 
     /// Update a tab's title.
-    func setTabTitle(_ tabId: String, title: String) {
+    func setTabTitle(_ tabId: String, title: String, updateDefaultLabel: Bool = false) {
         if let idx = tabs.firstIndex(where: { $0.id == tabId }) {
             tabs[idx].label = title
+            if updateDefaultLabel {
+                tabs[idx].defaultLabel = title
+            }
         }
     }
 
@@ -1060,7 +1319,10 @@ final class AppStore {
     func removeProject(_ id: String) {
         let tabIds = tabs.filter { $0.projectId == id }.map(\.id)
         projects.removeAll { $0.id == id }
+        projectSetups[id] = nil
         tabs.removeAll { $0.projectId == id }
+        clearManagedCommandStates(for: tabIds)
+        clearManagedAIPromptCapture(for: tabIds)
         unreadTabs.subtract(tabIds)
         lastActiveTab[id] = nil
         if activeProjectId == id {
@@ -1070,6 +1332,7 @@ final class AppStore {
         if lastSelectedProjectId == id {
             lastSelectedProjectId = nil
         }
+        expandedProjectIds.remove(id)
         workspaceViewportOffsets[id] = nil
 
         // Clean up column state
@@ -1094,6 +1357,8 @@ final class AppStore {
         if fullWidthTabIds.contains(id) {
             restoreColumnsIfNeeded(tabId: id, projectId: projectId)
             tabs.removeAll { $0.id == id }
+            managedCommandStates[id] = nil
+            clearManagedAIPromptCapture(for: [id])
             unreadTabs.remove(id)
             if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
             // Focus the previously active tab in the restored layout
@@ -1138,6 +1403,8 @@ final class AppStore {
 
         // Remove tab data
         tabs.removeAll { $0.id == id }
+        managedCommandStates[id] = nil
+        clearManagedAIPromptCapture(for: [id])
         unreadTabs.remove(id)
         if lastActiveTab[projectId] == id {
             lastActiveTab[projectId] = nil
@@ -1183,7 +1450,248 @@ final class AppStore {
         closeTab(activeTabId)
     }
 
-    private func makeShellTab(projectId: String, command: String?, label: String?) -> AppTab {
+    func restoreProjectSetup(for projectId: String? = nil) {
+        let targetProjectId = projectId ?? activeProjectId
+        guard let targetProjectId,
+              let setup = projectSetups[targetProjectId] else { return }
+
+        replaceProjectSession(for: targetProjectId, using: setup)
+        if activeProjectId == targetProjectId {
+            setActiveProject(targetProjectId)
+        }
+    }
+
+    private func replaceProjectSession(for projectId: String, using setup: ProjectSetup) {
+        suppressProjectSessionAutosave = true
+        defer {
+            suppressProjectSessionAutosave = false
+            autosaveProjectSessionsIfNeeded()
+        }
+
+        let existingTabIds = tabs.filter { $0.projectId == projectId }.map(\.id)
+        tabs.removeAll { $0.projectId == projectId }
+        clearManagedCommandStates(for: existingTabIds)
+        clearManagedAIPromptCapture(for: existingTabIds)
+        unreadTabs.subtract(existingTabIds)
+        lastActiveTab[projectId] = nil
+        workspaceViewportOffsets[projectId] = nil
+
+        let resolvedSetup = normalizedProjectSetup(from: setup)
+        let paneLookup = Dictionary(uniqueKeysWithValues: resolvedSetup.panes.map { ($0.id, $0) })
+        var paneToTabId: [String: String] = [:]
+        var rebuiltTabs: [AppTab] = []
+
+        for column in resolvedSetup.columns {
+            for paneId in column.paneIds {
+                guard let pane = paneLookup[paneId] else { continue }
+                let workingDirectory = resolvedWorkingDirectory(for: pane, projectId: projectId)
+                let tab: AppTab
+                switch pane.kind {
+                case .shell:
+                    tab = makeShellTab(
+                        projectId: projectId,
+                        command: nil,
+                        label: pane.label,
+                        workingDirectory: workingDirectory,
+                        role: pane.role,
+                        projectSetupPaneId: pane.id
+                    )
+                case .command:
+                    tab = makeShellTab(
+                        projectId: projectId,
+                        command: pane.command,
+                        label: pane.label,
+                        workingDirectory: workingDirectory,
+                        role: pane.role,
+                        projectSetupPaneId: pane.id
+                    )
+                case .chat:
+                    guard let threadId = pane.chatThreadId else { continue }
+                    tab = makeChatTab(
+                        projectId: projectId,
+                        threadId: threadId,
+                        label: pane.label,
+                        role: pane.role,
+                        workingDirectory: workingDirectory,
+                        projectSetupPaneId: pane.id
+                    )
+                }
+                rebuiltTabs.append(tab)
+                registerManagedCommandStateIfNeeded(for: tab)
+                registerManagedAIPromptTitleCaptureIfNeeded(for: tab)
+                paneToTabId[pane.id] = tab.id
+            }
+        }
+
+        tabs.append(contentsOf: rebuiltTabs)
+        columns[projectId] = resolvedSetup.columns.compactMap { column in
+            let tabIds = column.paneIds.compactMap { paneToTabId[$0] }
+            guard !tabIds.isEmpty else { return nil }
+            return Column(id: column.id, tabIds: tabIds)
+        }
+        reindexTabs(for: projectId)
+
+        if let firstTabId = columns[projectId]?.first?.tabIds.first ?? rebuiltTabs.first?.id {
+            lastActiveTab[projectId] = firstTabId
+            if activeProjectId == projectId {
+                activeTabId = firstTabId
+            }
+        }
+
+        let surfaceManager = surfaceManager
+        DispatchQueue.main.async {
+            surfaceManager?.destroySurfaces(tabIds: existingTabIds)
+        }
+    }
+
+    private func currentProjectSetupSnapshot(for projectId: String) -> ProjectSetup? {
+        let cols = projectColumns(for: projectId)
+        guard !cols.isEmpty else { return nil }
+
+        let lookup = tabsById
+        var panes: [ProjectSetupPane] = []
+        var tabIdToPaneId: [String: String] = [:]
+        var nextPaneIndex = 0
+
+        for column in cols {
+            for tabId in column.tabIds {
+                guard let tab = lookup[tabId] else { continue }
+                let paneId = "pane-\(nextPaneIndex)"
+                nextPaneIndex += 1
+                panes.append(
+                    ProjectSetupPane(
+                        id: paneId,
+                        kind: projectSetupPaneKind(for: tab),
+                        label: tab.label,
+                        role: tab.role,
+                        command: tab.command,
+                        chatThreadId: tab.chatThreadId,
+                        workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, projectId: projectId)
+                    )
+                )
+                tabIdToPaneId[tabId] = paneId
+            }
+        }
+
+        let setupColumns: [ProjectSetupColumn] = cols.enumerated().compactMap { entry in
+            let (index, column) = entry
+            let paneIds = column.tabIds.compactMap { tabIdToPaneId[$0] }
+            guard !paneIds.isEmpty else { return nil }
+            return ProjectSetupColumn(id: "col-\(index)", paneIds: paneIds)
+        }
+
+        guard !setupColumns.isEmpty else { return nil }
+        return ProjectSetup(projectId: projectId, updatedAt: .now, columns: setupColumns, panes: panes)
+    }
+
+    private func autosaveProjectSessionsIfNeeded() {
+        guard !suppressProjectSessionAutosave else { return }
+
+        var nextProjectSetups = projectSetups
+        var changed = false
+
+        for project in projects {
+            let snapshot = currentProjectSetupSnapshot(for: project.id)
+            let normalizedSnapshot = snapshot.map(normalizedProjectSetup(from:))
+            let normalizedExisting = projectSetups[project.id].map(normalizedProjectSetup(from:))
+
+            // Keep the last known session when runtime state is temporarily empty,
+            // such as during launch before panes are restored.
+            if snapshot == nil {
+                continue
+            }
+
+            if normalizedExisting == normalizedSnapshot {
+                continue
+            }
+
+            changed = true
+            if let snapshot {
+                nextProjectSetups[project.id] = snapshot
+            }
+        }
+
+        if changed {
+            projectSetups = nextProjectSetups
+        }
+    }
+
+    private func normalizedProjectSetup(from setup: ProjectSetup) -> ProjectSetup {
+        let paneLookup = Dictionary(uniqueKeysWithValues: setup.panes.map { ($0.id, $0) })
+        var normalizedPanes: [ProjectSetupPane] = []
+        var oldToNewPaneIds: [String: String] = [:]
+        var nextPaneIndex = 0
+
+        for column in setup.columns {
+            for paneId in column.paneIds {
+                guard let pane = paneLookup[paneId] else { continue }
+                let normalizedId = "pane-\(nextPaneIndex)"
+                nextPaneIndex += 1
+                oldToNewPaneIds[paneId] = normalizedId
+                normalizedPanes.append(
+                    ProjectSetupPane(
+                        id: normalizedId,
+                        kind: pane.kind,
+                        label: pane.label,
+                        role: pane.role,
+                        command: pane.command,
+                        chatThreadId: pane.chatThreadId,
+                        workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, projectId: setup.projectId)
+                    )
+                )
+            }
+        }
+
+        let normalizedColumns: [ProjectSetupColumn] = setup.columns.enumerated().compactMap { entry in
+            let (index, column) = entry
+            let paneIds = column.paneIds.compactMap { oldToNewPaneIds[$0] }
+            guard !paneIds.isEmpty else { return nil }
+            return ProjectSetupColumn(id: "col-\(index)", paneIds: paneIds)
+        }
+
+        return ProjectSetup(
+            projectId: setup.projectId,
+            updatedAt: .distantPast,
+            columns: normalizedColumns,
+            panes: normalizedPanes
+        )
+    }
+
+    private func normalizedWorkingDirectory(_ path: String?, projectId: String) -> String? {
+        guard let path else { return nil }
+        if let projectPath = projectPath(for: projectId), path == projectPath {
+            return nil
+        }
+        return path
+    }
+
+    private func resolvedWorkingDirectory(for pane: ProjectSetupPane, projectId: String) -> String? {
+        pane.workingDirectory ?? projectPath(for: projectId)
+    }
+
+    private func projectSetupPaneKind(for tab: AppTab) -> ProjectSetupPaneKind {
+        if tab.isChat {
+            return .chat
+        }
+        return tab.command == nil ? .shell : .command
+    }
+
+    private func projectPath(for projectId: String) -> String? {
+        projects.first(where: { $0.id == projectId })?.path
+    }
+
+    private func effectiveWorkingDirectory(_ path: String?, projectId: String) -> String {
+        path ?? projectPath(for: projectId) ?? ""
+    }
+
+    private func makeShellTab(
+        projectId: String,
+        command: String?,
+        label: String?,
+        workingDirectory: String? = nil,
+        role: String? = nil,
+        projectSetupPaneId: String? = nil
+    ) -> AppTab {
         let count = tabs.filter { $0.projectId == projectId && $0.isShell && $0.command == nil }.count + 1
         let defaultLabel = label ?? "Terminal \(count)"
         return AppTab(
@@ -1193,11 +1701,21 @@ final class AppStore {
             defaultLabel: defaultLabel,
             projectId: projectId,
             command: command,
-            chatThreadId: nil
+            chatThreadId: nil,
+            role: role,
+            workingDirectory: workingDirectory,
+            projectSetupPaneId: projectSetupPaneId
         )
     }
 
-    private func makeChatTab(projectId: String, threadId: String, label: String) -> AppTab {
+    private func makeChatTab(
+        projectId: String,
+        threadId: String,
+        label: String,
+        role: String? = nil,
+        workingDirectory: String? = nil,
+        projectSetupPaneId: String? = nil
+    ) -> AppTab {
         AppTab(
             id: UUID().uuidString,
             type: "chat",
@@ -1205,7 +1723,10 @@ final class AppStore {
             defaultLabel: label,
             projectId: projectId,
             command: nil,
-            chatThreadId: threadId
+            chatThreadId: threadId,
+            role: role,
+            workingDirectory: workingDirectory,
+            projectSetupPaneId: projectSetupPaneId
         )
     }
 
@@ -1221,6 +1742,81 @@ final class AppStore {
         }
 
         tabs.insert(tab, at: tabs.index(after: anchorIndex))
+    }
+
+    private func registerManagedCommandStateIfNeeded(for tab: AppTab) {
+        guard tab.isManagedCommand else { return }
+        managedCommandStates[tab.id] = ManagedCommandState(status: .running)
+    }
+
+    private func registerManagedAIPromptTitleCaptureIfNeeded(for tab: AppTab) {
+        guard let kind = tab.managedAIPaneKind else {
+            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tab.id)
+            return
+        }
+
+        if tab.label == kind.displayName && tab.defaultLabel == kind.displayName {
+            managedAIPaneTabsAwaitingInitialPromptTitle.insert(tab.id)
+        } else {
+            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tab.id)
+        }
+    }
+
+    private func clearManagedCommandStates(for tabIds: [String]) {
+        for tabId in tabIds {
+            managedCommandStates[tabId] = nil
+        }
+    }
+
+    private func clearManagedAIPromptCapture(for tabIds: [String]) {
+        for tabId in tabIds {
+            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
+            shellDetectedAIPaneKinds.removeValue(forKey: tabId)
+            shellDetectedAIPaneTabsSkippingLaunchCommand.remove(tabId)
+        }
+    }
+
+    private func registerShellDetectedAIPane(_ kind: ManagedAIPaneKind, for tabId: String) {
+        guard let tab = tabsById[tabId], tab.isShell, tab.command == nil else {
+            clearManagedAIPromptCapture(for: [tabId])
+            return
+        }
+
+        shellDetectedAIPaneKinds[tabId] = kind
+
+        let hasCustomAITitle = tab.label != tab.defaultLabel && tab.label != kind.displayName
+        guard !hasCustomAITitle else {
+            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
+            return
+        }
+
+        if tab.label != kind.displayName {
+            setTabTitle(tabId, title: kind.displayName)
+        }
+        managedAIPaneTabsAwaitingInitialPromptTitle.insert(tabId)
+        shellDetectedAIPaneTabsSkippingLaunchCommand.insert(tabId)
+    }
+
+    private func managedAIPaneTitle(from prompt: String, fallback: String) -> String {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return fallback }
+
+        let firstLine = trimmedPrompt
+            .split(whereSeparator: \.isNewline)
+            .first
+            .map(String.init) ?? trimmedPrompt
+
+        let condensed = firstLine
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !condensed.isEmpty else { return fallback }
+        if condensed.count <= 48 {
+            return condensed
+        }
+
+        let truncated = condensed.prefix(45).trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(truncated)..."
     }
 
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
@@ -1257,6 +1853,7 @@ final class AppStore {
             createdAt: .now
         )
         projects.append(project)
+        expandedProjectIds.insert(project.id)
         if activating {
             openProjectSession(project.id)
         }
@@ -1305,6 +1902,20 @@ final class AppStore {
     private static func saveColumns(_ columns: [String: [Column]]) {
         if let data = try? JSONEncoder().encode(columns) {
             UserDefaults.standard.set(data, forKey: StorageKeys.columns)
+        }
+    }
+
+    private static func loadProjectSetups() -> [String: ProjectSetup] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKeys.projectSetups),
+              let setups = try? JSONDecoder().decode([String: ProjectSetup].self, from: data) else {
+            return [:]
+        }
+        return setups
+    }
+
+    private static func saveProjectSetups(_ setups: [String: ProjectSetup]) {
+        if let data = try? JSONEncoder().encode(setups) {
+            UserDefaults.standard.set(data, forKey: StorageKeys.projectSetups)
         }
     }
 
