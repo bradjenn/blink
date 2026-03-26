@@ -16,6 +16,7 @@
 		08B5E689ECC2F6EF68FBE6D8 /* ChatTurnResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = F271D698721CE5F35E869ADC /* ChatTurnResult.swift */; };
 		08C1A7F9E4D15A4B9C27E101 /* ChatAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08C1A7F9E4D15A4B9C27E100 /* ChatAttachment.swift */; };
 		0973322112C267606F0D23CC /* StartScreenLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */; };
+		0A7D6B59C0B9441B8C3F1A2E /* TerminalSurfaceViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C24A4E63A574349A16A0B64 /* TerminalSurfaceViewTests.swift */; };
 		0D0CF9645DB57CFE7E2A99CC /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D522965A18450240E8B1B57 /* CoreText.framework */; };
 		0EDDE37BF54C746A6850E4BD /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 733316E4538EF5998654016C /* Carbon.framework */; };
 		0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AC6ABC78C8E62D696CABA8 /* PointerCursor.swift */; };
@@ -195,6 +196,7 @@
 		09D47A5C0A44933E63A3104C /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
+		7C24A4E63A574349A16A0B64 /* TerminalSurfaceViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceViewTests.swift; sourceTree = "<group>"; };
 		102868ECDF6CA451555BAC7A /* ProjectChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectChatView.swift; sourceTree = "<group>"; };
 		104F7EE9EE6F91C459A8CC7C /* BApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BApp.swift; sourceTree = "<group>"; };
 		115EAC323F30A567C3F50A78 /* ClaudeCLIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCLIService.swift; sourceTree = "<group>"; };
@@ -386,6 +388,7 @@
 			children = (
 				0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */,
 				7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */,
+				7C24A4E63A574349A16A0B64 /* TerminalSurfaceViewTests.swift */,
 			);
 			path = BTests;
 			sourceTree = "<group>";
@@ -803,6 +806,7 @@
 			files = (
 				9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */,
 				025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */,
+				0A7D6B59C0B9441B8C3F1A2E /* TerminalSurfaceViewTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -175,7 +175,8 @@ final class AppStoreTests: XCTestCase {
         let store = makeStore()
         store.openManagedAIPane(.codex, projectId: "1")
 
-        let tab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "codex" }))
+        let tab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.managedAIPaneKind == .codex }))
+        XCTAssertEqual(tab.command, "codex --no-alt-screen")
         XCTAssertEqual(tab.label, "Codex")
         XCTAssertEqual(tab.defaultLabel, "Codex")
 
@@ -185,6 +186,18 @@ final class AppStoreTests: XCTestCase {
         let updatedTab = try! XCTUnwrap(store.tabsById[tab.id])
         XCTAssertEqual(updatedTab.label, "Fix autosave restore")
         XCTAssertEqual(updatedTab.defaultLabel, "Fix autosave restore")
+    }
+
+    func testOpenManagedCodexPaneReusesExistingLegacyCodexCommandTab() {
+        let store = makeStore()
+        let existing = store.openOrFocusCommandTab(projectId: "1", command: "codex", label: "Codex")
+
+        store.openManagedAIPane(.codex, projectId: "1")
+
+        let codexTabs = store.projectTabs(for: "1").filter { $0.managedAIPaneKind == .codex }
+        XCTAssertEqual(codexTabs.count, 1)
+        XCTAssertEqual(codexTabs.first?.id, existing.id)
+        XCTAssertEqual(store.activeTabId, existing.id)
     }
 
     func testManagedAIPromptTitleIsOnlyAppliedOnce() {
@@ -549,6 +562,41 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(command?.contains("tmux -L") == true)
         XCTAssertTrue(command?.contains("attach-session") == true)
         XCTAssertTrue(command?.contains("new-session -d -t") == true)
+        XCTAssertTrue(command?.contains("env -u TMUX tmux") == true)
+        XCTAssertFalse(command?.contains("exec TMUX=") == true)
+    }
+
+    func testCloseTmuxBackedShellTabCleansUpClientSessionAndWindow() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let tab = store.openTab(projectId: "1")
+        let paneId = try! XCTUnwrap(tab.projectSetupPaneId)
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.closeTab(tab.id)
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertTrue(command.contains("kill-session -t 'blink-1-\(paneId)'"))
+        XCTAssertTrue(command.contains("kill-window -t 'blink-1:pane-\(paneId)'"))
+    }
+
+    func testRemoveProjectCleansUpBaseTmuxSessionAndClientSessions() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let first = store.openTab(projectId: "1")
+        let second = store.openTab(projectId: "1")
+        let firstPaneId = try! XCTUnwrap(first.projectSetupPaneId)
+        let secondPaneId = try! XCTUnwrap(second.projectSetupPaneId)
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.removeProject("1")
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertTrue(command.contains("kill-session -t 'blink-1-\(firstPaneId)'"))
+        XCTAssertTrue(command.contains("kill-session -t 'blink-1-\(secondPaneId)'"))
+        XCTAssertTrue(command.contains("kill-session -t 'blink-1'"))
     }
 
     func testSplitActivePaneWithNewTabInsertsBelowActivePane() {

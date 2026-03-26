@@ -13,10 +13,17 @@ class TerminalContainerView: NSView {
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
-        // Ensure the terminal surface gets an explicit size update when
-        // SwiftUI animates the column width. autoresizingMask handles
-        // most cases, but animated frame changes can skip setFrameSize.
-        currentSurface?.frame = bounds
+        syncCurrentSurfaceFrame()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncCurrentSurfaceFrame()
+    }
+
+    override func layout() {
+        super.layout()
+        syncCurrentSurfaceFrame()
     }
 
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
@@ -44,6 +51,14 @@ class TerminalContainerView: NSView {
         if shouldFocus {
             surfaceView.focus()
         }
+    }
+
+    private func syncCurrentSurfaceFrame() {
+        // SwiftUI and AppKit can reach subview geometry through slightly
+        // different paths during animated pane resizing. Keep forcing the
+        // hosted terminal to match the container bounds so Ghostty always
+        // receives a fresh size update.
+        currentSurface?.frame = bounds
     }
 }
 

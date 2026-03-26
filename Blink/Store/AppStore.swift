@@ -176,6 +176,8 @@ final class AppStore {
     private let tmuxIntegrationEnabled: Bool
     @ObservationIgnored
     private let tmuxSocketName: String
+    @ObservationIgnored
+    var detachedShellCommandHandler: ((String) -> Void)?
     private var suppressProjectSessionAutosave = true
 
     func focusTerminal() {
@@ -523,11 +525,23 @@ final class AppStore {
 
     func openManagedAIPane(_ kind: ManagedAIPaneKind, projectId: String? = nil) {
         guard let resolvedProjectId = projectId ?? activeProjectId else { return }
-        let tab = openOrFocusCommandTab(
-            projectId: resolvedProjectId,
-            command: kind.command,
-            label: kind.displayName
-        )
+        let tab: AppTab
+        if let existing = projectTabs(for: resolvedProjectId).first(where: { $0.managedAIPaneKind == kind }) {
+            if existing.isManagedCommand && isManagedCommandStopped(existing.id) {
+                restartManagedCommandTab(existing.id)
+            } else if existing.isManagedCommand {
+                registerManagedCommandStateIfNeeded(for: existing)
+            }
+            setActiveTab(existing.id)
+            activateTerminalFocusSoon()
+            tab = tabsById[existing.id] ?? existing
+        } else {
+            tab = openOrFocusCommandTab(
+                projectId: resolvedProjectId,
+                command: kind.launchCommand,
+                label: kind.displayName
+            )
+        }
 
         registerManagedAIPromptTitleCaptureIfNeeded(for: tab)
     }
@@ -1815,7 +1829,7 @@ final class AppStore {
         let baseSession = tmuxBaseSessionName(for: project.id)
         let clientSession = tmuxClientSessionName(projectId: project.id, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
-        let tmuxPrefix = "TMUX='' tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
         let loginShell = shellQuote(shell)
         let shellCommand = "env -u TMUX \(loginShell) -l"
         let baseTarget = shellQuote(baseSession)
@@ -1829,7 +1843,7 @@ final class AppStore {
         let ensureClientSession = "\(tmuxPrefix) has-session -t \(clientTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -t \(baseTarget) -s \(clientTarget)"
         let configureClient = "\(tmuxPrefix) set-option -t \(clientTarget) status off >/dev/null 2>&1; \(tmuxPrefix) set-option -t \(clientTarget) allow-rename off >/dev/null 2>&1"
         let selectWindow = "\(tmuxPrefix) select-window -t \(sessionWindowTarget) >/dev/null 2>&1"
-        let attachClient = "exec \(tmuxPrefix) attach-session -t \(clientTarget)"
+        let attachClient = "exec env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) attach-session -t \(clientTarget)"
 
         return [ensureBaseSession, ensureWindow, ensureClientSession, configureClient, selectWindow, attachClient]
             .joined(separator: "; ")
@@ -1842,8 +1856,8 @@ final class AppStore {
         let windowName = tmuxWindowName(for: paneId)
 
         runDetachedShellCommand("""
-        TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(clientSession)) >/dev/null 2>&1 || true
-        TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-window -t \(shellQuote("\(baseSession):\(windowName)")) >/dev/null 2>&1 || true
+        env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(clientSession)) >/dev/null 2>&1 || true
+        env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-window -t \(shellQuote("\(baseSession):\(windowName)")) >/dev/null 2>&1 || true
         """)
     }
 
@@ -1851,15 +1865,20 @@ final class AppStore {
         guard tmuxIntegrationEnabled else { return }
         let baseSession = tmuxBaseSessionName(for: projectId)
         let clientKills = paneIds.map {
-            "TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
+            "env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
         }
 
         runDetachedShellCommand((clientKills + [
-            "TMUX='' tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(baseSession)) >/dev/null 2>&1 || true",
+            "env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(baseSession)) >/dev/null 2>&1 || true",
         ]).joined(separator: "\n"))
     }
 
     private func runDetachedShellCommand(_ command: String) {
+        if let detachedShellCommandHandler {
+            detachedShellCommandHandler(command)
+            return
+        }
+
         let shellPath = "/bin/zsh"
         let task = Process()
         task.executableURL = URL(fileURLWithPath: shellPath)

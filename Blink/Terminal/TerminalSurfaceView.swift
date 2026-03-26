@@ -7,6 +7,38 @@ enum SwipeNavigationDirection {
     case next
 }
 
+@MainActor
+protocol TerminalSurfaceCommandSink: AnyObject {
+    func setContentScale(x: Double, y: Double)
+    func setSize(width: UInt32, height: UInt32)
+    func refresh()
+    func draw()
+}
+
+private final class GhosttyTerminalSurfaceCommandSink: TerminalSurfaceCommandSink {
+    private let surface: ghostty_surface_t
+
+    init(surface: ghostty_surface_t) {
+        self.surface = surface
+    }
+
+    func setContentScale(x: Double, y: Double) {
+        ghostty_surface_set_content_scale(surface, x, y)
+    }
+
+    func setSize(width: UInt32, height: UInt32) {
+        ghostty_surface_set_size(surface, width, height)
+    }
+
+    func refresh() {
+        ghostty_surface_refresh(surface)
+    }
+
+    func draw() {
+        ghostty_surface_draw(surface)
+    }
+}
+
 /// NSView subclass that hosts a single ghostty terminal surface.
 /// Metal rendering, keyboard/mouse input, and transparency are handled here.
 class TerminalSurfaceView: NSView, NSTextInputClient {
@@ -38,6 +70,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private var swipeNavigationDirection: SwipeNavigationDirection?
     private var lastSwipeNavigationTimestamp: TimeInterval = 0
     private var managedAIPromptBuffer = ""
+    var commandSinkOverride: TerminalSurfaceCommandSink?
 
     private static let defaultShellPATHEntries = [
         ".local/bin",
@@ -150,7 +183,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
         // Set initial size in framebuffer pixels (not points)
         let fbSize = convertToBacking(frame.size)
-        ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
+        GhosttyTerminalSurfaceCommandSink(surface: surface!).setSize(
+            width: UInt32(fbSize.width),
+            height: UInt32(fbSize.height)
+        )
 
         // Auto-focus after surface creation — use DispatchQueue (not Task)
         // so the focus call lands at a deterministic point in the run loop,
@@ -232,18 +268,44 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        guard let surface else { return }
-        let fbSize = convertToBacking(newSize)
-        ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
+        syncSurfaceSize()
+    }
+
+    override func setBoundsSize(_ newSize: NSSize) {
+        super.setBoundsSize(newSize)
+        syncSurfaceSize()
+    }
+
+    override func layout() {
+        super.layout()
+        syncSurfaceSize()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        guard let surface, let window else { return }
+        guard let commandSink = surfaceCommandSink, let window else { return }
         let scale = window.backingScaleFactor
-        ghostty_surface_set_content_scale(surface, Double(scale), Double(scale))
-        let fbSize = convertToBacking(frame.size)
-        ghostty_surface_set_size(surface, UInt32(fbSize.width), UInt32(fbSize.height))
+        commandSink.setContentScale(x: Double(scale), y: Double(scale))
+        syncSurfaceSize()
+    }
+
+    private func syncSurfaceSize() {
+        guard let commandSink = surfaceCommandSink else { return }
+        let fbSize = convertToBacking(bounds.size)
+        guard fbSize.width > 0, fbSize.height > 0 else { return }
+        commandSink.setSize(width: UInt32(fbSize.width), height: UInt32(fbSize.height))
+        commandSink.refresh()
+        commandSink.draw()
+        needsDisplay = true
+    }
+
+    private var surfaceCommandSink: TerminalSurfaceCommandSink? {
+        if let commandSinkOverride {
+            return commandSinkOverride
+        }
+
+        guard let surface else { return nil }
+        return GhosttyTerminalSurfaceCommandSink(surface: surface)
     }
 
     // MARK: - Tracking Areas

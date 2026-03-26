@@ -15,9 +15,14 @@ enum ManagedAIPaneKind: String, Equatable, Hashable {
     case claudeYolo
 
     init?(command: String) {
-        switch command {
-        case "codex":
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed == "codex" || trimmed.hasPrefix("codex ") {
             self = .codex
+            return
+        }
+
+        switch trimmed {
         case "claude":
             self = .claude
         case "claude --dangerously-skip-permissions":
@@ -63,6 +68,17 @@ enum ManagedAIPaneKind: String, Equatable, Hashable {
         switch self {
         case .codex:
             "codex"
+        case .claude:
+            "claude"
+        case .claudeYolo:
+            "claude --dangerously-skip-permissions"
+        }
+    }
+
+    var launchCommand: String {
+        switch self {
+        case .codex:
+            "codex --no-alt-screen"
         case .claude:
             "claude"
         case .claudeYolo:
