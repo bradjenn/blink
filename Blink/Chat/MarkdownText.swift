@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 // MARK: - Block model
@@ -119,6 +120,21 @@ struct MarkdownText: View {
     let content: String
     let project: Project?
 
+    private static let fileReferenceRegex = try! NSRegularExpression(
+        pattern: #"((?:/|(?:[A-Za-z0-9_.-]+/)+)?[A-Za-z0-9_. -]+\.(?:swift|m|mm|h|hpp|c|cc|cpp|json|md|txt|plist|yaml|yml|xcconfig|xcodeproj|xcworkspace))(#L\d+|:~?L?\d+(?::\d+)?)?"#,
+        options: []
+    )
+
+    private static let backtickedFileReferenceRegex = try! NSRegularExpression(
+        pattern: #"`((?:/|(?:[A-Za-z0-9_.-]+/)+)?[A-Za-z0-9_. -]+\.(?:swift|m|mm|h|hpp|c|cc|cpp|json|md|txt|plist|yaml|yml|xcconfig|xcodeproj|xcworkspace))(#L\d+|:~?L?\d+(?::\d+)?)?`"#,
+        options: []
+    )
+
+    private static let markdownLinkRegex = try! NSRegularExpression(
+        pattern: #"\[[^\]]+\]\([^)]+\)"#,
+        options: []
+    )
+
     private var blocks: [MarkdownBlock] {
         parseMarkdownBlocks(content)
     }
@@ -165,12 +181,10 @@ struct MarkdownText: View {
     }
 
     private func inlineMarkdownText(_ text: String) -> some View {
-        Group {
-            if let attributed = try? AttributedString(markdown: text) {
-                Text(attributed)
-            } else {
-                Text(text)
-            }
+        let renderedText = renderedInlineText(from: text)
+
+        return Group {
+            Text(renderedText)
         }
         .font(Fonts.primary(size: 13, family: store.uiFontFamily))
         .lineSpacing(2)
@@ -219,13 +233,21 @@ struct MarkdownText: View {
             return .systemAction(url)
         }
 
-        let command = nvimCommand(for: filePath, line: resolvedLineNumber(from: url))
-        let label = URL(fileURLWithPath: filePath).lastPathComponent
-        store.openTab(projectId: project.id, command: command, label: label)
+        store.openFileInEditor(
+            projectId: project.id,
+            path: filePath,
+            line: resolvedLineNumber(from: url)
+        )
         return .handled
     }
 
     private func resolvedFilePath(from url: URL) -> String? {
+        if url.scheme == "blink-file",
+           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let encodedPath = components.queryItems?.first(where: { $0.name == "path" })?.value {
+            return resolvedProjectPath(from: encodedPath)
+        }
+
         if url.isFileURL {
             return url.path.isEmpty ? nil : url.path
         }
@@ -234,15 +256,17 @@ struct MarkdownText: View {
             return nil
         }
 
-        let path = url.path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard path.hasPrefix("/") else {
-            return nil
-        }
-
-        return path
+        return resolvedProjectPath(from: url.path)
     }
 
     private func resolvedLineNumber(from url: URL) -> Int? {
+        if url.scheme == "blink-file",
+           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let lineValue = components.queryItems?.first(where: { $0.name == "line" })?.value,
+           let line = Int(lineValue) {
+            return line
+        }
+
         if let fragment = url.fragment,
            let line = parseLineNumber(from: fragment) {
             return line
@@ -252,7 +276,7 @@ struct MarkdownText: View {
     }
 
     private func parseLineNumber(from value: String) -> Int? {
-        if let match = value.range(of: #"L(\d+)"#, options: .regularExpression) {
+        if let match = value.range(of: #"(?:#L|~L|L)(\d+)"#, options: .regularExpression) {
             let digits = value[match].drop(while: { !$0.isNumber })
             return Int(digits)
         }
@@ -267,18 +291,100 @@ struct MarkdownText: View {
         return nil
     }
 
-    private func nvimCommand(for path: String, line: Int?) -> String {
-        var components = ["env", "EDITOR=nvim", "VISUAL=nvim", "nvim"]
-
-        if let line {
-            components.append("+\(line)")
+    private func renderedInlineText(from text: String) -> AttributedString {
+        let linkifiedText = linkifiedMarkdownText(from: text)
+        if let attributed = try? AttributedString(markdown: linkifiedText) {
+            return attributed
         }
-
-        components.append(shellQuote(path))
-        return components.joined(separator: " ")
+        return AttributedString(text)
     }
 
-    private func shellQuote(_ value: String) -> String {
-        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    private func linkifiedMarkdownText(from text: String) -> String {
+        var result = replacingBacktickedFileReferences(in: text)
+
+        let nsText = result as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        let protectedRanges = Self.markdownLinkRegex.matches(in: result, range: fullRange).map(\.range)
+        let matches = Self.fileReferenceRegex.matches(in: result, range: fullRange)
+
+        guard !matches.isEmpty else { return result }
+
+        for match in matches.reversed() {
+            let candidateRange = match.range(at: 0)
+            guard !isProtected(candidateRange, within: protectedRanges) else {
+                continue
+            }
+
+            let pathRange = match.range(at: 1)
+            guard pathRange.location != NSNotFound else { continue }
+
+            let path = nsText.substring(with: pathRange)
+            let suffixRange = match.range(at: 2)
+            let suffix = suffixRange.location == NSNotFound ? "" : nsText.substring(with: suffixRange)
+            let line = parseLineNumber(from: suffix)
+            let label = nsText.substring(with: candidateRange)
+            let link = fileReferenceURLString(path: path, line: line)
+            let replacement = "[\(label)](\(link))"
+            result = (result as NSString).replacingCharacters(in: candidateRange, with: replacement)
+        }
+
+        return result
+    }
+
+    private func replacingBacktickedFileReferences(in text: String) -> String {
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        let matches = Self.backtickedFileReferenceRegex.matches(in: text, range: fullRange)
+
+        guard !matches.isEmpty else { return text }
+
+        var result = text
+        for match in matches.reversed() {
+            let candidateRange = match.range(at: 0)
+            let pathRange = match.range(at: 1)
+            guard pathRange.location != NSNotFound else { continue }
+
+            let path = nsText.substring(with: pathRange)
+            let suffixRange = match.range(at: 2)
+            let suffix = suffixRange.location == NSNotFound ? "" : nsText.substring(with: suffixRange)
+            let line = parseLineNumber(from: suffix)
+            let label = "\(path)\(suffix)"
+            let replacement = "[\(label)](\(fileReferenceURLString(path: path, line: line)))"
+            result = (result as NSString).replacingCharacters(in: candidateRange, with: replacement)
+        }
+
+        return result
+    }
+
+    private func isProtected(_ range: NSRange, within protectedRanges: [NSRange]) -> Bool {
+        protectedRanges.contains { protectedRange in
+            NSLocationInRange(range.location, protectedRange)
+                && NSMaxRange(range) <= NSMaxRange(protectedRange)
+        }
+    }
+
+    private func fileReferenceURLString(path: String, line: Int?) -> String {
+        var components = URLComponents()
+        components.scheme = "blink-file"
+        components.host = "open"
+
+        var queryItems = [URLQueryItem(name: "path", value: path)]
+        if let line {
+            queryItems.append(URLQueryItem(name: "line", value: String(line)))
+        }
+        components.queryItems = queryItems
+        return components.string ?? path
+    }
+
+    private func resolvedProjectPath(from rawPath: String) -> String? {
+        let trimmedPath = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else { return nil }
+        if trimmedPath.hasPrefix("/") {
+            return trimmedPath
+        }
+        guard let project else { return nil }
+        return URL(fileURLWithPath: project.path)
+            .appendingPathComponent(trimmedPath)
+            .path
     }
 }

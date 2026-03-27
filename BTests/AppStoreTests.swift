@@ -3,6 +3,7 @@ import XCTest
 
 @MainActor
 final class AppStoreTests: XCTestCase {
+    private let fileManager = FileManager.default
     private let defaults = UserDefaults.standard
     private let storageKeys = [
         "blink.theme",
@@ -17,6 +18,8 @@ final class AppStoreTests: XCTestCase {
         "blink.workspaceViewportOffsets",
         "blink.columns",
         "blink.projectSetups",
+        "blink.fileEditorLauncher",
+        "blink.fileEditorCustomCommand",
     ]
 
     private var savedDefaults: [String: Any?] = [:]
@@ -597,6 +600,136 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(command.contains("kill-session -t 'blink-1-\(firstPaneId)'"))
         XCTAssertTrue(command.contains("kill-session -t 'blink-1-\(secondPaneId)'"))
         XCTAssertTrue(command.contains("kill-session -t 'blink-1'"))
+    }
+
+    func testOpenFileInEditorTargetsExistingTmuxNeovimTab() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let editorTab = store.openTab(projectId: "1")
+        let paneId = try! XCTUnwrap(editorTab.projectSetupPaneId)
+        store.handleTerminalTitleUpdate("nvim", for: editorTab.id)
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.openFileInEditor(projectId: "1", path: "/tmp/blink/Blink/Chat/ProjectChatView.swift", line: 42)
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertEqual(store.activeTabId, editorTab.id)
+        XCTAssertTrue(command.contains("send-keys"))
+        XCTAssertTrue(command.contains("blink-1:pane-\(paneId)"))
+        XCTAssertTrue(command.contains("/tmp/blink/Blink/Chat/ProjectChatView.swift"))
+        XCTAssertTrue(command.contains("call cursor(42, 1)"))
+        XCTAssertTrue(command.contains("tab drop"))
+        XCTAssertEqual(store.projectTabs(for: "1").count, 3)
+    }
+
+    func testOpenFileInEditorCreatesNewTmuxNeovimTabWhenNoEditorPaneExists() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        let initialCount = store.projectTabs(for: "1").count
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.openFileInEditor(projectId: "1", path: "/tmp/blink/README.md", line: 12)
+
+        let tabs = store.projectTabs(for: "1")
+        XCTAssertEqual(tabs.count, initialCount + 1)
+        let newTab = try! XCTUnwrap(tabs.last)
+        let paneId = try! XCTUnwrap(newTab.projectSetupPaneId)
+        XCTAssertEqual(newTab.label, "Neovim")
+        XCTAssertNil(newTab.command)
+        XCTAssertEqual(store.activeTabId, newTab.id)
+        XCTAssertTrue(commands.isEmpty)
+
+        store.handleTerminalSurfaceReady(for: newTab.id)
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertTrue(command.contains("blink-1:pane-\(paneId)"))
+        XCTAssertTrue(command.contains("send-keys"))
+        XCTAssertTrue(command.contains("nvim +12"))
+        XCTAssertTrue(command.contains("/tmp/blink/README.md"))
+    }
+
+    func testOpenFileInEditorResolvesMissingProjectPathByUniqueSuffix() throws {
+        let tempRoot = fileManager.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let nestedDirectory = tempRoot
+            .appendingPathComponent("Blink/Views", isDirectory: true)
+        let actualFile = nestedDirectory.appendingPathComponent("Sidebar.swift")
+        try fileManager.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+        try "struct SidebarView {}".write(to: actualFile, atomically: true, encoding: .utf8)
+        defer { try? fileManager.removeItem(at: tempRoot) }
+
+        let store = makeStore()
+        let originalProject = store.projects[0]
+        store.projects[0] = Project(
+            id: originalProject.id,
+            name: originalProject.name,
+            path: tempRoot.path,
+            color: originalProject.color,
+            createdAt: originalProject.createdAt
+        )
+        store.setActiveProject("1")
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.openFileInEditor(
+            projectId: "1",
+            path: tempRoot.appendingPathComponent("Views/Sidebar.swift").path,
+            line: 130
+        )
+
+        let newTab = try XCTUnwrap(store.projectTabs(for: "1").last)
+        store.handleTerminalSurfaceReady(for: newTab.id)
+
+        let command = try XCTUnwrap(commands.first)
+        let missingPath = tempRoot.appendingPathComponent("Views/Sidebar.swift").path
+        XCTAssertTrue(command.contains("nvim +130"))
+        XCTAssertTrue(command.contains(actualFile.path))
+        XCTAssertFalse(command.contains(missingPath))
+    }
+
+    func testOpenFileInEditorUsesExternalEditorLauncherWhenConfigured() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.fileEditorLauncher = .cursor
+        let initialCount = store.projectTabs(for: "1").count
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.openFileInEditor(
+            projectId: "1",
+            path: "/tmp/blink/Blink/Views/Sidebar.swift",
+            line: 130,
+            column: 4
+        )
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertEqual(store.projectTabs(for: "1").count, initialCount)
+        XCTAssertTrue(command.contains("cursor "))
+        XCTAssertTrue(command.contains("/tmp/blink/Blink/Views/Sidebar.swift:130:4"))
+    }
+
+    func testOpenFileInEditorUsesCustomEditorCommandTemplate() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.fileEditorLauncher = .custom
+        store.fileEditorCustomCommand = "custom-open --path {path} --line {line} --column {column}"
+        var commands: [String] = []
+        store.detachedShellCommandHandler = { commands.append($0) }
+
+        store.openFileInEditor(
+            projectId: "1",
+            path: "/tmp/blink/Blink/Views/Sidebar.swift",
+            line: 18,
+            column: 2
+        )
+
+        let command = try! XCTUnwrap(commands.first)
+        XCTAssertTrue(command.contains("custom-open --path "))
+        XCTAssertTrue(command.contains("/tmp/blink/Blink/Views/Sidebar.swift"))
+        XCTAssertTrue(command.contains("--line 18"))
+        XCTAssertTrue(command.contains("--column 2"))
     }
 
     func testSplitActivePaneWithNewTabInsertsBelowActivePane() {

@@ -271,6 +271,18 @@ struct ProjectChatView: View {
                 Text("\(projectThreads.count)")
                     .font(Fonts.primary(size: 11, family: store.uiFontFamily))
                     .foregroundStyle(theme.textDim)
+
+                Button(action: startNewConversation) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(theme.textDim)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Start a new conversation")
+                .accessibilityLabel("New Chat")
+                .pointerCursor()
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -394,10 +406,30 @@ struct ProjectChatView: View {
                 .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if shouldShowAISettingsShortcut(for: message) {
+                Button("AI Settings") {
+                    store.setActiveView(.settings)
+                }
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                .foregroundStyle(theme.accent)
+                .buttonStyle(.plain)
+                .pointerCursor()
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(theme.danger.opacity(0.08))
+    }
+
+    private func shouldShowAISettingsShortcut(for message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("codex cli")
+            || lowercased.contains("claude cli")
+            || lowercased.contains("install codex")
+            || lowercased.contains("install claude")
+            || lowercased.contains(" on your path")
+            || lowercased.contains("login shell")
     }
 
     private var messageTimeline: some View {
@@ -688,49 +720,38 @@ struct ProjectChatView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            ForEach(event.questions, id: \.id) { question in
+            if let firstQuestion = event.questions.first {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(question.header)
+                    Text(firstQuestion.header)
                         .font(Fonts.primary(size: 11, weight: .medium, family: store.uiFontFamily))
                         .foregroundStyle(theme.text)
 
-                    Text(question.prompt)
+                    Text(firstQuestion.prompt)
                         .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                         .foregroundStyle(theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    if !question.options.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(question.options, id: \.id) { option in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(option.label)
-                                            .font(Fonts.primary(size: 11, weight: .medium, family: store.uiFontFamily))
-                                            .foregroundStyle(theme.text)
-
-                                        if let description = option.description, !description.isEmpty {
-                                            Text(description)
-                                                .font(Fonts.primary(size: 10, family: store.uiFontFamily))
-                                                .foregroundStyle(theme.textDim)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                    }
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 7)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(Color.white.opacity(0.04))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .strokeBorder(theme.border.opacity(0.85), lineWidth: 1)
-                                    )
-                                }
-                            }
-                        }
-                        .scrollIndicators(.hidden)
-                    }
                 }
+            }
+
+            Text("Blink can show this runtime request, but it can’t answer it in chat yet. Use the underlying CLI directly if you need to continue this interaction.")
+                .font(Fonts.primary(size: 11, family: store.uiFontFamily))
+                .foregroundStyle(theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.8), lineWidth: 1)
+                )
+
+            if event.questions.count > 1 {
+                Text("\(event.questions.count) prompts captured from the runtime")
+                    .font(Fonts.primary(size: 10, family: store.uiFontFamily))
+                    .foregroundStyle(theme.textDim)
             }
         }
         .padding(.horizontal, 12)
@@ -785,6 +806,7 @@ struct ProjectChatView: View {
                         .padding(2)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(attachment.name)")
                 .pointerCursor()
             }
         }
@@ -798,6 +820,7 @@ struct ProjectChatView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(theme.border.opacity(0.85), lineWidth: 1)
         )
+        .help(attachment.path)
     }
 
     private func messageRow(_ message: ChatMessage) -> some View {
@@ -1398,6 +1421,13 @@ struct ProjectChatView: View {
                         Circle()
                             .fill(canSend ? theme.accent.opacity(0.95) : theme.textDim.opacity(0.28))
                             .frame(width: 36, height: 36)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(
+                                        canSend ? theme.accent.opacity(0.28) : theme.border.opacity(0.8),
+                                        lineWidth: 1
+                                    )
+                            )
 
                         if isSending {
                             ProgressView()
@@ -1412,6 +1442,8 @@ struct ProjectChatView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
+                .help(sendButtonHelpText)
+                .accessibilityLabel(sendButtonAccessibilityLabel)
                 .pointerCursor()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1444,15 +1476,16 @@ struct ProjectChatView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "paperclip")
                         .font(.system(size: 11, weight: .semibold))
-                    if !pendingAttachments.isEmpty {
-                        Text("\(pendingAttachments.count)")
-                            .font(Fonts.primary(size: 13, weight: .medium, family: store.uiFontFamily))
-                    }
+                    Text(attachmentButtonTitle)
+                        .font(Fonts.primary(size: 13, weight: .medium, family: store.uiFontFamily))
                 }
                 .foregroundStyle(pendingAttachments.isEmpty ? theme.textDim : theme.text)
             }
             .buttonStyle(.plain)
+            .disabled(isSending)
             .fixedSize()
+            .help("Attach files or images to this message.")
+            .accessibilityLabel("Attach files")
             .pointerCursor()
 
             railDivider
@@ -1660,13 +1693,17 @@ struct ProjectChatView: View {
     private var composerPlaceholder: String {
         if currentProvider == .secondOpinion {
             return messages.isEmpty
-                ? "Ask for a plan for this project"
-                : "Ask for another planning pass"
+                ? "Ask the agents to plan this work"
+                : "Ask the agents to revise or compare the plan"
         }
 
         return messages.isEmpty
             ? "Ask about this project or request a change"
-            : "Ask for follow-up changes"
+            : "Ask a follow-up question or request a change"
+    }
+
+    private var attachmentButtonTitle: String {
+        pendingAttachments.isEmpty ? "Attach" : "Attach \(pendingAttachments.count)"
     }
 
     private func modelOptions(for provider: ChatProvider) -> [(label: String, value: String)] {
@@ -1708,6 +1745,26 @@ struct ProjectChatView: View {
 
     private var canSend: Bool {
         !isSending && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty)
+    }
+
+    private var sendButtonHelpText: String {
+        if isSending {
+            return "Blink is waiting for the current reply to finish."
+        }
+
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Send message."
+        }
+
+        if !pendingAttachments.isEmpty {
+            return "Send attached files."
+        }
+
+        return "Add a message or attach files to send."
+    }
+
+    private var sendButtonAccessibilityLabel: String {
+        isSending ? "Sending message" : "Send message"
     }
 
     private func trimmedMessageContent(_ content: String) -> String {
@@ -1840,6 +1897,41 @@ struct ProjectChatView: View {
         planningPanelError = nil
         showPlanningSettingsMenu = false
         store.replaceChatThread(in: tabId, with: historyThread.id, label: historyThread.title)
+    }
+
+    private func startNewConversation() {
+        planningPanelError = nil
+        showPlanningSettingsMenu = false
+
+        Task {
+            let provider = currentProvider
+            let seedModel: String
+            switch provider {
+            case .claude:
+                seedModel = resolvedModelSelection(for: .claude)
+            case .codex, .secondOpinion:
+                seedModel = resolvedModelSelection(for: .codex)
+            }
+
+            let newThread = await chatStore.createThread(
+                project: project,
+                model: seedModel,
+                provider: provider,
+                permissionLevel: currentPermissionLevel
+            )
+
+            await chatStore.updateThreadEffortLevel(currentEffortLevel, for: newThread.id)
+
+            if provider == .secondOpinion {
+                await chatStore.updateThreadModel(resolvedModelSelection(for: .claude), for: newThread.id, provider: .claude)
+                await chatStore.updateThreadPlanningFormat(selectedPlanningFormat, for: newThread.id)
+                await chatStore.updateThreadSecondOpinionStrategy(selectedPlanningStrategy, for: newThread.id)
+            }
+
+            await MainActor.run {
+                store.replaceChatThread(in: tabId, with: newThread.id, label: newThread.title)
+            }
+        }
     }
 
     private var pendingDeletionBinding: Binding<Bool> {

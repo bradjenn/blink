@@ -152,6 +152,25 @@ final class GhosttyApp {
                 }
                 return true
 
+            case GHOSTTY_ACTION_OPEN_URL:
+                guard target.tag == GHOSTTY_TARGET_SURFACE else { return false }
+                let surface = target.target.surface
+                guard let urlPtr = action.action.open_url.url else { return false }
+                let urlBytes = UnsafeBufferPointer(
+                    start: UnsafeRawPointer(urlPtr).assumingMemoryBound(to: UInt8.self),
+                    count: Int(action.action.open_url.len)
+                )
+                let rawURL = String(decoding: urlBytes, as: UTF8.self)
+
+                guard let viewPtr = ghostty_surface_userdata(surface) else { return false }
+                let view = Unmanaged<TerminalSurfaceView>.fromOpaque(viewPtr).takeUnretainedValue()
+                let tabId = view.tabId
+
+                DispatchQueue.main.async {
+                    ghostty.handleOpenURL(rawURL, for: tabId)
+                }
+                return true
+
             default:
                 return false
             }
@@ -286,6 +305,103 @@ final class GhosttyApp {
         }
 
         return cfg
+    }
+
+    private func handleOpenURL(_ rawURL: String, for tabId: String) {
+        let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty,
+              let store,
+              let projectId = store.tabsById[tabId]?.projectId else {
+            return
+        }
+
+        if let editorTarget = resolvedEditorTarget(from: trimmedURL, projectId: projectId, store: store) {
+            store.openFileInEditor(
+                projectId: projectId,
+                path: editorTarget.path,
+                line: editorTarget.line
+            )
+            return
+        }
+
+        guard let url = URL(string: trimmedURL) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func resolvedEditorTarget(
+        from rawURL: String,
+        projectId: String,
+        store: AppStore
+    ) -> (path: String, line: Int?)? {
+        if let url = URL(string: rawURL) {
+            if url.scheme == "file" {
+                let path = url.path.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !path.isEmpty else { return nil }
+                return (path, resolvedLineNumber(from: url))
+            }
+
+            if url.scheme == "blink-file",
+               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let path = components.queryItems?.first(where: { $0.name == "path" })?.value {
+                let line = components.queryItems?
+                    .first(where: { $0.name == "line" })?
+                    .value
+                    .flatMap(Int.init)
+                return (resolvedProjectPath(path, projectId: projectId, store: store), line)
+            }
+
+            if url.scheme != nil {
+                return nil
+            }
+        }
+
+        let line = parseLineNumber(from: rawURL)
+        let basePath = rawURL
+            .replacingOccurrences(of: #"#L\d+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #":\d+(?::\d+)?$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !basePath.isEmpty else { return nil }
+        return (resolvedProjectPath(basePath, projectId: projectId, store: store), line)
+    }
+
+    private func resolvedProjectPath(_ rawPath: String, projectId: String, store: AppStore) -> String {
+        let trimmedPath = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPath.hasPrefix("/") {
+            return trimmedPath
+        }
+
+        guard let project = store.projects.first(where: { $0.id == projectId }) else {
+            return trimmedPath
+        }
+
+        return URL(fileURLWithPath: project.path)
+            .appendingPathComponent(trimmedPath)
+            .path
+    }
+
+    private func resolvedLineNumber(from url: URL) -> Int? {
+        if let fragment = url.fragment,
+           let line = parseLineNumber(from: fragment) {
+            return line
+        }
+
+        return parseLineNumber(from: url.lastPathComponent)
+    }
+
+    private func parseLineNumber(from value: String) -> Int? {
+        if let match = value.range(of: #"L(\d+)"#, options: .regularExpression) {
+            let digits = value[match].drop(while: { !$0.isNumber })
+            return Int(digits)
+        }
+
+        if let match = value.range(of: #":(\d+)(?::\d+)?$"#, options: .regularExpression) {
+            let digits = value[match]
+                .dropFirst()
+                .prefix(while: \.isNumber)
+            return Int(digits)
+        }
+
+        return nil
     }
 
     deinit {

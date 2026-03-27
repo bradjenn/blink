@@ -25,6 +25,7 @@ struct SettingsPage: View {
                     ForEach(SettingsTab.allCases, id: \.self) { tab in
                         SettingsTabButton(
                             label: tab.rawValue,
+                            badgeText: tab == .ai ? "New" : nil,
                             isActive: selectedTab == tab,
                             action: { selectedTab = tab }
                         )
@@ -92,6 +93,7 @@ private struct SettingsTabButton: View {
     @Environment(AppStore.self) private var store
 
     let label: String
+    let badgeText: String?
     let isActive: Bool
     let action: () -> Void
 
@@ -99,16 +101,32 @@ private struct SettingsTabButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(Fonts.primary(size: 14, family: store.uiFontFamily))
-                .foregroundStyle(isActive ? theme.text : isHovered ? theme.text : theme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isActive ? Color.white.opacity(0.06) : isHovered ? Color.white.opacity(0.03) : Color.clear)
-                )
+            HStack(spacing: 8) {
+                Text(label)
+                    .font(Fonts.primary(size: 14, family: store.uiFontFamily))
+                    .foregroundStyle(isActive ? theme.text : isHovered ? theme.text : theme.textMuted)
+
+                if let badgeText {
+                    Text(badgeText)
+                        .font(Fonts.primary(size: 10, weight: .medium, family: store.uiFontFamily))
+                        .foregroundStyle(theme.accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(theme.accent.opacity(0.14))
+                        )
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isActive ? Color.white.opacity(0.06) : isHovered ? Color.white.opacity(0.03) : Color.clear)
+            )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

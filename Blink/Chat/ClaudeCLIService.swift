@@ -16,6 +16,28 @@ actor ClaudeCLIService {
         permissionLevel: PermissionLevel = .readOnly,
         attachments: [ChatAttachment] = []
     ) async throws -> ChatTurnResult {
+        try await sendTurn(
+            projectPath: projectPath,
+            model: model,
+            sessionId: sessionId,
+            prompt: prompt,
+            effort: effort,
+            permissionLevel: permissionLevel,
+            attachments: attachments,
+            allowSessionReset: true
+        )
+    }
+
+    private func sendTurn(
+        projectPath: String,
+        model: String,
+        sessionId: String?,
+        prompt: String,
+        effort: String? = nil,
+        permissionLevel: PermissionLevel = .readOnly,
+        attachments: [ChatAttachment] = [],
+        allowSessionReset: Bool
+    ) async throws -> ChatTurnResult {
         let attachmentContext = attachmentPromptContext(for: attachments)
         let effectivePrompt = [attachmentContext, prompt]
             .filter { !$0.isEmpty }
@@ -48,13 +70,20 @@ actor ClaudeCLIService {
             try? stderrHandle.close()
         }
 
+        guard let executableURL = await LocalCLIResolver.shared.executableURL(named: "claude") else {
+            throw ChatProviderError.launchFailed(
+                "Blink could not find the local claude CLI from the app environment or your login shell. Install Claude Code and ensure `claude` is on your PATH."
+            )
+        }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = executableURL
+        process.environment = await LocalCLIResolver.shared.launchEnvironment()
         process.currentDirectoryURL = URL(fileURLWithPath: projectPath, isDirectory: true)
         process.standardOutput = stdoutHandle
         process.standardError = stderrHandle
 
-        var arguments = ["claude"]
+        var arguments: [String] = []
 
         if !model.isEmpty {
             arguments.append(contentsOf: ["--model", model])
@@ -99,24 +128,49 @@ actor ClaudeCLIService {
         let stderrText = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
 
         if process.terminationStatus != 0 {
-            let failureMessage = firstNonEmpty(
-                stderrText,
-                stdoutText,
-                "The claude CLI failed while handling this message."
+            if allowSessionReset,
+               sessionId != nil,
+               indicatesBusySession(stderr: stderrText, stdout: stdoutText) {
+                return try await sendTurn(
+                    projectPath: projectPath,
+                    model: model,
+                    sessionId: nil,
+                    prompt: prompt,
+                    effort: effort,
+                    permissionLevel: permissionLevel,
+                    attachments: attachments,
+                    allowSessionReset: false
+                )
+            }
+
+            let failureMessage = ChatCLITroubleshooting.failureMessage(
+                providerName: "Claude Code",
+                command: "claude",
+                stderr: stderrText,
+                stdout: stdoutText,
+                fallback: "The claude CLI failed while handling this message."
             )
             throw ChatProviderError.executionFailed(failureMessage)
         }
 
         let trimmedOutput = stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedOutput.isEmpty else {
-            let failureMessage = firstNonEmpty(
-                stderrText,
-                "The claude CLI completed without returning an assistant message."
+            let failureMessage = ChatCLITroubleshooting.emptyResponseMessage(
+                providerName: "Claude Code",
+                command: "claude",
+                stderr: stderrText,
+                fallback: "The claude CLI completed without returning an assistant message."
             )
             throw ChatProviderError.invalidResponse(failureMessage)
         }
 
         return ChatTurnResult(sessionId: resolvedSessionId, text: trimmedOutput)
+    }
+
+    private func indicatesBusySession(stderr: String, stdout: String) -> Bool {
+        let combined = "\(stderr)\n\(stdout)".lowercased()
+        return combined.contains("session id")
+            && combined.contains("already in use")
     }
 
     private func firstNonEmpty(_ candidates: String...) -> String {

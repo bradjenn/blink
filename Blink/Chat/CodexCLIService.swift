@@ -41,8 +41,15 @@ actor CodexCLIService {
             try? stderrHandle.close()
         }
 
+        guard let executableURL = await LocalCLIResolver.shared.executableURL(named: "codex") else {
+            throw ChatProviderError.launchFailed(
+                "Blink could not find the local codex CLI from the app environment or your login shell. Install Codex and ensure `codex` is on your PATH."
+            )
+        }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = executableURL
+        process.environment = await LocalCLIResolver.shared.launchEnvironment()
         process.currentDirectoryURL = URL(fileURLWithPath: projectPath, isDirectory: true)
         process.standardOutput = stdoutHandle
         process.standardError = stderrHandle
@@ -50,7 +57,7 @@ actor CodexCLIService {
         let stdinPipe = Pipe()
         process.standardInput = stdinPipe
 
-        var arguments = ["codex", "exec"]
+        var arguments = ["exec"]
         let sharedArguments = codexArguments(
             model: model,
             effort: effort,
@@ -100,10 +107,12 @@ actor CodexCLIService {
         let resolvedMessage = lastMessage.isEmpty ? parsed.lastAssistantMessage : lastMessage
 
         if process.terminationStatus != 0 {
-            let failureMessage = firstNonEmpty(
-                stderrText,
-                parsed.lastAssistantMessage,
-                "The codex CLI failed while handling this message."
+            let failureMessage = ChatCLITroubleshooting.failureMessage(
+                providerName: "Codex",
+                command: "codex",
+                stderr: stderrText,
+                stdout: parsed.lastAssistantMessage,
+                fallback: "The codex CLI failed while handling this message."
             )
             throw ChatProviderError.executionFailed(failureMessage)
         }
@@ -113,10 +122,14 @@ actor CodexCLIService {
         }
 
         guard !resolvedMessage.isEmpty else {
-            let failureMessage = firstNonEmpty(
-                parsed.lastAssistantMessage,
-                stderrText,
-                "The codex CLI completed without returning an assistant message."
+            let failureMessage = ChatCLITroubleshooting.emptyResponseMessage(
+                providerName: "Codex",
+                command: "codex",
+                stderr: firstNonEmpty(
+                    parsed.lastAssistantMessage,
+                    stderrText
+                ),
+                fallback: "The codex CLI completed without returning an assistant message."
             )
             throw ChatProviderError.invalidResponse(failureMessage)
         }

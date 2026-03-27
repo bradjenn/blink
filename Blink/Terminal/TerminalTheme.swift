@@ -384,8 +384,92 @@ enum YaziLauncher {
     }
 }
 
+enum FileEditorLauncher: String, CaseIterable {
+    case blinkNeovim
+    case cursor
+    case zed
+    case vsCode
+    case custom
+
+    var displayName: String {
+        switch self {
+        case .blinkNeovim:
+            "Blink Neovim"
+        case .cursor:
+            "Cursor"
+        case .zed:
+            "Zed"
+        case .vsCode:
+            "VS Code"
+        case .custom:
+            "Custom command"
+        }
+    }
+
+    var opensInsideBlink: Bool {
+        self == .blinkNeovim
+    }
+
+    func command(path: String, line: Int? = nil, column: Int? = nil, customTemplate: String = "") -> String {
+        let safeLine = max(line ?? 1, 1)
+        let safeColumn = max(column ?? 1, 1)
+        let location = line == nil && column == nil
+            ? NvimLauncher.shellQuote(path)
+            : NvimLauncher.shellQuote("\(path):\(safeLine):\(safeColumn)")
+
+        switch self {
+        case .blinkNeovim:
+            return NvimLauncher.command(path: path, line: line, column: column)
+        case .cursor:
+            return "cursor \(location)"
+        case .zed:
+            return "zed \(location)"
+        case .vsCode:
+            return "code --goto \(location)"
+        case .custom:
+            return FileEditorLauncher.renderCustomCommand(
+                template: customTemplate,
+                path: path,
+                line: safeLine,
+                column: safeColumn
+            )
+        }
+    }
+
+    private static func renderCustomCommand(
+        template: String,
+        path: String,
+        line: Int,
+        column: Int
+    ) -> String {
+        let effectiveTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "open {path}"
+            : template
+
+        return effectiveTemplate
+            .replacingOccurrences(of: "{path}", with: NvimLauncher.shellQuote(path))
+            .replacingOccurrences(of: "{line}", with: "\(line)")
+            .replacingOccurrences(of: "{column}", with: "\(column)")
+    }
+}
+
 enum NvimLauncher {
     static func command() -> String {
         "env EDITOR=nvim VISUAL=nvim nvim"
+    }
+
+    static func command(path: String, line: Int? = nil, column: Int? = nil) -> String {
+        var command = command()
+
+        if let line {
+            command += " +\(line)"
+        }
+
+        command += " \(shellQuote(path))"
+        return command
+    }
+
+    static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 }

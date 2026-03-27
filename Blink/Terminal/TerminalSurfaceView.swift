@@ -57,6 +57,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private let command: String?
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
+    /// Called once after the terminal surface is created and attached.
+    var onReady: ((String) -> Void)?
     /// Called when the user performs a window-switch gesture.
     var onSwipeNavigation: ((SwipeNavigationDirection) -> Void)?
     /// Called when the user interacts with the surface directly.
@@ -143,6 +145,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         var envVars: [ghostty_env_var_s] = [
             ghostty_env_var_s(key: strdup("TERM"), value: strdup("xterm-256color")),
             ghostty_env_var_s(key: strdup("COLORTERM"), value: strdup("truecolor")),
+            // Some CLIs only emit OSC-8 hyperlinks when the terminal program is
+            // advertised explicitly. Blink embeds Ghostty, so expose that here.
+            ghostty_env_var_s(key: strdup("TERM_PROGRAM"), value: strdup("Ghostty")),
             ghostty_env_var_s(key: strdup("PATH"), value: strdup(Self.shellPATH())),
         ]
 
@@ -193,6 +198,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         // before SwiftUI's cooperative scheduler can interleave focus-cleanup.
         DispatchQueue.main.async { [weak self] in
             self?.focus()
+            if let self {
+                self.onReady?(self.tabId)
+            }
         }
     }
 
@@ -726,6 +734,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
         self.surface = nil
         onClose = nil
+        onReady = nil
         onSwipeNavigation = nil
         onInteraction = nil
         onSubmittedLine = nil

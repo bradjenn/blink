@@ -104,6 +104,9 @@ struct BApp: App {
                             surfaceManager.destroySurface(tabId: tabId)
                         }
                     }
+                    surfaceManager.onSurfaceReady = { tabId in
+                        store.handleTerminalSurfaceReady(for: tabId)
+                    }
                 }
                 .onChange(of: store.spotifyEnabled) {
                     if store.spotifyEnabled {

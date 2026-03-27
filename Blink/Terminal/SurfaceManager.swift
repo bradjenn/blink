@@ -8,12 +8,17 @@ final class SurfaceManager {
 
     /// Called when a shell process exits.
     var onProcessExit: ((String) -> Void)?
+    /// Called when a terminal surface is ready to accept input.
+    var onSurfaceReady: ((String) -> Void)?
 
     /// Create a new terminal surface for a tab.
     func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String, command: String? = nil) -> TerminalSurfaceView {
         let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory, command: command)
         view.onClose = { [weak self] tabId in
             self?.onProcessExit?(tabId)
+        }
+        view.onReady = { [weak self] tabId in
+            self?.onSurfaceReady?(tabId)
         }
         surfaces[tabId] = view
         return view

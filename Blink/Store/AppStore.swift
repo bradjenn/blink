@@ -34,6 +34,8 @@ private enum StorageKeys {
     static let spotifyEnabled = "blink.spotifyEnabled"
     static let chatModel = "blink.chatModel"
     static let claudeChatModel = "blink.claudeChatModel"
+    static let fileEditorLauncher = "blink.fileEditorLauncher"
+    static let fileEditorCustomCommand = "blink.fileEditorCustomCommand"
 }
 
 @MainActor @Observable
@@ -57,6 +59,7 @@ final class AppStore {
     var activeTabId: String?
     var pendingMaximizedTabId: String?
     var managedCommandStates: [String: ManagedCommandState] = [:]
+    private var pendingTmuxShellCommands: [String: String] = [:]
 
     /// O(1) tab lookup by ID. Rebuilt on access when tabs change.
     var tabsById: [String: AppTab] {
@@ -141,6 +144,12 @@ final class AppStore {
     var claudeChatModel: String {
         didSet { UserDefaults.standard.set(claudeChatModel, forKey: StorageKeys.claudeChatModel) }
     }
+    var fileEditorLauncher: FileEditorLauncher {
+        didSet { UserDefaults.standard.set(fileEditorLauncher.rawValue, forKey: StorageKeys.fileEditorLauncher) }
+    }
+    var fileEditorCustomCommand: String {
+        didSet { UserDefaults.standard.set(fileEditorCustomCommand, forKey: StorageKeys.fileEditorCustomCommand) }
+    }
     // Focus centering
     var focusCenteringMode: FocusCenteringMode {
         didSet { UserDefaults.standard.set(focusCenteringMode.rawValue, forKey: StorageKeys.focusCenteringMode) }
@@ -217,6 +226,10 @@ final class AppStore {
         self.spotifyEnabled = defaults.object(forKey: StorageKeys.spotifyEnabled) as? Bool ?? false
         self.chatModel = defaults.string(forKey: StorageKeys.chatModel) ?? ""
         self.claudeChatModel = defaults.string(forKey: StorageKeys.claudeChatModel) ?? ""
+        self.fileEditorLauncher = FileEditorLauncher(
+            rawValue: defaults.string(forKey: StorageKeys.fileEditorLauncher) ?? ""
+        ) ?? .blinkNeovim
+        self.fileEditorCustomCommand = defaults.string(forKey: StorageKeys.fileEditorCustomCommand) ?? "open {path}"
         self.focusCenteringMode = FocusCenteringMode(rawValue: defaults.string(forKey: StorageKeys.focusCenteringMode) ?? "") ?? .never
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
@@ -594,6 +607,9 @@ final class AppStore {
         if let displayName = TabTitleFilter.displayName(for: title) {
             setTabTitle(tabId, title: displayName)
         } else if TabTitleFilter.isShellPrompt(title) {
+            if sendPendingTmuxShellCommandIfNeeded(for: tabId) {
+                return
+            }
             revertTabTitle(tabId)
         }
     }
@@ -1159,6 +1175,68 @@ final class AppStore {
         )
     }
 
+    func openFileInEditor(
+        projectId: String,
+        path: String,
+        line: Int? = nil,
+        column: Int? = nil
+    ) {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let resolvedPath = resolveExistingProjectFilePath(
+            normalizedPath,
+            projectId: projectId
+        ) ?? normalizedPath
+
+        guard fileEditorLauncher.opensInsideBlink else {
+            runDetachedShellCommand(
+                fileEditorLauncher.command(
+                    path: resolvedPath,
+                    line: line,
+                    column: column,
+                    customTemplate: fileEditorCustomCommand
+                )
+            )
+            return
+        }
+
+        if focusExistingTmuxEditorTab(
+            projectId: projectId,
+            path: resolvedPath,
+            line: line,
+            column: column
+        ) {
+            return
+        }
+
+        if tmuxIntegrationEnabled {
+            openFileInNewTmuxEditorTab(
+                projectId: projectId,
+                path: resolvedPath,
+                line: line,
+                column: column
+            )
+            return
+        }
+
+        let label = URL(fileURLWithPath: resolvedPath).lastPathComponent
+        let command = fileEditorLauncher.command(
+            path: resolvedPath,
+            line: line,
+            column: column,
+            customTemplate: fileEditorCustomCommand
+        )
+        _ = openTab(projectId: projectId, command: command, label: label)
+    }
+
+    func openFileInEditorForActiveProject(
+        path: String,
+        line: Int? = nil,
+        column: Int? = nil
+    ) {
+        guard let projectId = activeProjectId else { return }
+        openFileInEditor(projectId: projectId, path: path, line: line, column: column)
+    }
+
     func openOrFocusChatTab(
         projectId: String,
         threadId: String,
@@ -1356,6 +1434,7 @@ final class AppStore {
         tabs.removeAll { $0.projectId == id }
         clearManagedCommandStates(for: tabIds)
         clearManagedAIPromptCapture(for: tabIds)
+        clearPendingTmuxShellCommands(for: tabIds)
         unreadTabs.subtract(tabIds)
         lastActiveTab[id] = nil
         if activeProjectId == id {
@@ -1394,6 +1473,7 @@ final class AppStore {
             tabs.removeAll { $0.id == id }
             managedCommandStates[id] = nil
             clearManagedAIPromptCapture(for: [id])
+            clearPendingTmuxShellCommands(for: [id])
             unreadTabs.remove(id)
             if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
             // Focus the previously active tab in the restored layout
@@ -1443,6 +1523,7 @@ final class AppStore {
         tabs.removeAll { $0.id == id }
         managedCommandStates[id] = nil
         clearManagedAIPromptCapture(for: [id])
+        clearPendingTmuxShellCommands(for: [id])
         unreadTabs.remove(id)
         if lastActiveTab[projectId] == id {
             lastActiveTab[projectId] = nil
@@ -1734,11 +1815,12 @@ final class AppStore {
         projectSetupPaneId: String? = nil
     ) -> AppTab {
         let count = tabs.filter { $0.projectId == projectId && $0.isShell && $0.command == nil }.count + 1
-        let defaultLabel = label ?? "Terminal \(count)"
+        let defaultLabel = command == nil ? "Terminal \(count)" : (label ?? "Terminal \(count)")
+        let resolvedLabel = label ?? defaultLabel
         return AppTab(
             id: UUID().uuidString,
             type: "shell",
-            label: defaultLabel,
+            label: resolvedLabel,
             defaultLabel: defaultLabel,
             projectId: projectId,
             command: command,
@@ -1817,8 +1899,30 @@ final class AppStore {
         }
     }
 
+    private func clearPendingTmuxShellCommands(for tabIds: [String]) {
+        for tabId in tabIds {
+            pendingTmuxShellCommands.removeValue(forKey: tabId)
+        }
+    }
+
     private func shouldUseTmux(for tab: AppTab) -> Bool {
         tmuxIntegrationEnabled && tab.isShell && tab.command == nil && tab.projectSetupPaneId != nil
+    }
+
+    private func isReusableTmuxEditorTab(_ tab: AppTab) -> Bool {
+        guard shouldUseTmux(for: tab) else { return false }
+        return tab.label == "Neovim" || tab.label == "Vim"
+    }
+
+    private func preferredTmuxEditorTab(for projectId: String) -> AppTab? {
+        if let activeTabId,
+           let activeTab = tabsById[activeTabId],
+           activeTab.projectId == projectId,
+           isReusableTmuxEditorTab(activeTab) {
+            return activeTab
+        }
+
+        return projectTabs(for: projectId).first(where: isReusableTmuxEditorTab)
     }
 
     private func makeProjectSetupPaneId() -> String {
@@ -1873,6 +1977,66 @@ final class AppStore {
         ]).joined(separator: "\n"))
     }
 
+    private func focusExistingTmuxEditorTab(
+        projectId: String,
+        path: String,
+        line: Int?,
+        column: Int?
+    ) -> Bool {
+        guard let tab = preferredTmuxEditorTab(for: projectId),
+              let paneId = tab.projectSetupPaneId else {
+            return false
+        }
+
+        let foregroundCommand = tmuxPaneCurrentCommand(projectId: projectId, paneId: paneId)
+        let normalizedForegroundCommand = foregroundCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let shouldSendVimCommand: Bool
+        if let normalizedForegroundCommand {
+            shouldSendVimCommand = normalizedForegroundCommand == "nvim" || normalizedForegroundCommand == "vim"
+        } else {
+            shouldSendVimCommand = isReusableTmuxEditorTab(tab)
+        }
+
+        if shouldSendVimCommand {
+            runDetachedShellCommand(tmuxSendKeysCommand(
+                projectId: projectId,
+                paneId: paneId,
+                text: vimOpenCommand(path: path, line: line, column: column)
+            ))
+        } else {
+            runDetachedShellCommand(tmuxSendShellCommand(
+                projectId: projectId,
+                paneId: paneId,
+                workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: projectId),
+                text: NvimLauncher.command(path: path, line: line, column: column)
+            ))
+        }
+
+        setActiveTab(tab.id)
+        activateTerminalFocusSoon()
+        return true
+    }
+
+    private func openFileInNewTmuxEditorTab(
+        projectId: String,
+        path: String,
+        line: Int?,
+        column: Int?
+    ) {
+        let workingDirectory = URL(fileURLWithPath: path)
+            .deletingLastPathComponent()
+            .path
+        let tab = openTab(
+            projectId: projectId,
+            command: nil,
+            label: "Neovim",
+            workingDirectory: workingDirectory
+        )
+
+        pendingTmuxShellCommands[tab.id] = NvimLauncher.command(path: path, line: line, column: column)
+    }
+
     private func runDetachedShellCommand(_ command: String) {
         if let detachedShellCommandHandler {
             detachedShellCommandHandler(command)
@@ -1898,6 +2062,31 @@ final class AppStore {
         "pane-\(paneId)"
     }
 
+    private func tmuxWindowTarget(projectId: String, paneId: String) -> String {
+        "\(tmuxBaseSessionName(for: projectId)):\(tmuxWindowName(for: paneId))"
+    }
+
+    private func tmuxShellLaunchCommand() -> String {
+        let shell = UserDefaults.standard.string(forKey: "blink.shell")
+            ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        return "env -u TMUX \(shellQuote(shell)) -l"
+    }
+
+    private func tmuxEnsureWindowCommand(projectId: String, paneId: String, workingDirectory: String) -> String {
+        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let baseSession = tmuxBaseSessionName(for: projectId)
+        let windowName = tmuxWindowName(for: paneId)
+        let baseTarget = shellQuote(baseSession)
+        let windowTarget = shellQuote(windowName)
+        let workingDirectoryArg = shellQuote(workingDirectory)
+        let shellCommand = tmuxShellLaunchCommand()
+
+        let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
+        let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
+
+        return [ensureBaseSession, ensureWindow].joined(separator: "; ")
+    }
+
     private static func tmuxSocketName() -> String {
         let bundleId = Bundle.main.bundleIdentifier ?? "com.blink.app"
         return bundleId.replacingOccurrences(of: ".", with: "-")
@@ -1915,6 +2104,189 @@ final class AppStore {
 
     private func shellQuote(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    }
+
+    private func runSynchronousShellCommand(_ command: String) -> String? {
+        let shellPath = "/bin/zsh"
+        let task = Process()
+        let pipe = Pipe()
+        task.executableURL = URL(fileURLWithPath: shellPath)
+        task.arguments = ["-lc", command]
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+        } catch {
+            return nil
+        }
+
+        task.waitUntilExit()
+        guard task.terminationStatus == 0 else { return nil }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !output.isEmpty else {
+            return nil
+        }
+
+        return output
+    }
+
+    private func resolveExistingProjectFilePath(_ path: String, projectId: String) -> String? {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard !FileManager.default.fileExists(atPath: normalizedPath),
+              let projectPath = projects.first(where: { $0.id == projectId })?.path else {
+            return FileManager.default.fileExists(atPath: normalizedPath) ? normalizedPath : nil
+        }
+
+        let normalizedProjectPath = URL(fileURLWithPath: projectPath, isDirectory: true)
+            .standardizedFileURL
+            .path
+        let relativeCandidates = candidateProjectPathSuffixes(
+            for: normalizedPath,
+            projectPath: normalizedProjectPath
+        )
+
+        for suffix in relativeCandidates {
+            let matches = matchingProjectFiles(
+                under: normalizedProjectPath,
+                suffix: suffix
+            )
+            if matches.count == 1 {
+                return matches[0]
+            }
+        }
+
+        return nil
+    }
+
+    private func candidateProjectPathSuffixes(for path: String, projectPath: String) -> [String] {
+        var candidates: [String] = []
+        let normalizedProjectPrefix = projectPath.hasSuffix("/") ? projectPath : "\(projectPath)/"
+
+        if path.hasPrefix(normalizedProjectPrefix) {
+            let relativePath = String(path.dropFirst(normalizedProjectPrefix.count))
+            if !relativePath.isEmpty {
+                candidates.append(relativePath)
+            }
+        }
+
+        let components = path.split(separator: "/").map(String.init)
+        for suffixLength in stride(from: min(components.count, 4), through: 2, by: -1) {
+            let suffix = components.suffix(suffixLength).joined(separator: "/")
+            if !suffix.isEmpty, !candidates.contains(suffix) {
+                candidates.append(suffix)
+            }
+        }
+
+        return candidates
+    }
+
+    private func matchingProjectFiles(under projectPath: String, suffix: String) -> [String] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: URL(fileURLWithPath: projectPath, isDirectory: true),
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var matches: [String] = []
+        let normalizedSuffix = suffix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey]),
+                  values.isRegularFile == true else {
+                continue
+            }
+
+            let fullPath = fileURL.standardizedFileURL.path
+            if fullPath.hasSuffix("/\(normalizedSuffix)") {
+                matches.append(fullPath)
+            }
+        }
+
+        return matches
+    }
+
+    func handleTerminalSurfaceReady(for tabId: String) {
+        _ = sendPendingTmuxShellCommandIfNeeded(for: tabId)
+    }
+
+    private func tmuxPaneCurrentCommand(projectId: String, paneId: String) -> String? {
+        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        return runSynchronousShellCommand(
+            "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
+        )
+    }
+
+    private func vimSingleQuoteEscape(_ value: String) -> String {
+        value.replacingOccurrences(of: "'", with: "''")
+    }
+
+    private func vimOpenCommand(path: String, line: Int?, column: Int?) -> String {
+        let escapedPath = vimSingleQuoteEscape(path)
+        var command = ":execute 'tab drop ' . fnameescape('\(escapedPath)')"
+
+        if let line {
+            let safeColumn = max(column ?? 1, 1)
+            command += " | call cursor(\(line), \(safeColumn))"
+        }
+
+        return command
+    }
+
+    private func tmuxSendKeysCommand(projectId: String, paneId: String, text: String) -> String {
+        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        let literalText = shellQuote(text)
+
+        return [
+            "\(tmuxPrefix) send-keys -t \(target) Escape",
+            "\(tmuxPrefix) send-keys -t \(target) -l \(literalText)",
+            "\(tmuxPrefix) send-keys -t \(target) Enter",
+        ].joined(separator: "; ")
+    }
+
+    private func tmuxSendShellCommand(
+        projectId: String,
+        paneId: String,
+        workingDirectory: String,
+        text: String
+    ) -> String {
+        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        let literalText = shellQuote(text)
+
+        return [
+            tmuxEnsureWindowCommand(
+                projectId: projectId,
+                paneId: paneId,
+                workingDirectory: workingDirectory
+            ),
+            "\(tmuxPrefix) send-keys -t \(target) -l \(literalText)",
+            "\(tmuxPrefix) send-keys -t \(target) Enter",
+        ].joined(separator: "; ")
+    }
+
+    @discardableResult
+    private func sendPendingTmuxShellCommandIfNeeded(for tabId: String) -> Bool {
+        guard let text = pendingTmuxShellCommands.removeValue(forKey: tabId),
+              let tab = tabsById[tabId],
+              let paneId = tab.projectSetupPaneId else {
+            return false
+        }
+
+        runDetachedShellCommand(tmuxSendShellCommand(
+            projectId: tab.projectId,
+            paneId: paneId,
+            workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: tab.projectId),
+            text: text
+        ))
+        return true
     }
 
     private func registerShellDetectedAIPane(_ kind: ManagedAIPaneKind, for tabId: String) {
