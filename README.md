@@ -5,7 +5,7 @@
 <h1 align="center">Blink</h1>
 
 <p align="center">
-  A native macOS terminal workspace with column-based window management
+  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, and built-in Codex/Claude workflows
 </p>
 
 <p align="center">
@@ -32,6 +32,8 @@
 ### Terminal
 
 - **libghostty engine** — GPU-accelerated rendering via Metal, the same core that powers [Ghostty](https://ghostty.org)
+- **tmux-backed shell persistence** — project shells and editors can be reattached instead of restarted
+- **Managed tool panes** — open dedicated tabs for Codex, Claude Code, Neovim, and lazygit inside the workspace
 - **Drag-and-drop file support** — drop files onto the terminal to paste their path
 - **MesloLGS Nerd Font** — bundled with full icon/glyph support out of the box
 
@@ -45,8 +47,17 @@
 ### Project Management
 
 - **Auto-discovers projects** from `~/Code` on launch
+- **Per-project workspace restore** — Blink remembers your tab/column layout and reconnects shell panes on relaunch
 - **Sidebar with git branch tracking** — see the active branch for each project at a glance
-- **lazygit integration** — open lazygit in a dedicated tab with one shortcut
+- **Workspace tools** — open lazygit, Neovim, Project Chat, Planning Session, Codex, or Claude Code per project
+
+### AI Workflows
+
+- **Native Project Chat** — chat with the local `codex` or `claude` CLI from inside Blink with per-thread session persistence
+- **Planning Session** — run Codex and Claude together to compare plans, critique approaches, and hand off into implementation
+- **Managed CLI tabs** — open full interactive Codex and Claude Code panes alongside regular terminals
+- **Clickable code references** — chat file links can open inside Blink Neovim or external editors like Cursor, Zed, and VS Code
+- **AI Settings** — configure default models, verify local CLI availability, and choose how code links open
 
 ### Appearance
 
@@ -73,6 +84,8 @@ brew install --cask bradjenn/tap/blink
 > Or right-click the app and select **Open** on first launch.
 
 Requires macOS Sonoma+ and Apple Silicon (M1 or later).
+
+AI features require the local `codex` and/or `claude` CLI. Persistent shell/editor reattachment and in-app Neovim reuse work best with `tmux`, and Blink Neovim integration assumes `nvim` is installed.
 
 ## Keybindings
 
@@ -107,6 +120,7 @@ All shortcuts use `Cmd` (`⌘`) as the modifier.
 | --- | --- |
 | UI Framework | SwiftUI |
 | Terminal Rendering | Metal via libghostty (GhosttyKit) |
+| Shell Persistence | tmux |
 | Window Chrome | AppKit (NSWindow, NSMenu) |
 | Project Config | XcodeGen (`project.yml`) |
 | Testing | XCTest |
@@ -117,6 +131,9 @@ All shortcuts use `Cmd` (`⌘`) as the modifier.
 - Xcode 16+
 - Apple Silicon Mac (M1 or later)
 - `GhosttyKit.xcframework` in `Frameworks/`
+- `tmux` for persistent shell/editor sessions
+- `nvim` for Blink's in-app editor flow
+- `codex` and/or `claude` if you want to use Project Chat, Planning Session, or managed AI panes
 
 ### Getting Started
 
@@ -138,6 +155,7 @@ Build and run from Xcode (`⌘R`), or create a release DMG:
 Blink/
 ├── BApp.swift                  # App entry point, menu commands, keybindings
 ├── Assets.xcassets/            # App icon, colors, images
+├── Chat/                       # Native Project Chat, Planning Session, provider integrations
 ├── Resources/                  # Bundled fonts, themes, wallpapers
 ├── Models/
 │   ├── Column.swift            # Column layout model
@@ -145,7 +163,7 @@ Blink/
 │   ├── Tab.swift               # Tab state
 │   └── WallpaperPreset.swift   # Wallpaper configuration
 ├── Store/
-│   ├── AppStore.swift          # Central app state and actions
+│   ├── AppStore.swift          # Central app state, tmux integration, tab/editor actions
 │   └── GitStatus.swift         # Git branch monitoring
 ├── Terminal/
 │   ├── GhosttyApp.swift        # libghostty lifecycle and config
@@ -163,6 +181,7 @@ Blink/
 │   ├── TabBar.swift            # Tab strip
 │   ├── StatusLine.swift        # Bottom status bar
 │   ├── ThemePicker.swift       # Theme selection overlay
+│   ├── ProjectChatView.swift   # Native AI chat surface
 │   ├── SettingsPage.swift      # Settings panel
 │   ├── StartScreen.swift       # Welcome / project picker
 │   └── Settings/               # Settings sub-pages
