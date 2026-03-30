@@ -25,7 +25,6 @@ struct ProjectSetupPane: Identifiable, Equatable, Hashable, Codable {
     var label: String
     var role: String?
     var command: String?
-    var chatThreadId: String?
     var workingDirectory: String?
 }
 

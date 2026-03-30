@@ -261,20 +261,7 @@ private struct SidebarProjectWindowItem: View {
 
     @ViewBuilder
     private var leadingIcon: some View {
-        if let aiKind = tab.managedAIPaneKind {
-            switch aiKind {
-            case .codex:
-                BundledSVGIcon(name: "codex-icon")
-                    .opacity(isActive ? 1 : 0.82)
-            case .claude, .claudeYolo:
-                ClaudeIcon()
-                    .opacity(isActive ? 1 : 0.82)
-            }
-        } else if tab.isChat {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isActive ? theme.accent : theme.textDim)
-        } else if tab.command == nil {
+        if tab.command == nil {
             Image(systemName: "terminal")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(isActive ? theme.accent : theme.textDim)

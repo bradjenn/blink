@@ -76,7 +76,6 @@ struct Shell: View {
 
             if store.showCommandPalette {
                 CommandPalette(
-                    mode: store.commandPaletteMode,
                     onDismiss: { store.dismissCommandPalette() }
                 )
                 .zIndex(3)
@@ -304,6 +303,11 @@ private struct WorkspaceColumnsView: View {
         store.projectColumns(for: project.id)
     }
 
+    private var activeColumnIdInCurrentProject: String? {
+        guard let activeTabId = store.activeTabId else { return nil }
+        return columns.first(where: { $0.tabIds.contains(activeTabId) })?.id
+    }
+
     private var workspaceAnimation: Animation {
         reduceMotion ? .linear(duration: 0.01) : .smooth(duration: 0.4)
     }
@@ -354,12 +358,14 @@ private struct WorkspaceColumnsView: View {
             } else {
                 columnStrip(viewportWidth: geometry.size.width, viewportHeight: geometry.size.height)
                     .onChange(of: columns.map(\.id), initial: true) { _, _ in
+                        repairActiveTabSelectionIfNeeded()
                         syncColumns(viewportWidth: geometry.size.width)
                         restoreViewport(viewportWidth: geometry.size.width)
                         alignActiveTab(viewportWidth: geometry.size.width, animated: false)
                         applyPendingColumnMaximize(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: store.activeTabId, initial: false) {
+                        repairActiveTabSelectionIfNeeded()
                         alignActiveTab(viewportWidth: geometry.size.width, animated: !reduceMotion)
                         applyPendingColumnMaximize(viewportWidth: geometry.size.width)
                     }
@@ -659,10 +665,12 @@ private struct WorkspaceColumnsView: View {
         removeResizeMonitor()
         let projectId = project.id
         resizeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store, layoutState] event in
+            let currentColumns = store.projectColumns(for: projectId)
             guard event.modifierFlags.contains(.command),
                   !event.modifierFlags.contains(.shift),
                   !store.isOverviewMode,
-                  let colId = store.activeColumn?.id,
+                  let activeTabId = store.activeTabId,
+                  let colId = currentColumns.first(where: { $0.tabIds.contains(activeTabId) })?.id,
                   let chars = event.charactersIgnoringModifiers else { return event }
 
             switch chars {
@@ -746,7 +754,7 @@ private struct WorkspaceColumnsView: View {
         }
 
         if layoutState.isInitialized(projectId: project.id) {
-            if store.activeColumn != nil {
+            if activeColumnIdInCurrentProject != nil {
                 alignActiveTab(viewportWidth: viewportWidth, animated: false)
             } else {
                 clampViewportOffset(viewportWidth: viewportWidth, animated: false)
@@ -759,7 +767,7 @@ private struct WorkspaceColumnsView: View {
     /// After resize: ensure the active column is visible and fill blank space
     /// by scrolling left to show more content when possible.
     private func ensureActiveColumnVisible(viewportWidth: CGFloat) {
-        guard let colId = store.activeColumn?.id else { return }
+        guard let colId = activeColumnIdInCurrentProject else { return }
         let layout = stripLayout(viewportWidth: viewportWidth)
         var offset = store.workspaceViewportOffset(for: project.id)
 
@@ -811,7 +819,7 @@ private struct WorkspaceColumnsView: View {
         guard viewportWidth > 0,
               let activeTabId = store.activeTabId,
               tabs.contains(where: { $0.id == activeTabId }),
-              let colId = store.activeColumn?.id,
+              let colId = activeColumnIdInCurrentProject,
               store.consumePendingColumnMaximize(for: activeTabId) else { return }
 
         cachedLayoutKey = ""
@@ -884,7 +892,7 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func focusedViewportOffset(viewportWidth: CGFloat) -> CGFloat {
-        guard let colId = store.activeColumn?.id else { return 0 }
+        guard let colId = activeColumnIdInCurrentProject else { return 0 }
         let layout = stripLayout(viewportWidth: viewportWidth)
 
         guard layout.contentWidth > viewportWidth else { return 0 }
@@ -953,6 +961,19 @@ private struct WorkspaceColumnsView: View {
         }
     }
 
+    private func repairActiveTabSelectionIfNeeded() {
+        guard store.activeProjectId == project.id else { return }
+
+        if let activeTabId = store.activeTabId,
+           columns.contains(where: { $0.tabIds.contains(activeTabId) }) {
+            return
+        }
+
+        if let fallbackTabId = columns.first?.tabIds.first ?? tabs.first?.id {
+            store.setActiveTab(fallbackTabId)
+        }
+    }
+
     /// Scroll the minimum amount to make the column fully visible.
     private func minimalScrollOffset(
         currentOffset: CGFloat, colLeft: CGFloat, colRight: CGFloat,
@@ -1008,9 +1029,7 @@ private struct WorkspaceColumnView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.clear)
 
-                    if tab.isChat, let threadId = tab.chatThreadId {
-                        ProjectChatView(tabId: tab.id, threadId: threadId, project: project)
-                    } else if tab.isManagedCommand && store.isManagedCommandStopped(tab.id) {
+                    if tab.isManagedCommand && store.isManagedCommandStopped(tab.id) {
                         StoppedCommandPaneView(tab: tab)
                     } else {
                         TerminalView(

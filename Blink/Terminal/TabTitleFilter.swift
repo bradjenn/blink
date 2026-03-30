@@ -6,9 +6,7 @@ enum TabTitleFilter {
 
     /// Known processes that should update the tab title.
     private static let processMap: [String: String] = [
-        // AI / Dev tools
-        "codex": "Codex",
-        "claude": "Claude Code",
+        // Dev tools
         "aider": "Aider",
         "cursor": "Cursor",
 
@@ -103,22 +101,6 @@ enum TabTitleFilter {
         }
 
         // Not a known process — don't update tab title
-        return nil
-    }
-
-    static func managedAIKind(for title: String) -> ManagedAIPaneKind? {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if let kind = ManagedAIPaneKind(command: trimmed) {
-            return kind
-        }
-
-        let firstWord = String(trimmed.split(separator: " ").first ?? "")
-        if let kind = ManagedAIPaneKind(command: firstWord) {
-            return kind
-        }
-
         return nil
     }
 

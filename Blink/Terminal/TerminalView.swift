@@ -121,16 +121,6 @@ struct TerminalView: NSViewRepresentable {
             }
         }
 
-        surfaceView.onSubmittedLine = { [weak coordinator] prompt in
-            guard let coordinator, let store = coordinator.store else { return }
-            store.handleTerminalLineSubmission(prompt, for: coordinator.tabId)
-        }
-
-        surfaceView.onManagedAIPromptSubmitted = { [weak coordinator] prompt in
-            guard let coordinator, let store = coordinator.store else { return false }
-            return store.applyManagedAIPromptTitleIfNeeded(prompt, for: coordinator.tabId)
-        }
-
         container.showSurface(surfaceView, tabId: tabId, shouldFocus: isFocused)
     }
 }

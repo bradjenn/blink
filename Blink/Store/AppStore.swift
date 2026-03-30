@@ -7,11 +7,6 @@ enum ActiveView {
     case settings
 }
 
-enum CommandPaletteMode {
-    case all
-    case agents
-}
-
 private enum StorageKeys {
     static let theme = "blink.theme"
     static let backgroundImage = "blink.backgroundImage"
@@ -32,8 +27,6 @@ private enum StorageKeys {
     static let shell = "blink.shell"
     static let focusCenteringMode = "blink.focusCenteringMode"
     static let spotifyEnabled = "blink.spotifyEnabled"
-    static let chatModel = "blink.chatModel"
-    static let claudeChatModel = "blink.claudeChatModel"
     static let fileEditorLauncher = "blink.fileEditorLauncher"
     static let fileEditorCustomCommand = "blink.fileEditorCustomCommand"
 }
@@ -94,7 +87,6 @@ final class AppStore {
     var showProjectSwitcher = false
     var showNewTabMenu = false
     var showCommandPalette = false
-    var commandPaletteMode: CommandPaletteMode = .all
     var themePickerFocusRequest = 0
     var projectSwitcherFocusRequest = 0
 
@@ -138,12 +130,6 @@ final class AppStore {
     var spotifyEnabled: Bool {
         didSet { UserDefaults.standard.set(spotifyEnabled, forKey: StorageKeys.spotifyEnabled) }
     }
-    var chatModel: String {
-        didSet { UserDefaults.standard.set(chatModel, forKey: StorageKeys.chatModel) }
-    }
-    var claudeChatModel: String {
-        didSet { UserDefaults.standard.set(claudeChatModel, forKey: StorageKeys.claudeChatModel) }
-    }
     var fileEditorLauncher: FileEditorLauncher {
         didSet { UserDefaults.standard.set(fileEditorLauncher.rawValue, forKey: StorageKeys.fileEditorLauncher) }
     }
@@ -175,12 +161,6 @@ final class AppStore {
     private var workspaceViewportOffsets: [String: Double] {
         didSet { Self.saveDictionary(workspaceViewportOffsets, forKey: StorageKeys.workspaceViewportOffsets) }
     }
-    @ObservationIgnored
-    private var managedAIPaneTabsAwaitingInitialPromptTitle: Set<String> = []
-    @ObservationIgnored
-    private var shellDetectedAIPaneKinds: [String: ManagedAIPaneKind] = [:]
-    @ObservationIgnored
-    private var shellDetectedAIPaneTabsSkippingLaunchCommand: Set<String> = []
     @ObservationIgnored
     private let tmuxIntegrationEnabled: Bool
     @ObservationIgnored
@@ -224,8 +204,6 @@ final class AppStore {
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
         self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
         self.spotifyEnabled = defaults.object(forKey: StorageKeys.spotifyEnabled) as? Bool ?? false
-        self.chatModel = defaults.string(forKey: StorageKeys.chatModel) ?? ""
-        self.claudeChatModel = defaults.string(forKey: StorageKeys.claudeChatModel) ?? ""
         self.fileEditorLauncher = FileEditorLauncher(
             rawValue: defaults.string(forKey: StorageKeys.fileEditorLauncher) ?? ""
         ) ?? .blinkNeovim
@@ -395,17 +373,15 @@ final class AppStore {
         showThemePicker = false
     }
 
-    func presentCommandPalette(mode: CommandPaletteMode = .all) {
+    func presentCommandPalette() {
         sidebarFocused = false
         showProjectSwitcher = false
         showThemePicker = false
-        commandPaletteMode = mode
         showCommandPalette = true
     }
 
     func dismissCommandPalette() {
         showCommandPalette = false
-        commandPaletteMode = .all
     }
 
     // MARK: - Background Actions
@@ -536,73 +512,12 @@ final class AppStore {
         }
     }
 
-    func openManagedAIPane(_ kind: ManagedAIPaneKind, projectId: String? = nil) {
-        guard let resolvedProjectId = projectId ?? activeProjectId else { return }
-        let tab: AppTab
-        if let existing = projectTabs(for: resolvedProjectId).first(where: { $0.managedAIPaneKind == kind }) {
-            if existing.isManagedCommand && isManagedCommandStopped(existing.id) {
-                restartManagedCommandTab(existing.id)
-            } else if existing.isManagedCommand {
-                registerManagedCommandStateIfNeeded(for: existing)
-            }
-            setActiveTab(existing.id)
-            activateTerminalFocusSoon()
-            tab = tabsById[existing.id] ?? existing
-        } else {
-            tab = openOrFocusCommandTab(
-                projectId: resolvedProjectId,
-                command: kind.launchCommand,
-                label: kind.displayName
-            )
-        }
-
-        registerManagedAIPromptTitleCaptureIfNeeded(for: tab)
-    }
-
-    @discardableResult
-    func applyManagedAIPromptTitleIfNeeded(_ prompt: String, for tabId: String) -> Bool {
-        guard managedAIPaneTabsAwaitingInitialPromptTitle.contains(tabId),
-              let tab = tabsById[tabId],
-              let kind = tab.managedAIPaneKind ?? shellDetectedAIPaneKinds[tabId] else {
-            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
-            return false
-        }
-
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedPrompt.isEmpty else { return false }
-
-        if shellDetectedAIPaneTabsSkippingLaunchCommand.remove(tabId) != nil {
-            return false
-        }
-
-        setTabTitle(
-            tabId,
-            title: managedAIPaneTitle(from: trimmedPrompt, fallback: kind.displayName),
-            updateDefaultLabel: tab.managedAIPaneKind != nil
-        )
-        managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
-        return true
-    }
-
     func handleTerminalTitleUpdate(_ title: String, for tabId: String) {
         guard let tab = tabsById[tabId] else { return }
 
         defer { markUnread(tabId) }
 
         guard !tab.isManagedCommand else { return }
-
-        if let kind = TabTitleFilter.managedAIKind(for: title), tab.isShell {
-            registerShellDetectedAIPane(kind, for: tabId)
-            return
-        }
-
-        if shellDetectedAIPaneKinds[tabId] != nil {
-            if TabTitleFilter.isShellPrompt(title) {
-                clearManagedAIPromptCapture(for: [tabId])
-                revertTabTitle(tabId)
-            }
-            return
-        }
 
         if let displayName = TabTitleFilter.displayName(for: title) {
             setTabTitle(tabId, title: displayName)
@@ -612,14 +527,6 @@ final class AppStore {
             }
             revertTabTitle(tabId)
         }
-    }
-
-    func handleTerminalLineSubmission(_ line: String, for tabId: String) {
-        guard let tab = tabsById[tabId], tab.isShell, !tab.isManagedCommand else { return }
-        guard shellDetectedAIPaneKinds[tabId] == nil else { return }
-        guard let kind = ManagedAIPaneKind(submittedLine: line) else { return }
-
-        registerShellDetectedAIPane(kind, for: tabId)
     }
 
     func terminalLaunchCommand(for tab: AppTab, project: Project) -> String? {
@@ -1237,66 +1144,6 @@ final class AppStore {
         openFileInEditor(projectId: projectId, path: path, line: line, column: column)
     }
 
-    func openOrFocusChatTab(
-        projectId: String,
-        threadId: String,
-        label: String,
-        role: String? = nil,
-        workingDirectory: String? = nil,
-        projectSetupPaneId: String? = nil,
-        maximizeColumn: Bool = false
-    ) {
-        if let existing = projectTabs(for: projectId).first(where: { $0.chatThreadId == threadId }) {
-            setActiveTab(existing.id)
-            if maximizeColumn {
-                requestColumnMaximize(existing.id)
-            }
-            sidebarFocused = false
-            return
-        }
-
-        let tab = makeChatTab(
-            projectId: projectId,
-            threadId: threadId,
-            label: label,
-            role: role,
-            workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId
-        )
-        insertTab(tab, for: projectId, after: nil)
-
-        let column = Column(id: UUID().uuidString, tabIds: [tab.id])
-        var projectCols = columns[projectId] ?? []
-        projectCols.append(column)
-        columns[projectId] = projectCols
-
-        setActiveTab(tab.id)
-        if maximizeColumn {
-            requestColumnMaximize(tab.id)
-        }
-        sidebarFocused = false
-    }
-
-    func openOrFocusChatTabForActiveProject(
-        threadId: String,
-        label: String,
-        role: String? = nil,
-        workingDirectory: String? = nil,
-        projectSetupPaneId: String? = nil,
-        maximizeColumn: Bool = false
-    ) {
-        guard let projectId = activeProjectId else { return }
-        openOrFocusChatTab(
-            projectId: projectId,
-            threadId: threadId,
-            label: label,
-            role: role,
-            workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId,
-            maximizeColumn: maximizeColumn
-        )
-    }
-
     func requestColumnMaximize(_ tabId: String) {
         pendingMaximizedTabId = tabId
     }
@@ -1309,28 +1156,6 @@ final class AppStore {
 
     func isFullWidthTab(_ tabId: String) -> Bool {
         fullWidthTabIds.contains(tabId)
-    }
-
-    func setChatTabTitle(_ threadId: String, title: String) {
-        for index in tabs.indices where tabs[index].chatThreadId == threadId {
-            tabs[index].label = title
-            tabs[index].defaultLabel = title
-        }
-    }
-
-    func replaceChatThread(in tabId: String, with threadId: String, label: String) {
-        guard let index = tabs.firstIndex(where: { $0.id == tabId && $0.isChat }) else { return }
-        guard tabs[index].chatThreadId != threadId else {
-            setActiveTab(tabId)
-            sidebarFocused = false
-            return
-        }
-
-        tabs[index].chatThreadId = threadId
-        tabs[index].label = label
-        tabs[index].defaultLabel = label
-        setActiveTab(tabId)
-        sidebarFocused = false
     }
 
     // MARK: - Full Width Tabs
@@ -1358,7 +1183,6 @@ final class AppStore {
             defaultLabel: label,
             projectId: projectId,
             command: command,
-            chatThreadId: nil,
             role: role,
             workingDirectory: workingDirectory,
             projectSetupPaneId: projectSetupPaneId
@@ -1433,7 +1257,6 @@ final class AppStore {
         projectSetups[id] = nil
         tabs.removeAll { $0.projectId == id }
         clearManagedCommandStates(for: tabIds)
-        clearManagedAIPromptCapture(for: tabIds)
         clearPendingTmuxShellCommands(for: tabIds)
         unreadTabs.subtract(tabIds)
         lastActiveTab[id] = nil
@@ -1472,7 +1295,6 @@ final class AppStore {
             restoreColumnsIfNeeded(tabId: id, projectId: projectId)
             tabs.removeAll { $0.id == id }
             managedCommandStates[id] = nil
-            clearManagedAIPromptCapture(for: [id])
             clearPendingTmuxShellCommands(for: [id])
             unreadTabs.remove(id)
             if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
@@ -1522,7 +1344,6 @@ final class AppStore {
         // Remove tab data
         tabs.removeAll { $0.id == id }
         managedCommandStates[id] = nil
-        clearManagedAIPromptCapture(for: [id])
         clearPendingTmuxShellCommands(for: [id])
         unreadTabs.remove(id)
         if lastActiveTab[projectId] == id {
@@ -1593,7 +1414,6 @@ final class AppStore {
         let existingTabIds = tabs.filter { $0.projectId == projectId }.map(\.id)
         tabs.removeAll { $0.projectId == projectId }
         clearManagedCommandStates(for: existingTabIds)
-        clearManagedAIPromptCapture(for: existingTabIds)
         unreadTabs.subtract(existingTabIds)
         lastActiveTab[projectId] = nil
         workspaceViewportOffsets[projectId] = nil
@@ -1628,19 +1448,10 @@ final class AppStore {
                         projectSetupPaneId: pane.id
                     )
                 case .chat:
-                    guard let threadId = pane.chatThreadId else { continue }
-                    tab = makeChatTab(
-                        projectId: projectId,
-                        threadId: threadId,
-                        label: pane.label,
-                        role: pane.role,
-                        workingDirectory: workingDirectory,
-                        projectSetupPaneId: pane.id
-                    )
+                    continue
                 }
                 rebuiltTabs.append(tab)
                 registerManagedCommandStateIfNeeded(for: tab)
-                registerManagedAIPromptTitleCaptureIfNeeded(for: tab)
                 paneToTabId[pane.id] = tab.id
             }
         }
@@ -1687,7 +1498,6 @@ final class AppStore {
                         label: tab.label,
                         role: tab.role,
                         command: tab.command,
-                        chatThreadId: tab.chatThreadId,
                         workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, projectId: projectId)
                     )
                 )
@@ -1739,6 +1549,7 @@ final class AppStore {
     }
 
     private func normalizedProjectSetup(from setup: ProjectSetup) -> ProjectSetup {
+        let setup = Self.sanitizeLegacyChatPanes(in: setup)
         let paneLookup = Dictionary(uniqueKeysWithValues: setup.panes.map { ($0.id, $0) })
         var normalizedPanes: [ProjectSetupPane] = []
         var oldToNewPaneIds: [String: String] = [:]
@@ -1757,7 +1568,6 @@ final class AppStore {
                         label: pane.label,
                         role: pane.role,
                         command: pane.command,
-                        chatThreadId: pane.chatThreadId,
                         workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, projectId: setup.projectId)
                     )
                 )
@@ -1792,9 +1602,6 @@ final class AppStore {
     }
 
     private func projectSetupPaneKind(for tab: AppTab) -> ProjectSetupPaneKind {
-        if tab.isChat {
-            return .chat
-        }
         return tab.command == nil ? .shell : .command
     }
 
@@ -1824,29 +1631,6 @@ final class AppStore {
             defaultLabel: defaultLabel,
             projectId: projectId,
             command: command,
-            chatThreadId: nil,
-            role: role,
-            workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
-        )
-    }
-
-    private func makeChatTab(
-        projectId: String,
-        threadId: String,
-        label: String,
-        role: String? = nil,
-        workingDirectory: String? = nil,
-        projectSetupPaneId: String? = nil
-    ) -> AppTab {
-        AppTab(
-            id: UUID().uuidString,
-            type: "chat",
-            label: label,
-            defaultLabel: label,
-            projectId: projectId,
-            command: nil,
-            chatThreadId: threadId,
             role: role,
             workingDirectory: workingDirectory,
             projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
@@ -1872,30 +1656,9 @@ final class AppStore {
         managedCommandStates[tab.id] = ManagedCommandState(status: .running)
     }
 
-    private func registerManagedAIPromptTitleCaptureIfNeeded(for tab: AppTab) {
-        guard let kind = tab.managedAIPaneKind else {
-            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tab.id)
-            return
-        }
-
-        if tab.label == kind.displayName && tab.defaultLabel == kind.displayName {
-            managedAIPaneTabsAwaitingInitialPromptTitle.insert(tab.id)
-        } else {
-            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tab.id)
-        }
-    }
-
     private func clearManagedCommandStates(for tabIds: [String]) {
         for tabId in tabIds {
             managedCommandStates[tabId] = nil
-        }
-    }
-
-    private func clearManagedAIPromptCapture(for tabIds: [String]) {
-        for tabId in tabIds {
-            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
-            shellDetectedAIPaneKinds.removeValue(forKey: tabId)
-            shellDetectedAIPaneTabsSkippingLaunchCommand.remove(tabId)
         }
     }
 
@@ -2289,49 +2052,6 @@ final class AppStore {
         return true
     }
 
-    private func registerShellDetectedAIPane(_ kind: ManagedAIPaneKind, for tabId: String) {
-        guard let tab = tabsById[tabId], tab.isShell, tab.command == nil else {
-            clearManagedAIPromptCapture(for: [tabId])
-            return
-        }
-
-        shellDetectedAIPaneKinds[tabId] = kind
-
-        let hasCustomAITitle = tab.label != tab.defaultLabel && tab.label != kind.displayName
-        guard !hasCustomAITitle else {
-            managedAIPaneTabsAwaitingInitialPromptTitle.remove(tabId)
-            return
-        }
-
-        if tab.label != kind.displayName {
-            setTabTitle(tabId, title: kind.displayName)
-        }
-        managedAIPaneTabsAwaitingInitialPromptTitle.insert(tabId)
-        shellDetectedAIPaneTabsSkippingLaunchCommand.insert(tabId)
-    }
-
-    private func managedAIPaneTitle(from prompt: String, fallback: String) -> String {
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedPrompt.isEmpty else { return fallback }
-
-        let firstLine = trimmedPrompt
-            .split(whereSeparator: \.isNewline)
-            .first
-            .map(String.init) ?? trimmedPrompt
-
-        let condensed = firstLine
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !condensed.isEmpty else { return fallback }
-        if condensed.count <= 48 {
-            return condensed
-        }
-
-        let truncated = condensed.prefix(45).trimmingCharacters(in: .whitespacesAndNewlines)
-        return "\(truncated)..."
-    }
-
     /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
     private func reindexTabs(for projectId: String) {
         var counter = 0
@@ -2423,13 +2143,37 @@ final class AppStore {
               let setups = try? JSONDecoder().decode([String: ProjectSetup].self, from: data) else {
             return [:]
         }
-        return setups
+        return setups.reduce(into: [:]) { result, entry in
+            let sanitized = sanitizeLegacyChatPanes(in: entry.value)
+            guard !sanitized.columns.isEmpty, !sanitized.panes.isEmpty else { return }
+            result[entry.key] = sanitized
+        }
     }
 
     private static func saveProjectSetups(_ setups: [String: ProjectSetup]) {
         if let data = try? JSONEncoder().encode(setups) {
             UserDefaults.standard.set(data, forKey: StorageKeys.projectSetups)
         }
+    }
+
+    private static func sanitizeLegacyChatPanes(in setup: ProjectSetup) -> ProjectSetup {
+        let allowedPaneIds = Set(
+            setup.panes
+                .filter { $0.kind != .chat }
+                .map(\.id)
+        )
+        let panes = setup.panes.filter { allowedPaneIds.contains($0.id) }
+        let columns: [ProjectSetupColumn] = setup.columns.compactMap { column in
+            let paneIds = column.paneIds.filter { allowedPaneIds.contains($0) }
+            guard !paneIds.isEmpty else { return nil }
+            return ProjectSetupColumn(id: column.id, paneIds: paneIds)
+        }
+        return ProjectSetup(
+            projectId: setup.projectId,
+            updatedAt: setup.updatedAt,
+            columns: columns,
+            panes: panes
+        )
     }
 
     func workspaceViewportOffset(for projectId: String) -> CGFloat {

@@ -4,10 +4,8 @@ import AppKit
 struct CommandPalette: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
-    @Environment(ChatStore.self) private var chatStore
     @Environment(ThemeManager.self) private var themeManager
 
-    let mode: CommandPaletteMode
     let onDismiss: () -> Void
 
     @State private var searchText = ""
@@ -220,72 +218,6 @@ struct CommandPalette: View {
                 store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
             },
             PaletteCommand(
-                id: "open-project-chat",
-                title: "Open Project Chat",
-                subtitle: "Open the native chat for the active project",
-                category: "Agents",
-                shortcut: "Cmd-Shift-A",
-                keywords: ["chat", "project", "ai", "assistant", "openai"],
-                isEnabled: hasProject
-            ) {
-                openProjectChat()
-            },
-            PaletteCommand(
-                id: "open-second-opinion",
-                title: "Open Planning Session",
-                subtitle: "Open a planning session for the active project",
-                category: "Agents",
-                shortcut: nil,
-                keywords: ["planning", "session", "claude", "codex", "plan"],
-                isEnabled: hasProject
-            ) {
-                openSecondOpinion()
-            },
-            PaletteCommand(
-                id: "open-claude",
-                title: "Open Claude Code",
-                subtitle: "Open Claude Code for the active project",
-                category: "Agents",
-                shortcut: "Cmd-Option-C",
-                keywords: ["claude", "anthropic", "ai", "assistant", "agent"],
-                isEnabled: hasProject
-            ) {
-                store.openManagedAIPane(.claude)
-            },
-            PaletteCommand(
-                id: "open-claude-yolo",
-                title: "Open Claude Code Yolo",
-                subtitle: "Open Claude Code with dangerous permissions",
-                category: "Agents",
-                shortcut: nil,
-                keywords: ["claude", "yolo", "anthropic", "ai", "assistant", "agent"],
-                isEnabled: hasProject
-            ) {
-                store.openManagedAIPane(.claudeYolo)
-            },
-            PaletteCommand(
-                id: "open-codex",
-                title: "Open Codex",
-                subtitle: "Open Codex for the active project",
-                category: "Agents",
-                shortcut: "Cmd-Shift-C",
-                keywords: ["codex", "openai", "ai", "assistant", "agent"],
-                isEnabled: hasProject
-            ) {
-                store.openManagedAIPane(.codex)
-            },
-            PaletteCommand(
-                id: "open-open-code",
-                title: "Open Open Code",
-                subtitle: "Open Open Code for the active project",
-                category: "Agents",
-                shortcut: "Cmd-Shift-O",
-                keywords: ["open code", "opencode", "ai", "assistant", "agent"],
-                isEnabled: hasProject
-            ) {
-                store.openOrFocusCommandTabForActiveProject(command: "opencode", label: "Open Code")
-            },
-            PaletteCommand(
                 id: "open-files",
                 title: "Open Files",
                 subtitle: "Open Yazi for the active project",
@@ -423,51 +355,15 @@ struct CommandPalette: View {
         ]
     }
 
-    private var scopedCommands: [PaletteCommand] {
-        switch mode {
-        case .all:
-            commands
-        case .agents:
-            commands.filter { $0.category == "Agents" }
-        }
-    }
-
     private var filteredCommands: [PaletteCommand] {
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return scopedCommands }
+        guard !needle.isEmpty else { return commands }
 
-        return scopedCommands.filter { command in
+        return commands.filter { command in
             command.title.localizedStandardContains(needle)
             || command.subtitle.localizedStandardContains(needle)
             || command.category.localizedStandardContains(needle)
             || command.keywords.contains(where: { $0.localizedStandardContains(needle) })
-        }
-    }
-
-    private var paletteTitle: String {
-        switch mode {
-        case .all:
-            "Command Palette"
-        case .agents:
-            "Agent Palette"
-        }
-    }
-
-    private var searchPlaceholder: String {
-        switch mode {
-        case .all:
-            "Run a command..."
-        case .agents:
-            "Open an AI tool..."
-        }
-    }
-
-    private var headerIconName: String {
-        switch mode {
-        case .all:
-            "command"
-        case .agents:
-            "sparkles"
         }
     }
 
@@ -481,11 +377,11 @@ struct CommandPalette: View {
 
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Image(systemName: headerIconName)
+                    Image(systemName: "command")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(theme.accent)
 
-                    TextField(searchPlaceholder, text: $searchText)
+                    TextField("Run a command...", text: $searchText)
                         .font(Fonts.primary(size: 14))
                         .textFieldStyle(.plain)
                         .foregroundStyle(theme.text)
@@ -493,7 +389,7 @@ struct CommandPalette: View {
 
                     Spacer(minLength: 8)
 
-                    Text(paletteTitle)
+                    Text("Command Palette")
                         .font(Fonts.primary(size: 11, weight: .medium))
                         .foregroundStyle(theme.textDim)
                 }
@@ -602,10 +498,6 @@ struct CommandPalette: View {
     }
 
     private func commandRow(_ command: PaletteCommand, isSelected: Bool) -> some View {
-        if mode == .agents {
-            return AnyView(agentCommandRow(command, isSelected: isSelected))
-        }
-
         return AnyView(defaultCommandRow(command, isSelected: isSelected))
     }
 
@@ -649,67 +541,6 @@ struct CommandPalette: View {
         .disabled(!command.isEnabled)
     }
 
-    private func agentCommandRow(_ command: PaletteCommand, isSelected: Bool) -> some View {
-        Button {
-            run(command)
-        } label: {
-            HStack(spacing: 12) {
-                agentIcon(for: command)
-                    .frame(width: 18, height: 18)
-
-                Text(agentDisplayTitle(for: command))
-                    .font(Fonts.primary(size: 13, weight: .bold))
-                    .foregroundStyle(command.isEnabled ? theme.text : theme.textDim)
-
-                Spacer(minLength: 12)
-
-                if let shortcut = command.shortcut {
-                    Text(shortcut)
-                        .font(Fonts.primary(size: 10))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
-            .contentShape(Rectangle())
-            .opacity(command.isEnabled ? 1 : 0.55)
-        }
-        .buttonStyle(.plain)
-        .disabled(!command.isEnabled)
-    }
-
-    @ViewBuilder
-    private func agentIcon(for command: PaletteCommand) -> some View {
-        switch command.id {
-        case "open-project-chat":
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(theme.accent)
-        case "open-second-opinion":
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(theme.accent)
-        case "open-claude", "open-claude-yolo":
-            ClaudeIcon()
-        case "open-codex":
-            BundledSVGIcon(name: "codex-icon")
-        case "open-open-code":
-            BundledSVGIcon(name: "opencode-icon")
-        default:
-            Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(theme.accent)
-        }
-    }
-
-    private func agentDisplayTitle(for command: PaletteCommand) -> String {
-        if command.title.hasPrefix("Open ") {
-            return String(command.title.dropFirst(5))
-        }
-        return command.title
-    }
-
     private func run(_ command: PaletteCommand) {
         guard command.isEnabled else { return }
         searchFocused = false
@@ -741,48 +572,6 @@ struct CommandPalette: View {
             Text(label)
                 .font(Fonts.primary(size: 10))
                 .foregroundStyle(theme.textDim)
-        }
-    }
-
-    private func openProjectChat() {
-        guard let projectId = store.activeProjectId,
-              let project = store.projects.first(where: { $0.id == projectId }) else {
-            return
-        }
-
-        Task {
-            let thread = await chatStore.ensureThread(
-                for: project,
-                model: store.chatModel,
-                provider: .codex
-            )
-            store.openOrFocusChatTab(
-                projectId: projectId,
-                threadId: thread.id,
-                label: thread.title,
-                maximizeColumn: true
-            )
-        }
-    }
-
-    private func openSecondOpinion() {
-        guard let projectId = store.activeProjectId,
-              let project = store.projects.first(where: { $0.id == projectId }) else {
-            return
-        }
-
-        Task {
-            let thread = await chatStore.ensureThread(
-                for: project,
-                model: store.chatModel,
-                provider: .secondOpinion
-            )
-            store.openOrFocusChatTab(
-                projectId: projectId,
-                threadId: thread.id,
-                label: thread.title,
-                maximizeColumn: true
-            )
         }
     }
 }

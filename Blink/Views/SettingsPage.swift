@@ -9,7 +9,6 @@ struct SettingsPage: View {
     enum SettingsTab: String, CaseIterable {
         case appearance = "Appearance"
         case terminal = "Terminal"
-        case ai = "AI"
         case keyboardShortcuts = "Keyboard Shortcuts"
     }
 
@@ -25,7 +24,7 @@ struct SettingsPage: View {
                     ForEach(SettingsTab.allCases, id: \.self) { tab in
                         SettingsTabButton(
                             label: tab.rawValue,
-                            badgeText: tab == .ai ? "New" : nil,
+                            badgeText: nil,
                             isActive: selectedTab == tab,
                             action: { selectedTab = tab }
                         )
@@ -42,8 +41,6 @@ struct SettingsPage: View {
                     AppearanceSettings(ghosttyApp: ghosttyApp)
                 case .terminal:
                     TerminalSettings(ghosttyApp: ghosttyApp)
-                case .ai:
-                    AISettings()
                 case .keyboardShortcuts:
                     KeyboardShortcutsSettings()
                 }

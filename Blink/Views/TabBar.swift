@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, projectChat, secondOpinion, claude, claudeYolo, codex, openCode, lazygit, yazi, neovim
+    case terminal, lazygit, yazi, neovim
 }
 
 struct NewTabMenu: View {
@@ -56,41 +56,10 @@ struct NewTabMenu: View {
     let onAction: (NewTabAction) -> Void
 
     @State private var hoveredItem: String?
-    @State private var yoloHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
             menuRow("Terminal", icon: "terminal") { onAction(.terminal) }
-            Divider().overlay(theme.border)
-            menuRow("Project Chat", icon: "bubble.left.and.bubble.right") { onAction(.projectChat) }
-            Divider().overlay(theme.border)
-            menuRow("Planning Session", icon: "person.2.fill") { onAction(.secondOpinion) }
-            Divider().overlay(theme.border)
-
-            HStack(spacing: 0) {
-                menuRow("Claude Code", customIcon: ClaudeIcon()) { onAction(.claude) }
-
-                Divider().overlay(theme.border).frame(height: 28)
-
-                Button(action: runClaudeYolo) {
-                    Text("Yolo")
-                        .font(Fonts.primary(size: 11, weight: .medium))
-                        .foregroundStyle(yoloHovered ? theme.text : theme.textDim)
-                        .padding(.horizontal, 10)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .background(yoloHovered ? theme.accent.opacity(0.08) : Color.clear)
-                .onHover { yoloHovered = $0 }
-                .pointerCursor()
-            }
-            .fixedSize(horizontal: false, vertical: true)
-
-            Divider().overlay(theme.border)
-            menuRow("Codex", customIcon: BundledSVGIcon(name: "codex-icon")) { onAction(.codex) }
-            Divider().overlay(theme.border)
-            menuRow("Open Code", customIcon: BundledSVGIcon(name: "opencode-icon")) { onAction(.openCode) }
             Divider().overlay(theme.border)
             menuRow("lazygit", icon: "point.3.connected.trianglepath.dotted") { onAction(.lazygit) }
             Divider().overlay(theme.border)
@@ -103,10 +72,6 @@ struct NewTabMenu: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
         .padding(.top, 4)
-    }
-
-    private func runClaudeYolo() {
-        onAction(.claudeYolo)
     }
 
     private func menuRow(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -154,11 +119,5 @@ struct BundledSVGIcon: View {
                 .resizable()
                 .scaledToFit()
         }
-    }
-}
-
-struct ClaudeIcon: View {
-    var body: some View {
-        BundledSVGIcon(name: "claude-icon")
     }
 }

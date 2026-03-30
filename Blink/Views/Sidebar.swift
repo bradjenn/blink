@@ -18,7 +18,6 @@ private enum SidebarTreeSelection: Hashable {
 /// Header/footer are handled by Shell's top bar and footer rows.
 struct SidebarView: View {
     @Environment(AppStore.self) private var store
-    @Environment(ChatStore.self) private var chatStore
     @Environment(ThemeManager.self) private var themeManager
 
     @State private var keyMonitor: Any?
@@ -84,44 +83,6 @@ struct SidebarView: View {
         switch action {
         case .terminal:
             store.openTab(projectId: projectId)
-        case .projectChat:
-            guard let project = store.projects.first(where: { $0.id == projectId }) else { return }
-            Task {
-                let thread = await chatStore.ensureThread(
-                    for: project,
-                    model: store.chatModel,
-                    provider: .codex
-                )
-                store.openOrFocusChatTab(
-                    projectId: projectId,
-                    threadId: thread.id,
-                    label: thread.title,
-                    maximizeColumn: true
-                )
-            }
-        case .secondOpinion:
-            guard let project = store.projects.first(where: { $0.id == projectId }) else { return }
-            Task {
-                let thread = await chatStore.ensureThread(
-                    for: project,
-                    model: store.chatModel,
-                    provider: .secondOpinion
-                )
-                store.openOrFocusChatTab(
-                    projectId: projectId,
-                    threadId: thread.id,
-                    label: thread.title,
-                    maximizeColumn: true
-                )
-            }
-        case .claude:
-            store.openManagedAIPane(.claude, projectId: projectId)
-        case .claudeYolo:
-            store.openManagedAIPane(.claudeYolo, projectId: projectId)
-        case .codex:
-            store.openManagedAIPane(.codex, projectId: projectId)
-        case .openCode:
-            store.openOrFocusCommandTab(projectId: projectId, command: "opencode", label: "Open Code")
         case .lazygit:
             store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
         case .yazi:
