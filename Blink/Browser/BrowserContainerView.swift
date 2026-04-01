@@ -52,7 +52,6 @@ struct BrowserContainerView: NSViewRepresentable {
     let tabId: String
     let projectId: String
     let controller: BrowserController
-    let isFocused: Bool
 
     func makeNSView(context: Context) -> BrowserHostingView {
         BrowserHostingView()
@@ -73,9 +72,5 @@ struct BrowserContainerView: NSViewRepresentable {
         }
 
         container.showWebView(controller.webView, tabId: tabId)
-
-        if isFocused, controller.state.preferredFocus == .webView {
-            controller.focusWebView()
-        }
     }
 }

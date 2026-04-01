@@ -30,8 +30,7 @@ struct BrowserView: View {
             BrowserContainerView(
                 tabId: tab.id,
                 projectId: project.id,
-                controller: controller,
-                isFocused: isFocused
+                controller: controller
             )
         }
         .background(theme.bg)
