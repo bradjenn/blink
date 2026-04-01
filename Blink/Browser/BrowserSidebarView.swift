@@ -12,6 +12,14 @@ struct BrowserSidebarView<HeaderContent: View>: View {
     let onCloseTab: (String) -> Void
     @ViewBuilder let headerContent: () -> HeaderContent
 
+    private var sidebarOffset: CGFloat {
+        if isPinned {
+            return isPresented ? 0 : -Layout.browserSidebarWidth
+        }
+
+        return isPresented ? 0 : -(Layout.browserSidebarWidth + 24)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerContent()
@@ -39,24 +47,41 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         }
         .frame(width: Layout.browserSidebarWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(theme.bg.opacity(0.97))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(isPresented ? (isPinned ? 0.2 : 0.26) : 0), radius: 18, y: 10)
-        .padding(.leading, 12)
-        .padding(.vertical, 10)
-        .offset(x: isPresented ? 0 : -(Layout.browserSidebarWidth + 24))
+        .background(backgroundSurface)
+        .overlay(overlaySurface)
+        .shadow(color: Color.black.opacity(isPresented && !isPinned ? 0.26 : 0), radius: 18, y: 10)
+        .padding(.leading, isPinned ? 0 : 12)
+        .padding(.vertical, isPinned ? 0 : 10)
+        .offset(x: sidebarOffset)
         .opacity(isPresented ? 1 : 0.001)
         .animation(reduceMotion ? .linear(duration: 0.01) : .snappy(duration: 0.22, extraBounce: 0), value: isPresented)
         .allowsHitTesting(isPresented)
         .onHover(perform: onHoverChange)
         .accessibilityHidden(!isPresented)
         .zIndex(2)
+    }
+
+    @ViewBuilder
+    private var backgroundSurface: some View {
+        if isPinned {
+            theme.bg.opacity(0.98)
+        } else {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(theme.bg.opacity(0.97))
+        }
+    }
+
+    @ViewBuilder
+    private var overlaySurface: some View {
+        if isPinned {
+            Rectangle()
+                .fill(theme.border.opacity(0.95))
+                .frame(width: 1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
+        }
     }
 }
 

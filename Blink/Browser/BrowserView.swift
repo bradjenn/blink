@@ -21,6 +21,10 @@ struct BrowserView: View {
         paneState.selectedTab
     }
 
+    private var sidebarContentInset: CGFloat {
+        paneState.isSidebarPinned ? Layout.browserSidebarWidth : 0
+    }
+
     private var isSidebarExpanded: Bool {
         paneState.isSidebarPinned || isSidebarHovered || addressBarFocused || selectedBrowserTab?.state.preferredFocus == .addressBar
     }
@@ -47,14 +51,17 @@ struct BrowserView: View {
                         browserTabId: selectedBrowserTab.id,
                         controller: controller
                     )
+                    .padding(.leading, sidebarContentInset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    BrowserSidebarHoverRegion { isHovered in
-                        isSidebarHovered = isHovered
-                    }
+                    if !paneState.isSidebarPinned {
+                        BrowserSidebarHoverRegion { isHovered in
+                            isSidebarHovered = isHovered
+                        }
                         .frame(width: Layout.browserSidebarHotspotWidth)
                         .frame(maxHeight: .infinity, alignment: .leading)
                         .zIndex(1)
+                    }
 
                     BrowserSidebarView(
                         paneState: paneState,
