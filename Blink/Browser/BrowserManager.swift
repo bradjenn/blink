@@ -17,13 +17,35 @@ final class BrowserManager {
             return existing
         }
 
-        let controller = BrowserController(
+        let controller = makeController(
             tabId: tabId,
             initialState: initialState,
             onStateChange: onStateChange
         )
         controllers[tabId] = controller
         return controller
+    }
+
+    private func makeController(
+        tabId: String,
+        initialState: BrowserTabState,
+        onStateChange: @escaping (BrowserTabState) -> Void
+    ) -> BrowserController {
+        switch engine {
+        case .webKit:
+            return BrowserController(
+                tabId: tabId,
+                initialState: initialState,
+                onStateChange: onStateChange
+            )
+        case .chromium:
+            assertionFailure("Chromium browser engine is not integrated yet. Falling back to WebKit.")
+            return BrowserController(
+                tabId: tabId,
+                initialState: initialState,
+                onStateChange: onStateChange
+            )
+        }
     }
 
     func destroyController(tabId: String) {
