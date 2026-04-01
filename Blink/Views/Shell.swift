@@ -8,6 +8,7 @@ struct Shell: View {
 
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
+    let browserManager: BrowserManager
 
     @State private var escapeMonitor: Any?
     @State private var shortcutMonitor: Any?
@@ -132,6 +133,13 @@ struct Shell: View {
                             }
                             return nil
                         case "l":
+                            if let activeTabId = store.activeTabId,
+                               store.tabsById[activeTabId]?.isBrowser == true {
+                                DispatchQueue.main.async {
+                                    store.focusBrowserAddressBar()
+                                }
+                                return nil
+                            }
                             DispatchQueue.main.async {
                                 store.focusRight()
                             }
@@ -197,7 +205,8 @@ struct Shell: View {
                     WorkspaceColumnsView(
                         project: project,
                         ghosttyApp: ghosttyApp,
-                        surfaceManager: surfaceManager
+                        surfaceManager: surfaceManager,
+                        browserManager: browserManager
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -292,6 +301,7 @@ private struct WorkspaceColumnsView: View {
     let project: Project
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
+    let browserManager: BrowserManager
 
     @State private var layoutState = WorkspaceLayoutState()
     @State private var overviewMonitor: Any?
@@ -359,7 +369,7 @@ private struct WorkspaceColumnsView: View {
                     Text("No windows in this workspace")
                         .font(Fonts.primary(size: 16))
                         .foregroundStyle(theme.text)
-                    Text("Use the sidebar controls to open a terminal, chat, or tool window")
+                    Text("Use the sidebar controls to open a terminal, browser, or tool window")
                         .font(Fonts.primary(size: 13))
                         .foregroundStyle(theme.textDim)
                 }
@@ -460,7 +470,8 @@ private struct WorkspaceColumnsView: View {
                             project: project,
                             activeTabId: store.activeTabId,
                             ghosttyApp: ghosttyApp,
-                            surfaceManager: surfaceManager
+                            surfaceManager: surfaceManager,
+                            browserManager: browserManager
                         )
                         .frame(width: frame.width)
                         .frame(height: viewportHeight)
@@ -1029,6 +1040,7 @@ private struct WorkspaceColumnView: View {
     let activeTabId: String?
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
+    let browserManager: BrowserManager
 
     private var columnTabs: [AppTab] {
         column.tabIds.compactMap { store.tabsById[$0] }
@@ -1043,20 +1055,35 @@ private struct WorkspaceColumnView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.clear)
 
-                    if tab.isManagedCommand && store.isManagedCommandStopped(tab.id) {
-                        StoppedCommandPaneView(tab: tab)
-                    } else {
-                        TerminalView(
-                            tabId: tab.id,
-                            paneId: tab.projectSetupPaneId ?? tab.id,
-                            ghosttyApp: ghosttyApp,
-                            surfaceManager: surfaceManager,
-                            projectId: project.id,
-                            projectName: project.name,
-                            workingDirectory: tab.workingDirectory ?? project.path,
-                            isFocused: isFocused,
-                            command: store.terminalLaunchCommand(for: tab, project: project)
+                    switch tab.kind {
+                    case .terminal:
+                        if tab.isManagedCommand && store.isManagedCommandStopped(tab.id) {
+                            StoppedCommandPaneView(tab: tab)
+                        } else {
+                            TerminalView(
+                                tabId: tab.id,
+                                paneId: tab.projectSetupPaneId ?? tab.id,
+                                ghosttyApp: ghosttyApp,
+                                surfaceManager: surfaceManager,
+                                projectId: project.id,
+                                projectName: project.name,
+                                workingDirectory: tab.workingDirectory ?? project.path,
+                                isFocused: isFocused,
+                                command: store.terminalLaunchCommand(for: tab, project: project)
+                            )
+                        }
+                    case .browser:
+                        BrowserView(
+                            tab: tab,
+                            project: project,
+                            browserManager: browserManager,
+                            isFocused: isFocused
                         )
+                    case .chat:
+                        Text("Chat panes are not currently supported in Blink workspaces.")
+                            .font(Fonts.primary(size: 13))
+                            .foregroundStyle(theme.textDim)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .overlay(

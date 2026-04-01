@@ -17,6 +17,7 @@ enum ProjectSetupPaneKind: String, Codable, Hashable {
     case shell
     case command
     case chat
+    case browser
 }
 
 struct ProjectSetupPane: Identifiable, Equatable, Hashable, Codable {
@@ -26,6 +27,7 @@ struct ProjectSetupPane: Identifiable, Equatable, Hashable, Codable {
     var role: String?
     var command: String?
     var workingDirectory: String?
+    var browserState: BrowserTabState?
 }
 
 struct ProjectSetupColumn: Identifiable, Equatable, Hashable, Codable {

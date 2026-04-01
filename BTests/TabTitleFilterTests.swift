@@ -1,5 +1,5 @@
 import Testing
-@testable import Blink_Dev
+@testable import Blink
 
 struct TabTitleFilterTests {
     @Test("maps AI terminal titles to friendly names")

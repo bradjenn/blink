@@ -156,6 +156,7 @@ final class AppStore {
     var expandedProjectIds: Set<String> = []
     var sidebarFocused: Bool = false
     var surfaceManager: SurfaceManager?
+    var browserManager: BrowserManager?
     private var sidebarFocusProtectionDeadline: Date?
     private var pendingSidebarFocusOnReveal = false
 
@@ -181,8 +182,16 @@ final class AppStore {
 
     func focusTerminal() {
         sidebarFocused = false
-        if let tabId = activeTabId {
+        guard let tabId = activeTabId,
+              let tab = tabsById[tabId] else { return }
+
+        switch tab.kind {
+        case .terminal:
             surfaceManager?.surface(for: tabId)?.focus()
+        case .browser:
+            browserManager?.focusWebView(tabId: tabId)
+        case .chat:
+            break
         }
     }
 
@@ -784,9 +793,7 @@ final class AppStore {
 
         if sidebarFocused {
             sidebarFocused = false
-            if let tabId = activeTabId {
-                surfaceManager?.surface(for: tabId)?.focus()
-            }
+            focusTerminal()
             return
         }
 
@@ -1037,6 +1044,45 @@ final class AppStore {
         return tab
     }
 
+    @discardableResult
+    func openBrowserTab(
+        projectId: String,
+        url: String? = nil,
+        maximizeColumn: Bool = false,
+        projectSetupPaneId: String? = nil,
+        browserState: BrowserTabState? = nil
+    ) -> AppTab {
+        let tab = makeBrowserTab(
+            projectId: projectId,
+            url: url,
+            projectSetupPaneId: projectSetupPaneId,
+            browserState: browserState
+        )
+        insertTab(tab, for: projectId, after: nil)
+
+        let column = Column(id: UUID().uuidString, tabIds: [tab.id])
+        var projectCols = columns[projectId] ?? []
+        projectCols.append(column)
+        columns[projectId] = projectCols
+
+        reindexTabs(for: projectId)
+        setActiveTab(tab.id)
+        if maximizeColumn {
+            requestColumnMaximize(tab.id)
+        }
+        sidebarFocused = false
+        return tab
+    }
+
+    @discardableResult
+    func openBrowserTabForActiveProject(
+        url: String? = nil,
+        maximizeColumn: Bool = false
+    ) -> AppTab? {
+        guard let projectId = activeProjectId else { return nil }
+        return openBrowserTab(projectId: projectId, url: url, maximizeColumn: maximizeColumn)
+    }
+
     func splitActivePaneWithNewTab() {
         guard let projectId = activeProjectId else { return }
 
@@ -1148,6 +1194,27 @@ final class AppStore {
             }
             return tab
         }
+    }
+
+    @discardableResult
+    func openOrFocusBrowserTab(projectId: String, url: String) -> AppTab {
+        let resolvedURLString = BrowserURLResolver.resolve(url)?.absoluteString ?? url
+
+        if let existing = projectTabs(for: projectId).first(where: {
+            $0.isBrowser && $0.browserState?.urlString == resolvedURLString
+        }) {
+            setActiveTab(existing.id)
+            focusTerminal()
+            return tabsById[existing.id] ?? existing
+        }
+
+        return openBrowserTab(projectId: projectId, url: resolvedURLString)
+    }
+
+    @discardableResult
+    func openOrFocusBrowserTabForActiveProject(url: String) -> AppTab? {
+        guard let projectId = activeProjectId else { return nil }
+        return openOrFocusBrowserTab(projectId: projectId, url: url)
     }
 
     @discardableResult
@@ -1269,7 +1336,7 @@ final class AppStore {
     ) -> AppTab {
         let tab = AppTab(
             id: UUID().uuidString,
-            type: "shell",
+            kind: .terminal,
             label: label,
             defaultLabel: label,
             projectId: projectId,
@@ -1313,6 +1380,66 @@ final class AppStore {
         if let idx = tabs.firstIndex(where: { $0.id == tabId }) {
             tabs[idx].label = tabs[idx].defaultLabel
         }
+    }
+
+    func updateBrowserState(_ state: BrowserTabState, for tabId: String) {
+        guard let idx = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[idx].browserState = state
+        if let title = state.title, !title.isEmpty {
+            tabs[idx].label = title
+        } else if let urlString = state.urlString,
+                  let host = URL(string: urlString)?.host(percentEncoded: false),
+                  !host.isEmpty {
+            tabs[idx].label = host
+        } else {
+            tabs[idx].label = tabs[idx].defaultLabel
+        }
+        markUnread(tabId)
+    }
+
+    func setBrowserFocusTarget(_ target: BrowserFocusTarget, for tabId: String) {
+        guard let idx = tabs.firstIndex(where: { $0.id == tabId }),
+              var state = tabs[idx].browserState else { return }
+        state.preferredFocus = target
+        tabs[idx].browserState = state
+    }
+
+    func focusBrowserAddressBar() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        setBrowserFocusTarget(.addressBar, for: tabId)
+        browserManager?.focusAddressBar(tabId: tabId)
+    }
+
+    func focusBrowserWebView() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        setBrowserFocusTarget(.webView, for: tabId)
+        browserManager?.focusWebView(tabId: tabId)
+    }
+
+    func navigateActiveBrowserBack() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        browserManager?.goBack(tabId: tabId)
+    }
+
+    func navigateActiveBrowserForward() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        browserManager?.goForward(tabId: tabId)
+    }
+
+    func reloadActiveBrowser() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        browserManager?.reload(tabId: tabId)
+    }
+
+    func openActiveBrowserInDefaultBrowser() {
+        guard let tabId = activeTabId,
+              tabsById[tabId]?.isBrowser == true else { return }
+        browserManager?.openInDefaultBrowser(tabId: tabId)
     }
 
     /// Mark a tab as having unread activity.
@@ -1499,6 +1626,7 @@ final class AppStore {
         columns[id] = nil
 
         let surfaceManager = surfaceManager
+        browserManager?.destroyControllers(tabIds: tabIds)
         DispatchQueue.main.async {
             surfaceManager?.destroySurfaces(tabIds: tabIds)
         }
@@ -1531,6 +1659,14 @@ final class AppStore {
             }
             if let paneId, shouldUseTmux(for: tab) {
                 destroyTmuxPane(projectId: projectId, paneId: paneId)
+            }
+            switch tab.kind {
+            case .terminal:
+                surfaceManager?.destroySurface(tabId: id)
+            case .browser:
+                browserManager?.destroyController(tabId: id)
+            case .chat:
+                break
             }
             return
         }
@@ -1602,8 +1738,18 @@ final class AppStore {
         reindexTabs(for: projectId)
 
         let surfaceManager = surfaceManager
+        if tab.isBrowser {
+            browserManager?.destroyController(tabId: id)
+        }
         DispatchQueue.main.async {
-            surfaceManager?.destroySurface(tabId: id)
+            switch tab.kind {
+            case .terminal:
+                surfaceManager?.destroySurface(tabId: id)
+            case .browser:
+                break
+            case .chat:
+                break
+            }
         }
         if let paneId, shouldUseTmux(for: tab) {
             destroyTmuxPane(projectId: projectId, paneId: paneId)
@@ -1670,6 +1816,13 @@ final class AppStore {
                         role: pane.role,
                         projectSetupPaneId: pane.id
                     )
+                case .browser:
+                    tab = makeBrowserTab(
+                        projectId: projectId,
+                        url: pane.browserState?.urlString,
+                        projectSetupPaneId: pane.id,
+                        browserState: pane.browserState
+                    )
                 case .chat:
                     continue
                 }
@@ -1695,6 +1848,7 @@ final class AppStore {
         }
 
         let surfaceManager = surfaceManager
+        browserManager?.destroyControllers(tabIds: existingTabIds)
         DispatchQueue.main.async {
             surfaceManager?.destroySurfaces(tabIds: existingTabIds)
         }
@@ -1721,7 +1875,8 @@ final class AppStore {
                         label: tab.label,
                         role: tab.role,
                         command: tab.command,
-                        workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, projectId: projectId)
+                        workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, projectId: projectId),
+                        browserState: tab.browserState
                     )
                 )
                 tabIdToPaneId[tabId] = paneId
@@ -1791,7 +1946,8 @@ final class AppStore {
                         label: pane.label,
                         role: pane.role,
                         command: pane.command,
-                        workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, projectId: setup.projectId)
+                        workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, projectId: setup.projectId),
+                        browserState: pane.browserState
                     )
                 )
             }
@@ -1825,7 +1981,14 @@ final class AppStore {
     }
 
     private func projectSetupPaneKind(for tab: AppTab) -> ProjectSetupPaneKind {
-        return tab.command == nil ? .shell : .command
+        switch tab.kind {
+        case .terminal:
+            return tab.command == nil ? .shell : .command
+        case .browser:
+            return .browser
+        case .chat:
+            return .chat
+        }
     }
 
     private func projectPath(for projectId: String) -> String? {
@@ -1849,7 +2012,7 @@ final class AppStore {
         let resolvedLabel = label ?? defaultLabel
         return AppTab(
             id: UUID().uuidString,
-            type: "shell",
+            kind: .terminal,
             label: resolvedLabel,
             defaultLabel: defaultLabel,
             projectId: projectId,
@@ -1857,6 +2020,35 @@ final class AppStore {
             role: role,
             workingDirectory: workingDirectory,
             projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
+        )
+    }
+
+    private func makeBrowserTab(
+        projectId: String,
+        url: String?,
+        projectSetupPaneId: String? = nil,
+        browserState: BrowserTabState? = nil
+    ) -> AppTab {
+        let resolvedURLString = url.flatMap { BrowserURLResolver.resolve($0)?.absoluteString ?? $0 }
+        let count = tabs.filter { $0.projectId == projectId && $0.isBrowser }.count + 1
+        let defaultLabel = browserState?.title ?? "Browser \(count)"
+        let resolvedState = browserState ?? BrowserTabState(
+            urlString: resolvedURLString,
+            title: nil,
+            canGoBack: false,
+            canGoForward: false,
+            isLoading: false,
+            preferredFocus: resolvedURLString == nil ? .addressBar : .webView
+        )
+
+        return AppTab(
+            id: UUID().uuidString,
+            kind: .browser,
+            label: resolvedState.title ?? defaultLabel,
+            defaultLabel: defaultLabel,
+            projectId: projectId,
+            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId(),
+            browserState: resolvedState
         )
     }
 

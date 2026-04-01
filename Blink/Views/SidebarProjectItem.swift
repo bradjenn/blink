@@ -306,7 +306,11 @@ private struct SidebarProjectWindowItem: View {
 
     @ViewBuilder
     private var leadingIcon: some View {
-        if tab.command == nil {
+        if tab.isBrowser {
+            Image(systemName: "safari")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        } else if tab.command == nil {
             if let detectedAIKind {
                 aiIcon(for: detectedAIKind)
             } else {

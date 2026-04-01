@@ -64,13 +64,18 @@ struct BApp: App {
     @State private var store = AppStore()
     @State private var ghosttyApp = GhosttyApp()
     @State private var surfaceManager = SurfaceManager()
+    @State private var browserManager = BrowserManager()
     @State private var gitMonitor = GitStatusMonitor()
     @State private var spotifyMonitor = SpotifyMonitor()
     @State private var updateChecker = UpdateChecker()
 
     var body: some Scene {
         WindowGroup {
-            Shell(ghosttyApp: ghosttyApp, surfaceManager: surfaceManager)
+            Shell(
+                ghosttyApp: ghosttyApp,
+                surfaceManager: surfaceManager,
+                browserManager: browserManager
+            )
                 .background(
                     WindowTitleBarConfigurator(
                         onCloseRequest: { store.closeActiveTab() }
@@ -96,6 +101,7 @@ struct BApp: App {
                     ghosttyApp.store = store
                     ghosttyApp.surfaceManager = surfaceManager
                     store.surfaceManager = surfaceManager
+                    store.browserManager = browserManager
                     surfaceManager.onProcessExit = { tabId in
                         if store.handleProcessExit(for: tabId) {
                             surfaceManager.destroySurface(tabId: tabId)
