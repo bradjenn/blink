@@ -35,7 +35,7 @@ struct BrowserSidebarView<HeaderContent: View>: View {
                 .overlay(theme.border.opacity(0.9))
 
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 4) {
                     ForEach(paneState.tabs) { browserTab in
                         BrowserSidebarTabRow(
                             browserTab: browserTab,
@@ -46,7 +46,7 @@ struct BrowserSidebarView<HeaderContent: View>: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 12)
+                .padding(.vertical, 8)
             }
         }
         .frame(width: Layout.browserSidebarWidth)
@@ -100,14 +100,42 @@ private struct BrowserSidebarTabRow: View {
 
     @State private var isHovered = false
 
+    private var rowFill: Color {
+        if isSelected {
+            return theme.bg2.opacity(0.9)
+        }
+        if isHovered {
+            return theme.bg2.opacity(0.55)
+        }
+        return .clear
+    }
+
+    private var titleFadeColor: Color {
+        if isSelected || isHovered {
+            return rowFill
+        }
+        return theme.bg
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             favicon
 
             Text(browserTab.displayTitle)
-                .font(Fonts.primary(size: 12, weight: isSelected ? .bold : .regular))
+                .font(Fonts.primary(size: 11.5, weight: isSelected ? .bold : .regular))
                 .foregroundStyle(theme.text)
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .trailing) {
+                    LinearGradient(
+                        colors: [Color.clear, titleFadeColor],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 28)
+                    .allowsHitTesting(false)
+                }
 
             Spacer(minLength: 0)
 
@@ -124,12 +152,12 @@ private struct BrowserSidebarTabRow: View {
             .accessibilityHidden(!isHovered)
             .accessibilityLabel("Close \(browserTab.displayTitle)")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? theme.bg2.opacity(0.9) : (isHovered ? theme.bg2.opacity(0.55) : Color.clear))
+                .fill(rowFill)
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
@@ -155,7 +183,7 @@ private struct BrowserSidebarTabRow: View {
                     faviconFallback
                 }
             }
-            .frame(width: 16, height: 16)
+            .frame(width: 14, height: 14)
         } else {
             faviconFallback
         }
@@ -163,8 +191,8 @@ private struct BrowserSidebarTabRow: View {
 
     private var faviconFallback: some View {
         Image(systemName: browserTab.state.isLoading ? "circle.dashed" : "globe")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(isSelected ? theme.text : theme.textDim)
-            .frame(width: 16, height: 16)
+            .frame(width: 14, height: 14)
     }
 }
