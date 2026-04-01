@@ -24,6 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clearReservedKeyboardShortcuts()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        BlinkChromiumRuntime.shared().shutdown()
+    }
+
 
     private func clearReservedKeyboardShortcuts() {
         guard let mainMenu = NSApp.mainMenu else { return }
@@ -57,7 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main
 struct BApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var themeManager = ThemeManager()

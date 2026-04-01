@@ -51,7 +51,7 @@ struct BrowserContainerView: NSViewRepresentable {
 
     let tabId: String
     let projectId: String
-    let controller: BrowserController
+    let controller: any BrowserHostController
 
     func makeNSView(context: Context) -> BrowserHostingView {
         BrowserHostingView()
@@ -71,6 +71,6 @@ struct BrowserContainerView: NSViewRepresentable {
             store.openBrowserTab(projectId: projectId, url: url.absoluteString, maximizeColumn: false)
         }
 
-        container.showWebView(controller.webView, tabId: tabId)
+        container.showWebView(controller.hostView, tabId: tabId)
     }
 }

@@ -34,17 +34,27 @@ final class BlinkBrowserWebView: WKWebView {
 
 @MainActor
 @Observable
-final class BrowserController: NSObject {
+final class BrowserController: NSObject, BrowserHostController {
     let tabId: String
     let webView: BlinkBrowserWebView
+    let session: BrowserSessionModel
 
-    var state: BrowserTabState
-    var addressBarFocusRequestID: Int = 0
     var onInteraction: (() -> Void)?
     var onOpenNewTabRequest: ((URL) -> Void)?
+    var hostView: NSView { webView }
 
     private var onStateChange: ((BrowserTabState) -> Void)?
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
+
+    var state: BrowserTabState {
+        get { session.state }
+        set { session.state = newValue }
+    }
+
+    var addressBarFocusRequestID: Int {
+        get { session.addressBarFocusRequestID }
+        set { session.addressBarFocusRequestID = newValue }
+    }
 
     init(
         tabId: String,
@@ -52,7 +62,7 @@ final class BrowserController: NSObject {
         onStateChange: @escaping (BrowserTabState) -> Void
     ) {
         self.tabId = tabId
-        self.state = initialState
+        self.session = BrowserSessionModel(state: initialState)
         self.onStateChange = onStateChange
 
         let configuration = WKWebViewConfiguration()
@@ -222,7 +232,7 @@ final class BrowserController: NSObject {
     }
 
     private func publishState() {
-        onStateChange?(state)
+        onStateChange?(session.state)
     }
 
     private func sanitizedTitle(_ title: String?) -> String? {

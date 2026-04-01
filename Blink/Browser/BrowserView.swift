@@ -13,11 +13,15 @@ struct BrowserView: View {
     @FocusState private var addressBarFocused: Bool
 
     private var browserState: BrowserTabState {
-        tab.browserState ?? .blank
+        controller.session.state
     }
 
-    private var controller: BrowserController {
-        browserManager.controller(for: tab.id, initialState: browserState) { state in
+    private var controller: any BrowserHostController {
+        browserManager.controller(
+            for: tab.id,
+            projectId: project.id,
+            initialState: tab.browserState ?? .blank
+        ) { state in
             store.updateBrowserState(state, for: tab.id)
         }
     }
@@ -37,21 +41,21 @@ struct BrowserView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onAppear {
             syncAddressTextFromState()
-            if isFocused, controller.state.preferredFocus == .addressBar {
+            if isFocused, controller.session.state.preferredFocus == .addressBar {
                 requestAddressBarFocus()
             }
         }
-        .onChange(of: controller.state.urlString) { _, _ in
+        .onChange(of: controller.session.state.urlString) { _, _ in
             if !addressBarFocused {
                 syncAddressTextFromState()
             }
         }
-        .onChange(of: controller.addressBarFocusRequestID) { _, _ in
+        .onChange(of: controller.session.addressBarFocusRequestID) { _, _ in
             requestAddressBarFocus()
         }
         .onChange(of: isFocused) { _, focused in
             guard focused else { return }
-            if controller.state.preferredFocus == .addressBar {
+            if controller.session.state.preferredFocus == .addressBar {
                 requestAddressBarFocus()
             } else {
                 browserManager.focusWebView(tabId: tab.id)
@@ -61,15 +65,15 @@ struct BrowserView: View {
 
     private var chrome: some View {
         HStack(spacing: 10) {
-            navigationButton(systemName: "chevron.left", isEnabled: controller.state.canGoBack) {
+            navigationButton(systemName: "chevron.left", isEnabled: controller.session.state.canGoBack) {
                 browserManager.goBack(tabId: tab.id)
             }
 
-            navigationButton(systemName: "chevron.right", isEnabled: controller.state.canGoForward) {
+            navigationButton(systemName: "chevron.right", isEnabled: controller.session.state.canGoForward) {
                 browserManager.goForward(tabId: tab.id)
             }
 
-            navigationButton(systemName: controller.state.isLoading ? "xmark" : "arrow.clockwise", isEnabled: true) {
+            navigationButton(systemName: controller.session.state.isLoading ? "xmark" : "arrow.clockwise", isEnabled: true) {
                 browserManager.reload(tabId: tab.id)
             }
 
@@ -151,7 +155,7 @@ struct BrowserView: View {
     }
 
     private func syncAddressTextFromState() {
-        addressText = controller.state.urlString ?? ""
+        addressText = controller.session.state.urlString ?? ""
     }
 
     private func requestAddressBarFocus() {

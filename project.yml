@@ -6,6 +6,8 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
+    CEF_DIST_DIR: "$(PROJECT_DIR)/ThirdParty/CEF/cef_binary_144.0.6+g5f7e671+chromium-144.0.7559.59_macosarm64"
+    CEF_INCLUDE_DIR: "$(CEF_DIST_DIR)/include"
 targets:
   Blink:
     type: application
@@ -21,6 +23,10 @@ targets:
       - path: Blink/Resources/Wallpapers
         buildPhase: resources
     dependencies:
+      - target: BlinkCEFWrapper
+      - target: BlinkHelper
+        link: false
+        embed: false
       - framework: Frameworks/GhosttyKit.xcframework
         embed: false
       - sdk: Metal.framework
@@ -31,14 +37,48 @@ targets:
       - sdk: QuartzCore.framework
       - sdk: IOSurface.framework
       - sdk: Carbon.framework
+      - sdk: GameController.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app
         INFOPLIST_KEY_CFBundleDisplayName: Blink
         GENERATE_INFOPLIST_FILE: true
         PRODUCT_NAME: Blink
+        CEF_HELPER_NAME: "Blink Helper"
+        SWIFT_OBJC_BRIDGING_HEADER: Blink/Browser/Chromium/BlinkChromium-Bridging-Header.h
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        CLANG_CXX_LIBRARY: "libc++"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(CEF_DIST_DIR)"
         OTHER_LDFLAGS:
           - "-lstdc++"
+    postBuildScripts:
+      - name: Stage CEF Framework
+        script: |
+          set -euo pipefail
+          SRC="${CEF_DIST_DIR}/${CONFIGURATION}/Chromium Embedded Framework.framework"
+          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/Chromium Embedded Framework.framework"
+          rm -rf "${DST}"
+          ditto "${SRC}" "${DST}"
+          if [ ! -d "${DST}/Versions" ]; then
+            mkdir -p "${DST}/Versions/A"
+            mv "${DST}/Chromium Embedded Framework" "${DST}/Versions/A/Chromium Embedded Framework"
+            mv "${DST}/Resources" "${DST}/Versions/A/Resources"
+            mv "${DST}/Libraries" "${DST}/Versions/A/Libraries"
+            ln -sfn A "${DST}/Versions/Current"
+            ln -sfn "Versions/Current/Chromium Embedded Framework" "${DST}/Chromium Embedded Framework"
+            ln -sfn "Versions/Current/Resources" "${DST}/Resources"
+            ln -sfn "Versions/Current/Libraries" "${DST}/Libraries"
+          fi
+      - name: Stage CEF Helper
+        script: |
+          set -euo pipefail
+          SRC="${BUILT_PRODUCTS_DIR}/${CEF_HELPER_NAME}.app"
+          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/${CEF_HELPER_NAME}.app"
+          rm -rf "${DST}"
+          mkdir -p "$(dirname "${DST}")"
+          ditto "${SRC}" "${DST}"
   BlinkDev:
     type: application
     platform: macOS
@@ -53,6 +93,10 @@ targets:
       - path: Blink/Resources/Wallpapers
         buildPhase: resources
     dependencies:
+      - target: BlinkCEFWrapper
+      - target: BlinkDevHelper
+        link: false
+        embed: false
       - framework: Frameworks/GhosttyKit.xcframework
         embed: false
       - sdk: Metal.framework
@@ -63,15 +107,107 @@ targets:
       - sdk: QuartzCore.framework
       - sdk: IOSurface.framework
       - sdk: Carbon.framework
+      - sdk: GameController.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.dev
         INFOPLIST_KEY_CFBundleDisplayName: "Blink Dev"
         GENERATE_INFOPLIST_FILE: true
         PRODUCT_NAME: "Blink Dev"
+        CEF_HELPER_NAME: "Blink Dev Helper"
+        SWIFT_OBJC_BRIDGING_HEADER: Blink/Browser/Chromium/BlinkChromium-Bridging-Header.h
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        CLANG_CXX_LIBRARY: "libc++"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(CEF_DIST_DIR)"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Debug
         OTHER_LDFLAGS:
           - "-lstdc++"
+    postBuildScripts:
+      - name: Stage CEF Framework
+        script: |
+          set -euo pipefail
+          SRC="${CEF_DIST_DIR}/${CONFIGURATION}/Chromium Embedded Framework.framework"
+          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/Chromium Embedded Framework.framework"
+          rm -rf "${DST}"
+          ditto "${SRC}" "${DST}"
+          if [ ! -d "${DST}/Versions" ]; then
+            mkdir -p "${DST}/Versions/A"
+            mv "${DST}/Chromium Embedded Framework" "${DST}/Versions/A/Chromium Embedded Framework"
+            mv "${DST}/Resources" "${DST}/Versions/A/Resources"
+            mv "${DST}/Libraries" "${DST}/Versions/A/Libraries"
+            ln -sfn A "${DST}/Versions/Current"
+            ln -sfn "Versions/Current/Chromium Embedded Framework" "${DST}/Chromium Embedded Framework"
+            ln -sfn "Versions/Current/Resources" "${DST}/Resources"
+            ln -sfn "Versions/Current/Libraries" "${DST}/Libraries"
+          fi
+      - name: Stage CEF Helper
+        script: |
+          set -euo pipefail
+          SRC="${BUILT_PRODUCTS_DIR}/${CEF_HELPER_NAME}.app"
+          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/${CEF_HELPER_NAME}.app"
+          rm -rf "${DST}"
+          mkdir -p "$(dirname "${DST}")"
+          ditto "${SRC}" "${DST}"
+  BlinkCEFWrapper:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ThirdParty/CEF/cef_binary_144.0.6+g5f7e671+chromium-144.0.7559.59_macosarm64/libcef_dll
+        excludes:
+          - ctocpp/test
+          - cpptoc/test
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.cefwrapper
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        CLANG_CXX_LIBRARY: "libc++"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - WRAPPING_CEF_SHARED=1
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(CEF_DIST_DIR)"
+          - "$(CEF_INCLUDE_DIR)"
+  BlinkHelper:
+    type: application
+    platform: macOS
+    sources:
+      - path: Support/ChromiumHelper/BlinkChromiumHelperMain.cc
+    dependencies:
+      - target: BlinkCEFWrapper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.helper
+        PRODUCT_NAME: "Blink Helper"
+        INFOPLIST_FILE: Support/ChromiumHelper/BlinkChromiumHelper-Info.plist
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        CLANG_CXX_LIBRARY: "libc++"
+        GENERATE_INFOPLIST_FILE: false
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(CEF_DIST_DIR)"
+          - "$(CEF_INCLUDE_DIR)"
+  BlinkDevHelper:
+    type: application
+    platform: macOS
+    sources:
+      - path: Support/ChromiumHelper/BlinkChromiumHelperMain.cc
+    dependencies:
+      - target: BlinkCEFWrapper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.dev.helper
+        PRODUCT_NAME: "Blink Dev Helper"
+        INFOPLIST_FILE: Support/ChromiumHelper/BlinkChromiumHelper-Info.plist
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        CLANG_CXX_LIBRARY: "libc++"
+        GENERATE_INFOPLIST_FILE: false
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(CEF_DIST_DIR)"
+          - "$(CEF_INCLUDE_DIR)"
   BTests:
     type: bundle.unit-test
     platform: macOS

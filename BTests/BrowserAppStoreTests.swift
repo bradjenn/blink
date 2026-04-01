@@ -97,13 +97,21 @@ final class BrowserAppStoreTests: XCTestCase {
         store.browserManager = manager
 
         let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
-        let firstController = manager.controller(for: tab.id, initialState: tab.browserState ?? .blank) { _ in }
+        let firstController = manager.controller(
+            for: tab.id,
+            projectId: "project-1",
+            initialState: tab.browserState ?? .blank
+        ) { _ in }
 
         store.closeTab(tab.id)
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
 
-        let secondController = manager.controller(for: tab.id, initialState: .blank) { _ in }
-        XCTAssertFalse(firstController === secondController)
+        let secondController = manager.controller(
+            for: tab.id,
+            projectId: "project-1",
+            initialState: .blank
+        ) { _ in }
+        XCTAssertFalse((firstController as AnyObject) === (secondController as AnyObject))
     }
 
     func testSetBrowserFocusTargetUpdatesStoredBrowserState() {

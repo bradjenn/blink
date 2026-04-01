@@ -4,14 +4,19 @@ import Observation
 @MainActor
 @Observable
 final class BrowserManager {
-    let engine: BrowserEngine = BrowserEngineSelection.active
-    private var controllers: [String: BrowserController] = [:]
+    let engine: BrowserEngine
+    private var controllers: [String: any BrowserHostController] = [:]
+
+    init() {
+        self.engine = Self.resolveEngine()
+    }
 
     func controller(
         for tabId: String,
+        projectId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
-    ) -> BrowserController {
+    ) -> any BrowserHostController {
         if let existing = controllers[tabId] {
             existing.update(initialState: initialState, onStateChange: onStateChange)
             return existing
@@ -19,6 +24,7 @@ final class BrowserManager {
 
         let controller = makeController(
             tabId: tabId,
+            projectId: projectId,
             initialState: initialState,
             onStateChange: onStateChange
         )
@@ -28,9 +34,10 @@ final class BrowserManager {
 
     private func makeController(
         tabId: String,
+        projectId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
-    ) -> BrowserController {
+    ) -> any BrowserHostController {
         switch engine {
         case .webKit:
             return BrowserController(
@@ -39,13 +46,26 @@ final class BrowserManager {
                 onStateChange: onStateChange
             )
         case .chromium:
-            assertionFailure("Chromium browser engine is not integrated yet. Falling back to WebKit.")
-            return BrowserController(
+            return ChromiumBrowserController(
                 tabId: tabId,
+                projectId: projectId,
                 initialState: initialState,
                 onStateChange: onStateChange
             )
         }
+    }
+
+    private static func resolveEngine() -> BrowserEngine {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return .webKit
+        }
+
+        guard BrowserEngineSelection.active == .chromium,
+              BlinkChromiumRuntime.canStartInCurrentBundle() else {
+            return .webKit
+        }
+
+        return .chromium
     }
 
     func destroyController(tabId: String) {
