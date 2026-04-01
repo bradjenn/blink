@@ -35,6 +35,28 @@ struct BrowserPaneTab: Identifiable, Codable, Equatable, Hashable {
               !urlString.isEmpty else { return nil }
         return urlString
     }
+
+    var host: String? {
+        guard let urlString = state.urlString,
+              let url = URL(string: urlString),
+              let host = url.host(percentEncoded: false),
+              !host.isEmpty else {
+            return nil
+        }
+
+        return host
+    }
+
+    var faviconURL: URL? {
+        guard let host else { return nil }
+
+        var components = URLComponents(string: "https://www.google.com/s2/favicons")
+        components?.queryItems = [
+            URLQueryItem(name: "sz", value: "64"),
+            URLQueryItem(name: "domain", value: host)
+        ]
+        return components?.url
+    }
 }
 
 struct BrowserPaneState: Codable, Equatable, Hashable {

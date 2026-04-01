@@ -102,21 +102,12 @@ private struct BrowserSidebarTabRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            glyph
+            favicon
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(browserTab.displayTitle)
-                    .font(Fonts.primary(size: 12, weight: isSelected ? .bold : .regular))
-                    .foregroundStyle(theme.text)
-                    .lineLimit(1)
-
-                if let subtitle = browserTab.displaySubtitle {
-                    Text(subtitle)
-                        .font(Fonts.primary(size: 11))
-                        .foregroundStyle(theme.textDim)
-                        .lineLimit(1)
-                }
-            }
+            Text(browserTab.displayTitle)
+                .font(Fonts.primary(size: 12, weight: isSelected ? .bold : .regular))
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
 
@@ -134,15 +125,11 @@ private struct BrowserSidebarTabRow: View {
             .accessibilityLabel("Close \(browserTab.displayTitle)")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isSelected ? theme.accent.opacity(0.14) : (isHovered ? theme.bg2 : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isSelected ? theme.accent.opacity(0.45) : theme.border.opacity(0.8), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? theme.bg2.opacity(0.9) : (isHovered ? theme.bg2.opacity(0.55) : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
@@ -150,19 +137,34 @@ private struct BrowserSidebarTabRow: View {
         .pointerCursor()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(browserTab.displayTitle)
-        .accessibilityValue(browserTab.displaySubtitle ?? "")
+        .accessibilityValue(browserTab.host ?? "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var glyph: some View {
-        ZStack {
-            Circle()
-                .fill((isSelected ? theme.accent : theme.textMuted).opacity(0.16))
-                .frame(width: 24, height: 24)
-
-            Image(systemName: browserTab.state.isLoading ? "circle.dashed" : "globe")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isSelected ? theme.accent : theme.textDim)
+    @ViewBuilder
+    private var favicon: some View {
+        if let faviconURL = browserTab.faviconURL {
+            AsyncImage(url: faviconURL, transaction: .init(animation: .none)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                default:
+                    faviconFallback
+                }
+            }
+            .frame(width: 16, height: 16)
+        } else {
+            faviconFallback
         }
+    }
+
+    private var faviconFallback: some View {
+        Image(systemName: browserTab.state.isLoading ? "circle.dashed" : "globe")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(isSelected ? theme.text : theme.textDim)
+            .frame(width: 16, height: 16)
     }
 }
