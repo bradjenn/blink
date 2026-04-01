@@ -21,6 +21,7 @@
 		19A7388011B32BAA1810F986 /* BrowserAppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9B9ABE5070FDDE8DD1C2EB /* BrowserAppStoreTests.swift */; };
 		19F2F8B9416F42F451D3A428 /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */; };
 		1ACA3C15FD9C709EDDC92934 /* BrowserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E6CE37B17F06FC055AB927 /* BrowserManager.swift */; };
+		1AE923CE3EF3D15424912EC6 /* BrowserEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B72DF31B86995AADD900B8 /* BrowserEngine.swift */; };
 		1BBE58619D05508B1C4B026F /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F051F6B723C8DC22255A384 /* SettingsPage.swift */; };
 		1D3B3B23756683633A092E2E /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */; };
 		1D86A2625B0C384691261F3A /* BrowserTabState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CCBFD155E44D107B923B2E /* BrowserTabState.swift */; };
@@ -66,6 +67,7 @@
 		5CA5C241E8BBD7664174D957 /* BApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104F7EE9EE6F91C459A8CC7C /* BApp.swift */; };
 		5CCD3E4C8BFF60FF3FFBE4F9 /* CursorStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9548147B4FB10C2860D5C78 /* CursorStyle.swift */; };
 		6243578B4A44A0CDD78A4A6E /* akane-pagoda.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */; };
+		647A6E66265461A7F9F8F7BC /* BrowserEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B72DF31B86995AADD900B8 /* BrowserEngine.swift */; };
 		6510A2C09D7FE43F521FEF23 /* gruvbox-ferns.jpg in Resources */ = {isa = PBXBuildFile; fileRef = C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */; };
 		65F87582D2A47D4586450C2B /* BrowserContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7F77BC98D850186700273B /* BrowserContainerView.swift */; };
 		666B443D5962F1244391BC7E /* SpotifyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */; };
@@ -92,6 +94,7 @@
 		8E0F6EC0E220D245BD40F45A /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762E93713BEF3B6BAE6DB7CC /* Theme.swift */; };
 		8E9F90572424473CFF88504B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C747FAD7B2FD821BC48474F /* Metal.framework */; };
 		92A3D8F325ED0F5B9007ABC3 /* everforest.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E7511997BAA46E9D924A8619 /* everforest.jpg */; };
+		9444FB6ED90087BABB3DC48E /* BrowserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69E2405D0B399681EC6061C /* BrowserDefaults.swift */; };
 		94AFCA55AC929B1ABF3459DF /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188062355388B795F360A5EF /* UpdateChecker.swift */; };
 		98E7410EBA0008B32814292C /* ClaudeHookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */; };
 		9985FE021FAFBD2E70231F02 /* ClaudeHookSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */; };
@@ -137,6 +140,7 @@
 		D3B4A974951999D948C6CAF6 /* Themes in Resources */ = {isa = PBXBuildFile; fileRef = 1EDE19D0FBE88E948C87BF23 /* Themes */; };
 		D6312D6BE98B204DA7C19BE2 /* KeyboardShortcutsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B05A07DC5BFA43BAF15661C /* KeyboardShortcutsSettings.swift */; };
 		D7BEEB525112792927C78AAC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BF5F1BD395AB638696B46E9 /* Assets.xcassets */; };
+		D9ED1C124A86BF8C971698E1 /* BrowserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69E2405D0B399681EC6061C /* BrowserDefaults.swift */; };
 		DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
 		DA7A141D6EEC41ED5B03E7BB /* StartScreenProjectPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B24EB0AEA9E3EBBA512711C /* StartScreenProjectPicker.swift */; };
 		DE44AD4E389F09D7ACA17332 /* akane-mist.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F9A82625A455F5E823649549 /* akane-mist.jpg */; };
@@ -173,6 +177,7 @@
 
 /* Begin PBXFileReference section */
 		01CCBFD155E44D107B923B2E /* BrowserTabState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabState.swift; sourceTree = "<group>"; };
+		03B72DF31B86995AADD900B8 /* BrowserEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserEngine.swift; sourceTree = "<group>"; };
 		05378AD2DE8E05326E13BD31 /* Column.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Column.swift; sourceTree = "<group>"; };
 		0728E5270FEDF0231EC92CC4 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		090B4D4B05D2CD4E01FE702D /* TabTitleFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabTitleFilterTests.swift; sourceTree = "<group>"; };
@@ -233,6 +238,7 @@
 		91721316B80C9735C556EF51 /* BrowserController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserController.swift; sourceTree = "<group>"; };
 		9358E6A6BAD09CFBD6BED7BE /* BrowserURLResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserURLResolverTests.swift; sourceTree = "<group>"; };
 		A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreenLogo.swift; sourceTree = "<group>"; };
+		A69E2405D0B399681EC6061C /* BrowserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserDefaults.swift; sourceTree = "<group>"; };
 		A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFavicon.swift; sourceTree = "<group>"; };
 		AA9A3835FD4C5895690F442D /* StyledControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyledControls.swift; sourceTree = "<group>"; };
 		B1A9F0622A8AC85FCF1C0948 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
@@ -324,6 +330,8 @@
 			children = (
 				FF7F77BC98D850186700273B /* BrowserContainerView.swift */,
 				91721316B80C9735C556EF51 /* BrowserController.swift */,
+				A69E2405D0B399681EC6061C /* BrowserDefaults.swift */,
+				03B72DF31B86995AADD900B8 /* BrowserEngine.swift */,
 				F5E6CE37B17F06FC055AB927 /* BrowserManager.swift */,
 				01CCBFD155E44D107B923B2E /* BrowserTabState.swift */,
 				1ADA7024A206C60AB6E0DB25 /* BrowserURLResolver.swift */,
@@ -647,6 +655,8 @@
 				5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */,
 				BE8F069B8FB86941774CCA9D /* BrowserContainerView.swift in Sources */,
 				5023441A3451AD33C5190F5C /* BrowserController.swift in Sources */,
+				9444FB6ED90087BABB3DC48E /* BrowserDefaults.swift in Sources */,
+				1AE923CE3EF3D15424912EC6 /* BrowserEngine.swift in Sources */,
 				1ACA3C15FD9C709EDDC92934 /* BrowserManager.swift in Sources */,
 				738FE0499E2DCBAA402FF683 /* BrowserTabState.swift in Sources */,
 				B191288580675F013041B755 /* BrowserURLResolver.swift in Sources */,
@@ -704,6 +714,8 @@
 				7065625D6D71AB3BD5777B7F /* BackgroundPopover.swift in Sources */,
 				65F87582D2A47D4586450C2B /* BrowserContainerView.swift in Sources */,
 				F32D63DBEB7F5BC3F8276694 /* BrowserController.swift in Sources */,
+				D9ED1C124A86BF8C971698E1 /* BrowserDefaults.swift in Sources */,
+				647A6E66265461A7F9F8F7BC /* BrowserEngine.swift in Sources */,
 				6D33C1319C1C18ED82B5E8FD /* BrowserManager.swift in Sources */,
 				1D86A2625B0C384691261F3A /* BrowserTabState.swift in Sources */,
 				FE142300439F61F985C020B2 /* BrowserURLResolver.swift in Sources */,

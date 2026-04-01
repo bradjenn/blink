@@ -291,12 +291,11 @@ struct BApp: App {
             }
 
             CommandGroup(replacing: .newItem) {
-                Button("New Window") {
-                    if let projectId = store.activeProjectId {
-                        store.openTab(projectId: projectId)
-                    }
+                Button("New Tab") {
+                    store.openNewTabForActiveSurface()
                 }
                 .keyboardShortcut("t", modifiers: .command)
+                .disabled(store.activeProjectId == nil)
 
                 Button("New Browser") {
                     store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)

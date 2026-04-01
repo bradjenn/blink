@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class BrowserManager {
+    let engine: BrowserEngine = BrowserEngineSelection.active
     private var controllers: [String: BrowserController] = [:]
 
     func controller(

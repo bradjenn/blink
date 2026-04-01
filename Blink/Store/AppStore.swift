@@ -1080,7 +1080,23 @@ final class AppStore {
         maximizeColumn: Bool = false
     ) -> AppTab? {
         guard let projectId = activeProjectId else { return nil }
-        return openBrowserTab(projectId: projectId, url: url, maximizeColumn: maximizeColumn)
+        let resolvedURL = url ?? BrowserDefaults.homePageURLString
+        return openBrowserTab(projectId: projectId, url: resolvedURL, maximizeColumn: maximizeColumn)
+    }
+
+    func openNewTabForActiveSurface() {
+        guard let projectId = activeProjectId else { return }
+
+        if !sidebarFocused,
+           let activeTabId,
+           let activeTab = tabsById[activeTabId],
+           activeTab.projectId == projectId,
+           activeTab.isBrowser {
+            _ = openBrowserTab(projectId: projectId, url: BrowserDefaults.homePageURLString)
+            return
+        }
+
+        _ = openTab(projectId: projectId)
     }
 
     func splitActivePaneWithNewTab() {

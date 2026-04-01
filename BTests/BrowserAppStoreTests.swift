@@ -33,16 +33,51 @@ final class BrowserAppStoreTests: XCTestCase {
         }
     }
 
-    func testOpenBrowserTabCreatesBrowserSurfaceWithAddressBarFocus() throws {
+    func testOpenBrowserTabForActiveProjectDefaultsToHomePage() throws {
         let store = makeStore()
         store.setActiveProject("project-1")
 
         let tab = try XCTUnwrap(store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false))
 
         XCTAssertEqual(tab.kind, .browser)
-        XCTAssertEqual(tab.browserState?.preferredFocus, .addressBar)
+        XCTAssertEqual(tab.browserState?.urlString, BrowserDefaults.homePageURLString)
+        XCTAssertEqual(tab.browserState?.preferredFocus, .webView)
         XCTAssertEqual(store.activeTabId, tab.id)
         XCTAssertTrue(store.projectColumns(for: "project-1").contains { $0.tabIds == [tab.id] })
+    }
+
+    func testOpenNewTabForActiveSurfaceCreatesBrowserTabWhenBrowserIsFocused() throws {
+        let store = makeStore()
+        let existing = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        store.setActiveTab(existing.id)
+
+        store.openNewTabForActiveSurface()
+
+        let browserTabs = store.projectTabs(for: "project-1").filter(\.isBrowser)
+        XCTAssertEqual(browserTabs.count, 2)
+        XCTAssertEqual(browserTabs.last?.browserState?.urlString, BrowserDefaults.homePageURLString)
+    }
+
+    func testOpenNewTabForActiveSurfaceCreatesTerminalTabWhenTerminalIsFocused() {
+        let store = makeStore()
+        let terminal = store.openTab(projectId: "project-1")
+        store.setActiveTab(terminal.id)
+
+        store.openNewTabForActiveSurface()
+
+        XCTAssertEqual(store.projectTabs(for: "project-1").filter(\.isTerminal).count, 2)
+    }
+
+    func testOpenNewTabForActiveSurfaceCreatesTerminalTabWhenSidebarIsFocused() {
+        let store = makeStore()
+        let browser = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        store.setActiveTab(browser.id)
+        store.sidebarFocused = true
+
+        store.openNewTabForActiveSurface()
+
+        XCTAssertEqual(store.projectTabs(for: "project-1").filter(\.isBrowser).count, 1)
+        XCTAssertEqual(store.projectTabs(for: "project-1").filter(\.isTerminal).count, 1)
     }
 
     func testOpenOrFocusBrowserTabReusesExistingURLTab() {
