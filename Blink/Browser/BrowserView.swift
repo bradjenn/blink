@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BrowserView: View {
     private static let sidebarTransition = Animation.snappy(duration: 0.24, extraBounce: 0)
+    private static let sidebarHoverDismissDelay: TimeInterval = 0.18
 
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
@@ -12,8 +13,12 @@ struct BrowserView: View {
     let isFocused: Bool
 
     @State private var addressText = ""
-    @State private var isSidebarHovered = false
+    @State private var isSidebarHotspotHovered = false
+    @State private var isSidebarPanelHovered = false
+    @State private var isSidebarHoverLatched = false
     @FocusState private var addressBarFocused: Bool
+
+    @State private var sidebarHoverDismissWorkItem: DispatchWorkItem?
 
     private var paneState: BrowserPaneState {
         tab.browserState ?? .empty
@@ -27,8 +32,15 @@ struct BrowserView: View {
         paneState.isSidebarPinned ? Layout.browserSidebarWidth : 0
     }
 
+    private var hoverRegionWidth: CGFloat {
+        isSidebarExpanded ? Layout.browserSidebarHoverBridgeWidth : Layout.browserSidebarHotspotWidth
+    }
+
     private var isSidebarExpanded: Bool {
-        paneState.isSidebarPinned || isSidebarHovered || addressBarFocused || selectedBrowserTab?.state.preferredFocus == .addressBar
+        paneState.isSidebarPinned
+            || isSidebarHoverLatched
+            || addressBarFocused
+            || selectedBrowserTab?.state.preferredFocus == .addressBar
     }
 
     private func resolveController(for browserTab: BrowserPaneTab) -> any BrowserHostController {
@@ -59,9 +71,9 @@ struct BrowserView: View {
 
                     if !paneState.isSidebarPinned {
                         BrowserSidebarHoverRegion { isHovered in
-                            isSidebarHovered = isHovered
+                            handleSidebarHotspotHoverChange(isHovered)
                         }
-                        .frame(width: Layout.browserSidebarHotspotWidth)
+                        .frame(width: hoverRegionWidth)
                         .frame(maxHeight: .infinity, alignment: .leading)
                         .zIndex(1)
                     }
@@ -70,7 +82,9 @@ struct BrowserView: View {
                         paneState: paneState,
                         isPresented: isSidebarExpanded,
                         isPinned: paneState.isSidebarPinned,
-                        onHoverChange: { isSidebarHovered = $0 },
+                        onHoverChange: { isHovered in
+                            handleSidebarPanelHoverChange(isHovered)
+                        },
                         onSelectTab: { browserTabId in
                             store.selectBrowserTab(browserTabId, in: tab.id)
                             store.setActiveTab(tab.id)
@@ -108,9 +122,38 @@ struct BrowserView: View {
                 .onChange(of: controller.session.addressBarFocusRequestID) { _, _ in
                     requestAddressBarFocus()
                 }
+                .onChange(of: addressBarFocused) { _, focused in
+                    if focused {
+                        latchSidebarHover()
+                    } else {
+                        scheduleSidebarHoverDismissIfNeeded()
+                    }
+                }
+                .onChange(of: selectedBrowserTab.state.preferredFocus) { _, preferredFocus in
+                    if preferredFocus == .addressBar {
+                        latchSidebarHover()
+                    } else {
+                        scheduleSidebarHoverDismissIfNeeded()
+                    }
+                }
                 .onChange(of: isFocused) { _, focused in
                     guard focused else { return }
                     syncFocus(controller: controller, browserTab: selectedBrowserTab)
+                }
+                .onChange(of: paneState.isSidebarPinned) { _, isPinned in
+                    guard !isPinned else {
+                        cancelSidebarHoverDismiss()
+                        isSidebarHoverLatched = true
+                        return
+                    }
+
+                    if !addressBarFocused,
+                       selectedBrowserTab.state.preferredFocus != .addressBar {
+                        scheduleSidebarHoverDismissIfNeeded()
+                    }
+                }
+                .onDisappear {
+                    cancelSidebarHoverDismiss()
                 }
             } else {
                 VStack(spacing: 12) {
@@ -254,6 +297,57 @@ struct BrowserView: View {
 
     private func syncAddressText(from state: BrowserTabState) {
         addressText = state.urlString ?? ""
+    }
+
+    private func handleSidebarHotspotHoverChange(_ isHovered: Bool) {
+        isSidebarHotspotHovered = isHovered
+
+        if isHovered {
+            latchSidebarHover()
+        } else {
+            scheduleSidebarHoverDismissIfNeeded()
+        }
+    }
+
+    private func handleSidebarPanelHoverChange(_ isHovered: Bool) {
+        isSidebarPanelHovered = isHovered
+
+        if isHovered {
+            latchSidebarHover()
+        } else {
+            scheduleSidebarHoverDismissIfNeeded()
+        }
+    }
+
+    private func latchSidebarHover() {
+        cancelSidebarHoverDismiss()
+        isSidebarHoverLatched = true
+    }
+
+    private func scheduleSidebarHoverDismissIfNeeded() {
+        cancelSidebarHoverDismiss()
+
+        guard !paneState.isSidebarPinned,
+              !isSidebarHotspotHovered,
+              !isSidebarPanelHovered,
+              !addressBarFocused,
+              selectedBrowserTab?.state.preferredFocus != .addressBar else {
+            return
+        }
+
+        let workItem = DispatchWorkItem {
+            isSidebarHoverLatched = false
+        }
+        sidebarHoverDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.sidebarHoverDismissDelay,
+            execute: workItem
+        )
+    }
+
+    private func cancelSidebarHoverDismiss() {
+        sidebarHoverDismissWorkItem?.cancel()
+        sidebarHoverDismissWorkItem = nil
     }
 
     private func syncFocus(
