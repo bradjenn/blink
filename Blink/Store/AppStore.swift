@@ -1384,22 +1384,28 @@ final class AppStore {
 
     func updateBrowserState(_ state: BrowserTabState, for tabId: String) {
         guard let idx = tabs.firstIndex(where: { $0.id == tabId }) else { return }
-        tabs[idx].browserState = state
+        let nextLabel: String
         if let title = state.title, !title.isEmpty {
-            tabs[idx].label = title
+            nextLabel = title
         } else if let urlString = state.urlString,
                   let host = URL(string: urlString)?.host(percentEncoded: false),
                   !host.isEmpty {
-            tabs[idx].label = host
+            nextLabel = host
         } else {
-            tabs[idx].label = tabs[idx].defaultLabel
+            nextLabel = tabs[idx].defaultLabel
         }
+
+        guard tabs[idx].browserState != state || tabs[idx].label != nextLabel else { return }
+
+        tabs[idx].browserState = state
+        tabs[idx].label = nextLabel
         markUnread(tabId)
     }
 
     func setBrowserFocusTarget(_ target: BrowserFocusTarget, for tabId: String) {
         guard let idx = tabs.firstIndex(where: { $0.id == tabId }),
               var state = tabs[idx].browserState else { return }
+        guard state.preferredFocus != target else { return }
         state.preferredFocus = target
         tabs[idx].browserState = state
     }

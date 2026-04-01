@@ -6,28 +6,29 @@ import WebKit
 @MainActor
 final class BlinkBrowserWebView: WKWebView {
     var onInteraction: (() -> Void)?
+    var suppressNextInteraction = false
+
+    private func notifyInteractionIfNeeded() {
+        if suppressNextInteraction {
+            suppressNextInteraction = false
+            return
+        }
+        onInteraction?()
+    }
 
     override func mouseDown(with event: NSEvent) {
-        onInteraction?()
+        notifyInteractionIfNeeded()
         super.mouseDown(with: event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        onInteraction?()
+        notifyInteractionIfNeeded()
         super.rightMouseDown(with: event)
     }
 
     override func otherMouseDown(with event: NSEvent) {
-        onInteraction?()
+        notifyInteractionIfNeeded()
         super.otherMouseDown(with: event)
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        let result = super.becomeFirstResponder()
-        if result {
-            onInteraction?()
-        }
-        return result
     }
 }
 
@@ -110,21 +111,33 @@ final class BrowserController: NSObject {
 
     func navigate(to rawValue: String) {
         guard let url = BrowserURLResolver.resolve(rawValue) else { return }
+        state.urlString = url.absoluteString
+        state.title = nil
+        state.isLoading = true
         load(url: url)
-        state.preferredFocus = .webView
+        if state.preferredFocus != .webView {
+            state.preferredFocus = .webView
+        }
         publishState()
     }
 
     func focusWebView() {
+        let focusChanged = state.preferredFocus != .webView
         state.preferredFocus = .webView
-        makeWebViewFirstResponder()
+        let responderChanged = makeWebViewFirstResponder()
+        guard focusChanged || responderChanged else { return }
         publishState()
     }
 
     func focusAddressBar() {
-        state.preferredFocus = .addressBar
+        let focusChanged = state.preferredFocus != .addressBar
+        if focusChanged {
+            state.preferredFocus = .addressBar
+        }
         addressBarFocusRequestID += 1
-        publishState()
+        if focusChanged {
+            publishState()
+        }
     }
 
     func goBack() {
@@ -154,9 +167,13 @@ final class BrowserController: NSObject {
         webView.load(URLRequest(url: url))
     }
 
-    private func makeWebViewFirstResponder() {
-        guard let window = webView.window else { return }
+    @discardableResult
+    private func makeWebViewFirstResponder() -> Bool {
+        guard let window = webView.window else { return false }
+        guard window.firstResponder !== webView else { return false }
+        webView.suppressNextInteraction = true
         window.makeFirstResponder(webView)
+        return true
     }
 
     private func installObservers() {
