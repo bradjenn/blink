@@ -27,9 +27,9 @@ struct BrowserSidebarView<HeaderContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             headerContent()
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
 
             Divider()
                 .overlay(theme.border.opacity(0.9))
@@ -45,8 +45,8 @@ struct BrowserSidebarView<HeaderContent: View>: View {
                         )
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
             }
         }
         .frame(width: Layout.browserSidebarWidth)
@@ -54,8 +54,8 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         .background(backgroundSurface)
         .overlay(overlaySurface)
         .shadow(color: Color.black.opacity(isPresented && !isPinned ? 0.26 : 0), radius: 18, y: 10)
-        .padding(.leading, isPinned ? 0 : 12)
-        .padding(.vertical, isPinned ? 0 : 10)
+        .padding(.leading, isPinned ? 0 : 8)
+        .padding(.vertical, isPinned ? 0 : 8)
         .offset(x: sidebarOffset)
         .opacity(isPresented ? 1 : 0.001)
         .animation(transitionAnimation, value: isPresented)
@@ -152,8 +152,8 @@ private struct BrowserSidebarTabRow: View {
             .accessibilityHidden(!isHovered)
             .accessibilityLabel("Close \(browserTab.displayTitle)")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
