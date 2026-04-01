@@ -109,6 +109,24 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTabId, "t2")
     }
 
+    func testSetActiveTabSwitchesActiveProjectWhenNeeded() {
+        let store = makeStore()
+        store.setActiveProject("1")
+
+        store.setActiveTab("t3")
+
+        XCTAssertEqual(store.activeProjectId, "2")
+        XCTAssertEqual(store.activeTabId, "t3")
+    }
+
+    func testActiveColumnFallsBackWhenActiveTabIsNoLongerInColumns() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.activeTabId = "missing-tab"
+
+        XCTAssertEqual(store.activeColumn?.id, "c1")
+    }
+
     func testSelectNextTabWrapsWithinProject() {
         let store = makeStore()
         store.setActiveProject("1")
@@ -172,126 +190,6 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(commandTabs.count, 1)
         XCTAssertEqual(commandTabs[0].id, tabId)
         XCTAssertEqual(store.managedCommandStatus(for: tabId), .running)
-    }
-
-    func testOpenManagedAIPaneUsesProviderNameUntilFirstPromptIsSubmitted() {
-        let store = makeStore()
-        store.openManagedAIPane(.codex, projectId: "1")
-
-        let tab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.managedAIPaneKind == .codex }))
-        XCTAssertEqual(tab.command, "codex --no-alt-screen")
-        XCTAssertEqual(tab.label, "Codex")
-        XCTAssertEqual(tab.defaultLabel, "Codex")
-
-        let applied = store.applyManagedAIPromptTitleIfNeeded("Fix autosave restore", for: tab.id)
-
-        XCTAssertTrue(applied)
-        let updatedTab = try! XCTUnwrap(store.tabsById[tab.id])
-        XCTAssertEqual(updatedTab.label, "Fix autosave restore")
-        XCTAssertEqual(updatedTab.defaultLabel, "Fix autosave restore")
-    }
-
-    func testOpenManagedCodexPaneReusesExistingLegacyCodexCommandTab() {
-        let store = makeStore()
-        let existing = store.openOrFocusCommandTab(projectId: "1", command: "codex", label: "Codex")
-
-        store.openManagedAIPane(.codex, projectId: "1")
-
-        let codexTabs = store.projectTabs(for: "1").filter { $0.managedAIPaneKind == .codex }
-        XCTAssertEqual(codexTabs.count, 1)
-        XCTAssertEqual(codexTabs.first?.id, existing.id)
-        XCTAssertEqual(store.activeTabId, existing.id)
-    }
-
-    func testManagedAIPromptTitleIsOnlyAppliedOnce() {
-        let store = makeStore()
-        store.activeProjectId = "2"
-        store.openManagedAIPane(.claude)
-
-        let tab = try! XCTUnwrap(store.projectTabs(for: "2").first(where: { $0.command == "claude" }))
-        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Review workspace restore", for: tab.id))
-        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("Something else", for: tab.id))
-
-        let updatedTab = try! XCTUnwrap(store.tabsById[tab.id])
-        XCTAssertEqual(updatedTab.label, "Review workspace restore")
-        XCTAssertEqual(updatedTab.defaultLabel, "Review workspace restore")
-    }
-
-    func testShellStartedCodexAdoptsFirstPromptTitleAndRevertsOnShellPrompt() {
-        let store = makeStore()
-        let tabId = "t1"
-
-        store.handleTerminalLineSubmission("codex", for: tabId)
-
-        var updatedTab = try! XCTUnwrap(store.tabsById[tabId])
-        XCTAssertEqual(updatedTab.label, "Codex")
-        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
-
-        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("codex", for: tabId))
-        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Fix autosave restore", for: tabId))
-
-        updatedTab = try! XCTUnwrap(store.tabsById[tabId])
-        XCTAssertEqual(updatedTab.label, "Fix autosave restore")
-        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
-
-        store.handleTerminalTitleUpdate("zsh", for: tabId)
-
-        updatedTab = try! XCTUnwrap(store.tabsById[tabId])
-        XCTAssertEqual(updatedTab.label, "Terminal 1")
-        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
-    }
-
-    func testShellStartedClaudePromptTitleIsNotClobberedByLaterProviderTitles() {
-        let store = makeStore()
-        let tabId = "t1"
-
-        store.handleTerminalLineSubmission("claude", for: tabId)
-        XCTAssertFalse(store.applyManagedAIPromptTitleIfNeeded("claude", for: tabId))
-        XCTAssertTrue(store.applyManagedAIPromptTitleIfNeeded("Review the sidebar tree", for: tabId))
-
-        store.handleTerminalTitleUpdate("claude", for: tabId)
-
-        let updatedTab = try! XCTUnwrap(store.tabsById[tabId])
-        XCTAssertEqual(updatedTab.label, "Review the sidebar tree")
-        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
-    }
-
-    func testShellStartedClaudeYoloIsDetectedFromSubmittedLine() {
-        let store = makeStore()
-        let tabId = "t1"
-
-        store.handleTerminalLineSubmission("claude --dangerously-skip-permissions", for: tabId)
-
-        let updatedTab = try! XCTUnwrap(store.tabsById[tabId])
-        XCTAssertEqual(updatedTab.label, "Claude Code")
-        XCTAssertEqual(updatedTab.defaultLabel, "Terminal 1")
-    }
-
-    func testRestoredManagedAIPaneCanStillAdoptFirstPromptTitle() {
-        let store = makeStore()
-        store.openManagedAIPane(.claude, projectId: "1")
-
-        let originalTab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "claude" }))
-        let originalSetup = try! XCTUnwrap(store.projectSetup(for: "1"))
-
-        store.tabs.removeAll()
-        store.columns["1"] = []
-        store.activeProjectId = "1"
-        store.activeTabId = nil
-        store.projectSetups["1"] = originalSetup
-
-        store.restoreProjectSetup(for: "1")
-
-        let restoredTab = try! XCTUnwrap(store.projectTabs(for: "1").first(where: { $0.command == "claude" }))
-        XCTAssertNotEqual(restoredTab.id, originalTab.id)
-        XCTAssertEqual(restoredTab.label, "Claude Code")
-
-        let applied = store.applyManagedAIPromptTitleIfNeeded("Audit the window resizing regression", for: restoredTab.id)
-
-        XCTAssertTrue(applied)
-        let updatedTab = try! XCTUnwrap(store.tabsById[restoredTab.id])
-        XCTAssertEqual(updatedTab.label, "Audit the window resizing regression")
-        XCTAssertEqual(updatedTab.defaultLabel, "Audit the window resizing regression")
     }
 
     func testHideTitleBarPersists() {
@@ -621,6 +519,128 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(command.contains("call cursor(42, 1)"))
         XCTAssertTrue(command.contains("tab drop"))
         XCTAssertEqual(store.projectTabs(for: "1").count, 3)
+    }
+
+    func testClaudeTitleMarksTabRunningWithoutHooks() {
+        let store = makeStore()
+        store.setActiveProject("1")
+
+        store.handleTerminalTitleUpdate("claude", for: "t2")
+
+        XCTAssertEqual(store.claudeActivity(for: "t2")?.kind, .running)
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Claude Code")
+    }
+
+    func testShellPromptClearsClaudeRunningFallbackAndMarksUnread() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalTitleUpdate("claude", for: "t2")
+        store.clearUnread("t2")
+
+        store.handleTerminalTitleUpdate("~/Code/blink", for: "t2")
+
+        XCTAssertNil(store.claudeActivity(for: "t2"))
+        XCTAssertEqual(store.tabsById["t2"]?.label, store.tabsById["t2"]?.defaultLabel)
+        XCTAssertTrue(store.unreadTabs.contains("t2"))
+    }
+
+    func testClaudeLaunchArmsPromptTitleCapture() {
+        let store = makeStore()
+        store.setActiveProject("1")
+
+        store.handleTerminalLineSubmission("claude --resume", for: "t2")
+
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Claude Code")
+        XCTAssertEqual(store.claudeActivity(for: "t2")?.kind, .running)
+    }
+
+    func testClaudePromptTitleUsesFirstPromptText() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("claude", for: "t2")
+
+        store.handleTerminalLineSubmission("Add Gemini CLI to Blink", for: "t2")
+
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Add Gemini CLI to Blink")
+    }
+
+    func testClaudeForegroundTitleDoesNotOverwritePromptTitle() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("claude", for: "t2")
+        store.handleTerminalLineSubmission("Add Gemini CLI to Blink", for: "t2")
+
+        store.handleTerminalTitleUpdate("claude", for: "t2")
+
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Add Gemini CLI to Blink")
+    }
+
+    func testClaudeIdleDoesNotClearCustomPromptTitle() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("claude", for: "t2")
+        store.handleTerminalLineSubmission("Add Gemini CLI to Blink", for: "t2")
+
+        store.handleClaudeHookEventForTesting(
+            event: "idle",
+            projectId: "1",
+            tabId: "t2",
+            rawInput: ""
+        )
+
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Add Gemini CLI to Blink")
+        XCTAssertEqual(store.claudeActivity(for: "t2")?.kind, .completed)
+    }
+
+    func testClaudeSessionEndDoesNotClearCustomPromptTitle() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("claude", for: "t2")
+        store.handleTerminalLineSubmission("Add Gemini CLI to Blink", for: "t2")
+
+        store.handleClaudeHookEventForTesting(
+            event: "session-end",
+            projectId: "1",
+            tabId: "t2",
+            rawInput: ""
+        )
+
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Add Gemini CLI to Blink")
+        XCTAssertEqual(store.claudeActivity(for: "t2")?.kind, .completed)
+    }
+
+    func testCodexLaunchTracksProviderKind() {
+        let store = makeStore()
+        store.setActiveProject("1")
+
+        store.handleTerminalLineSubmission("codex", for: "t2")
+
+        XCTAssertEqual(store.shellDetectedAIPaneKinds["t2"], .codex)
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Codex")
+    }
+
+    func testShellPromptDoesNotClearPendingCodexLaunch() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("codex", for: "t2")
+
+        store.handleTerminalTitleUpdate("~/Code/blink", for: "t2")
+        store.handleTerminalLineSubmission("Plan Blink release notes", for: "t2")
+
+        XCTAssertEqual(store.shellDetectedAIPaneKinds["t2"], .codex)
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Plan Blink release notes")
+    }
+
+    func testShellPromptDoesNotClearCustomCodexPromptTitle() {
+        let store = makeStore()
+        store.setActiveProject("1")
+        store.handleTerminalLineSubmission("codex", for: "t2")
+        store.handleTerminalLineSubmission("Plan Blink release notes", for: "t2")
+
+        store.handleTerminalTitleUpdate("~/Code/blink", for: "t2")
+
+        XCTAssertEqual(store.shellDetectedAIPaneKinds["t2"], .codex)
+        XCTAssertEqual(store.tabsById["t2"]?.label, "Plan Blink release notes")
     }
 
     func testOpenFileInEditorCreatesNewTmuxNeovimTabWhenNoEditorPaneExists() {

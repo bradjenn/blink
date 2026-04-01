@@ -28,7 +28,10 @@ class TerminalContainerView: NSView {
 
     func showSurface(_ surfaceView: TerminalSurfaceView, tabId: String, shouldFocus: Bool) {
         if tabId == currentTabId, currentSurface === surfaceView {
-            surfaceView.frame = bounds
+            surfaceView.setVisibleInUI(true)
+            if surfaceView.frame != bounds {
+                surfaceView.frame = bounds
+            }
             currentSurface = surfaceView
             if shouldFocus {
                 surfaceView.focus()
@@ -38,12 +41,14 @@ class TerminalContainerView: NSView {
 
         // Remove old surface from this container (doesn't destroy it —
         // SurfaceManager still holds a reference)
+        currentSurface?.setVisibleInUI(false)
         currentSurface?.removeFromSuperview()
 
         // Add new surface as subview
         surfaceView.frame = bounds
         surfaceView.autoresizingMask = [.width, .height]
         addSubview(surfaceView)
+        surfaceView.setVisibleInUI(true)
 
         currentTabId = tabId
         currentSurface = surfaceView
@@ -54,11 +59,12 @@ class TerminalContainerView: NSView {
     }
 
     private func syncCurrentSurfaceFrame() {
+        guard let currentSurface, currentSurface.frame != bounds else { return }
         // SwiftUI and AppKit can reach subview geometry through slightly
-        // different paths during animated pane resizing. Keep forcing the
-        // hosted terminal to match the container bounds so Ghostty always
-        // receives a fresh size update.
-        currentSurface?.frame = bounds
+        // different paths during animated pane resizing. Keep the hosted
+        // terminal aligned with the container bounds, but avoid writing the
+        // same frame back repeatedly during layout churn.
+        currentSurface.frame = bounds
     }
 }
 
@@ -67,8 +73,11 @@ struct TerminalView: NSViewRepresentable {
     @Environment(AppStore.self) private var store
 
     let tabId: String
+    let paneId: String
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
+    let projectId: String
+    let projectName: String
     let workingDirectory: String
     let isFocused: Bool
     var command: String? = nil
@@ -95,6 +104,12 @@ struct TerminalView: NSViewRepresentable {
         } else {
             surfaceView = surfaceManager.createSurface(
                 tabId: tabId,
+                paneId: paneId,
+                projectId: projectId,
+                projectName: projectName,
+                hookScriptDirectoryPath: store.claudeHookScriptPath,
+                hookShellIntegrationDirectoryPath: store.claudeHookShellIntegrationPath,
+                hookEventDirectoryPath: store.claudeHookEventDirectoryPath,
                 app: ghosttyApp,
                 workingDirectory: workingDirectory,
                 command: command
@@ -119,6 +134,11 @@ struct TerminalView: NSViewRepresentable {
                     store.setActiveTab(coordinator.tabId)
                 }
             }
+        }
+
+        surfaceView.onSubmittedLine = { [weak coordinator] line in
+            guard let coordinator, let store = coordinator.store else { return }
+            store.handleTerminalLineSubmission(line, for: coordinator.tabId)
         }
 
         container.showSurface(surfaceView, tabId: tabId, shouldFocus: isFocused)

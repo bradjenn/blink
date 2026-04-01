@@ -22,6 +22,15 @@ struct Shell: View {
             : AnyShapeStyle(theme.bg)
     }
 
+    private var settingsBackground: AnyShapeStyle {
+        if store.hasWallpaper {
+            let opacity = max(store.backgroundOpacity + 0.22, 0.9)
+            return AnyShapeStyle(theme.bg.opacity(min(opacity, 0.97)))
+        } else {
+            return AnyShapeStyle(theme.bg.opacity(0.97))
+        }
+    }
+
     private var sidebarAnimation: Animation {
         reduceMotion ? .linear(duration: 0.01) : .snappy(duration: 0.18, extraBounce: 0)
     }
@@ -48,7 +57,7 @@ struct Shell: View {
                 .padding(.horizontal, Layout.workspacePaddingH)
                 .padding(.top, Layout.workspacePaddingV)
                 .padding(.bottom, 8)
-                .background(Rectangle().fill(chromeBackground))
+                .background(Rectangle().fill(settingsBackground))
                 .opacity(isSettingsActive ? 1 : 0)
                 .scaleEffect(isSettingsActive ? 1 : 0.97)
                 .animation(.easeOut(duration: 0.25), value: isSettingsActive)
@@ -380,14 +389,21 @@ private struct WorkspaceColumnsView: View {
                         handleViewportChange(viewportWidth: newWidth)
                     }
                     .onAppear {
+                        currentViewportWidth = geometry.size.width
                         installResizeMonitor(viewportWidth: geometry.size.width)
                     }
                     .onDisappear {
                         removeResizeMonitor()
                     }
                     .onChange(of: geometry.size.width) { _, newWidth in
+                        currentViewportWidth = newWidth
                         // Reinstall so the closure captures the current viewport width
                         installResizeMonitor(viewportWidth: newWidth)
+                    }
+                    .onChange(of: project.id, initial: false) { _, _ in
+                        cachedLayoutKey = ""
+                        currentViewportWidth = geometry.size.width
+                        installResizeMonitor(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: columns.count) {
                         if store.isOverviewMode {
@@ -663,14 +679,12 @@ private struct WorkspaceColumnsView: View {
 
     private func installResizeMonitor(viewportWidth: CGFloat) {
         removeResizeMonitor()
-        let projectId = project.id
         resizeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store, layoutState] event in
-            let currentColumns = store.projectColumns(for: projectId)
             guard event.modifierFlags.contains(.command),
                   !event.modifierFlags.contains(.shift),
                   !store.isOverviewMode,
-                  let activeTabId = store.activeTabId,
-                  let colId = currentColumns.first(where: { $0.tabIds.contains(activeTabId) })?.id,
+                  let projectId = store.activeProjectId,
+                  let colId = store.activeColumn?.id,
                   let chars = event.charactersIgnoringModifiers else { return event }
 
             switch chars {
@@ -1034,8 +1048,11 @@ private struct WorkspaceColumnView: View {
                     } else {
                         TerminalView(
                             tabId: tab.id,
+                            paneId: tab.projectSetupPaneId ?? tab.id,
                             ghosttyApp: ghosttyApp,
                             surfaceManager: surfaceManager,
+                            projectId: project.id,
+                            projectName: project.name,
                             workingDirectory: tab.workingDirectory ?? project.path,
                             isFocused: isFocused,
                             command: store.terminalLaunchCommand(for: tab, project: project)

@@ -8,7 +8,10 @@ enum TabTitleFilter {
     private static let processMap: [String: String] = [
         // Dev tools
         "aider": "Aider",
+        "claude": "Claude Code",
+        "codex": "Codex",
         "cursor": "Cursor",
+        "opencode": "OpenCode",
 
         // Editors
         "vim": "Vim",

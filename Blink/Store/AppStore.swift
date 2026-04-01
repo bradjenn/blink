@@ -52,7 +52,11 @@ final class AppStore {
     var activeTabId: String?
     var pendingMaximizedTabId: String?
     var managedCommandStates: [String: ManagedCommandState] = [:]
+    var claudeTabActivities: [String: ClaudeTabActivity] = [:]
+    var shellDetectedAIPaneKinds: [String: ShellDetectedAIPaneKind] = [:]
     private var pendingTmuxShellCommands: [String: String] = [:]
+    private var aiTabsAwaitingInitialPromptTitle: [String: ShellDetectedAIPaneKind] = [:]
+    private var tmuxForegroundCommandPollTask: Task<Void, Never>?
 
     /// O(1) tab lookup by ID. Rebuilt on access when tabs change.
     var tabsById: [String: AppTab] {
@@ -166,6 +170,12 @@ final class AppStore {
     @ObservationIgnored
     private let tmuxSocketName: String
     @ObservationIgnored
+    private var claudeHookReceiver: ClaudeHookReceiver?
+    @ObservationIgnored
+    private var claudeHookScriptDirectoryPath: String?
+    @ObservationIgnored
+    private var claudeHookShellIntegrationDirectoryPath: String?
+    @ObservationIgnored
     var detachedShellCommandHandler: ((String) -> Void)?
     private var suppressProjectSessionAutosave = true
 
@@ -234,7 +244,31 @@ final class AppStore {
 
         // Pre-render blurred wallpaper from persisted settings
         updateBlurredWallpaper()
+        claudeHookReceiver = ClaudeHookReceiver(
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
+        ) { [weak self] event in
+            self?.handleClaudeHookEvent(event)
+        }
+        claudeHookScriptDirectoryPath = ClaudeHookScriptInstaller.install(
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
+        )?.path
+        claudeHookShellIntegrationDirectoryPath = ClaudeHookScriptInstaller.installShellIntegration(
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
+        )?.path
         suppressProjectSessionAutosave = false
+        startTmuxForegroundCommandPolling()
+    }
+
+    var claudeHookEventDirectoryPath: String? {
+        claudeHookReceiver?.eventDirectoryURL.path
+    }
+
+    var claudeHookScriptPath: String? {
+        claudeHookScriptDirectoryPath
+    }
+
+    var claudeHookShellIntegrationPath: String? {
+        claudeHookShellIntegrationDirectoryPath
     }
 
     // MARK: - View Actions
@@ -452,8 +486,11 @@ final class AppStore {
     }
 
     var activeColumn: Column? {
-        guard let tabId = activeTabId else { return nil }
-        return columnFor(tabId: tabId)
+        guard let projectId = activeProjectId,
+              let tabId = resolvedSelectableTabId(for: projectId, preferred: [activeTabId].compactMap { $0 }) else {
+            return nil
+        }
+        return projectColumns(for: projectId).first { $0.tabIds.contains(tabId) }
     }
 
     /// Returns tabs in column-major order: left-to-right columns, top-to-bottom within each.
@@ -520,20 +557,73 @@ final class AppStore {
         guard !tab.isManagedCommand else { return }
 
         if let displayName = TabTitleFilter.displayName(for: title) {
-            setTabTitle(tabId, title: displayName)
+            if let aiKind = shellDetectedAIKind(forDisplayName: displayName) {
+                shellDetectedAIPaneKinds[tabId] = aiKind
+            }
+            if displayName == ShellDetectedAIPaneKind.claude.displayName,
+               claudeTabActivities[tabId]?.kind != .needsInput {
+                claudeTabActivities[tabId] = ClaudeTabActivity(
+                    kind: .running,
+                    summary: nil,
+                    updatedAt: .now
+                )
+            }
+            if !shouldPreserveCustomAITitle(for: tab, displayName: displayName) {
+                setTabTitle(tabId, title: displayName)
+            }
         } else if TabTitleFilter.isShellPrompt(title) {
             if sendPendingTmuxShellCommandIfNeeded(for: tabId) {
                 return
+            }
+            if shouldPreserveShellDetectedAIState(for: tabId, tab: tab) {
+                return
+            }
+            aiTabsAwaitingInitialPromptTitle[tabId] = nil
+            shellDetectedAIPaneKinds[tabId] = nil
+            if claudeTabActivities[tabId] != nil {
+                claudeTabActivities[tabId] = nil
             }
             revertTabTitle(tabId)
         }
     }
 
+    func handleTerminalLineSubmission(_ line: String, for tabId: String) {
+        guard let tab = tabsById[tabId], tab.isShell, !tab.isManagedCommand else { return }
+        if let aiKind = ShellDetectedAIPaneKind(submittedLine: line) {
+            shellDetectedAIPaneKinds[tabId] = aiKind
+            aiTabsAwaitingInitialPromptTitle[tabId] = aiKind
+
+            if aiKind == .claude, claudeTabActivities[tabId]?.kind != .needsInput {
+                claudeTabActivities[tabId] = ClaudeTabActivity(
+                    kind: .running,
+                    summary: nil,
+                    updatedAt: .now
+                )
+            }
+            if !shouldPreserveCustomAITitle(for: tab, displayName: aiKind.displayName) {
+                setTabTitle(tabId, title: aiKind.displayName)
+            }
+            return
+        }
+
+        guard let aiKind = aiTabsAwaitingInitialPromptTitle[tabId],
+              tabsById[tabId] != nil else {
+            aiTabsAwaitingInitialPromptTitle[tabId] = nil
+            return
+        }
+
+        let trimmedPrompt = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return }
+
+        setTabTitle(tabId, title: aiPromptTitle(from: trimmedPrompt, fallback: aiKind.displayName))
+        aiTabsAwaitingInitialPromptTitle[tabId] = nil
+    }
+
     func terminalLaunchCommand(for tab: AppTab, project: Project) -> String? {
-        if tab.isShell, tab.command == nil, let paneId = tab.projectSetupPaneId, tmuxIntegrationEnabled {
+        if tab.isShell, tab.command == nil, tab.projectSetupPaneId != nil, tmuxIntegrationEnabled {
             return tmuxAttachCommand(
                 project: project,
-                paneId: paneId,
+                tab: tab,
                 workingDirectory: tab.workingDirectory ?? project.path
             )
         }
@@ -578,13 +668,10 @@ final class AppStore {
         }
 
         if let id {
-            // Restore last active tab, or fall back to first tab
-            if let remembered = lastActiveTab[id],
-               projectTabs(for: id).contains(where: { $0.id == remembered }) {
-                activeTabId = remembered
-            } else {
-                activeTabId = projectTabs(for: id).first?.id
-            }
+            activeTabId = resolvedSelectableTabId(
+                for: id,
+                preferred: [lastActiveTab[id]].compactMap { $0 }
+            )
             if let tabId = activeTabId {
                 clearUnread(tabId)
             }
@@ -619,12 +706,16 @@ final class AppStore {
     }
 
     func setActiveTab(_ id: String) {
-        activeTabId = id
-        if let tab = tabsById[id] {
-            expandProject(tab.projectId)
-            lastActiveTab[tab.projectId] = id
+        guard let tab = tabsById[id] else { return }
+        if activeProjectId != tab.projectId {
+            setActiveProject(tab.projectId)
         }
-        clearUnread(id)
+
+        expandProject(tab.projectId)
+        let resolvedTabId = resolvedSelectableTabId(for: tab.projectId, preferred: [id]) ?? id
+        activeTabId = resolvedTabId
+        lastActiveTab[tab.projectId] = resolvedTabId
+        clearUnread(resolvedTabId)
     }
 
     func selectNextTab() {
@@ -1242,6 +1333,31 @@ final class AppStore {
         return !unreadTabs.isDisjoint(with: projectTabIds)
     }
 
+    func claudeActivity(for tabId: String) -> ClaudeTabActivity? {
+        claudeTabActivities[tabId]
+    }
+
+    func claudeProjectActivity(for projectId: String) -> ClaudeTabActivity? {
+        let activities = projectTabs(for: projectId)
+            .compactMap { claudeTabActivities[$0.id] }
+
+        if let needsInput = activities
+            .filter({ $0.kind == .needsInput })
+            .max(by: { $0.updatedAt < $1.updatedAt }) {
+            return needsInput
+        }
+
+        if let running = activities
+            .filter({ $0.kind == .running })
+            .max(by: { $0.updatedAt < $1.updatedAt }) {
+            return running
+        }
+
+        return activities
+            .filter { $0.kind == .completed }
+            .max(by: { $0.updatedAt < $1.updatedAt })
+    }
+
     func projectTabs(for projectId: String) -> [AppTab] {
         tabs.filter { $0.projectId == projectId }
     }
@@ -1250,6 +1366,109 @@ final class AppStore {
         tabs.filter { $0.projectId == projectId && $0.isShell }.count
     }
 
+    private func handleClaudeHookEvent(_ event: ClaudeHookEvent) {
+        let resolvedTabId: String? = {
+            if let tab = tabsById[event.tabId], tab.projectId == event.projectId {
+                return tab.id
+            }
+            if let paneId = event.paneId {
+                return tabs.first {
+                    $0.projectId == event.projectId && $0.projectSetupPaneId == paneId
+                }?.id
+            }
+            return nil
+        }()
+        guard let resolvedTabId else { return }
+
+        switch event.event.lowercased() {
+        case "prompt-submit":
+            shellDetectedAIPaneKinds[resolvedTabId] = .claude
+            if let promptTitle = ClaudeHookSummary.promptTitle(rawInput: event.rawInput) {
+                setTabTitle(resolvedTabId, title: promptTitle)
+                aiTabsAwaitingInitialPromptTitle[resolvedTabId] = nil
+            } else if let tab = tabsById[resolvedTabId],
+                      !shouldPreserveCustomAITitle(for: tab, displayName: ShellDetectedAIPaneKind.claude.displayName) {
+                setTabTitle(resolvedTabId, title: ShellDetectedAIPaneKind.claude.displayName)
+            }
+            claudeTabActivities[resolvedTabId] = ClaudeTabActivity(
+                kind: .running,
+                summary: nil,
+                updatedAt: .now
+            )
+        case "pre-tool-use":
+            shellDetectedAIPaneKinds[resolvedTabId] = .claude
+            if let tab = tabsById[resolvedTabId],
+               !shouldPreserveCustomAITitle(for: tab, displayName: ShellDetectedAIPaneKind.claude.displayName) {
+                setTabTitle(resolvedTabId, title: ShellDetectedAIPaneKind.claude.displayName)
+            }
+            claudeTabActivities[resolvedTabId] = ClaudeTabActivity(
+                kind: .running,
+                summary: nil,
+                updatedAt: .now
+            )
+        case "notification", "notify":
+            let summary = ClaudeHookSummary.notificationSummary(rawInput: event.rawInput)
+            shellDetectedAIPaneKinds[resolvedTabId] = .claude
+            if let tab = tabsById[resolvedTabId],
+               !shouldPreserveCustomAITitle(for: tab, displayName: ShellDetectedAIPaneKind.claude.displayName) {
+                setTabTitle(resolvedTabId, title: ShellDetectedAIPaneKind.claude.displayName)
+            }
+            claudeTabActivities[resolvedTabId] = ClaudeTabActivity(
+                kind: .needsInput,
+                summary: summary.body,
+                updatedAt: .now
+            )
+            markUnread(resolvedTabId)
+        case "stop", "idle":
+            let completionSummary = ClaudeHookSummary.completionSummary(
+                from: ClaudeHookSummary.parse(rawInput: event.rawInput)
+            )
+            aiTabsAwaitingInitialPromptTitle[resolvedTabId] = nil
+            shellDetectedAIPaneKinds[resolvedTabId] = nil
+            claudeTabActivities[resolvedTabId] = ClaudeTabActivity(
+                kind: .completed,
+                summary: completionSummary?.body,
+                updatedAt: .now
+            )
+            markUnread(resolvedTabId)
+        case "session-end":
+            let completionSummary = ClaudeHookSummary.completionSummary(
+                from: ClaudeHookSummary.parse(rawInput: event.rawInput)
+            )
+            aiTabsAwaitingInitialPromptTitle[resolvedTabId] = nil
+            shellDetectedAIPaneKinds[resolvedTabId] = nil
+            claudeTabActivities[resolvedTabId] = ClaudeTabActivity(
+                kind: .completed,
+                summary: completionSummary?.body,
+                updatedAt: .now
+            )
+            markUnread(resolvedTabId)
+        default:
+            break
+        }
+    }
+
+#if DEBUG
+    func handleClaudeHookEventForTesting(
+        event: String,
+        projectId: String,
+        tabId: String,
+        rawInput: String,
+        paneId: String? = nil
+    ) {
+        handleClaudeHookEvent(ClaudeHookEvent(
+            event: event,
+            projectId: projectId,
+            tabId: tabId,
+            paneId: paneId,
+            projectPath: nil,
+            cwd: nil,
+            pid: nil,
+            rawInput: rawInput
+        ))
+    }
+#endif
+
     func removeProject(_ id: String) {
         let tabIds = tabs.filter { $0.projectId == id }.map(\.id)
         let paneIds = tabs.filter { $0.projectId == id }.compactMap(\.projectSetupPaneId)
@@ -1257,6 +1476,7 @@ final class AppStore {
         projectSetups[id] = nil
         tabs.removeAll { $0.projectId == id }
         clearManagedCommandStates(for: tabIds)
+        clearClaudeTabActivities(for: tabIds)
         clearPendingTmuxShellCommands(for: tabIds)
         unreadTabs.subtract(tabIds)
         lastActiveTab[id] = nil
@@ -1295,6 +1515,7 @@ final class AppStore {
             restoreColumnsIfNeeded(tabId: id, projectId: projectId)
             tabs.removeAll { $0.id == id }
             managedCommandStates[id] = nil
+            claudeTabActivities[id] = nil
             clearPendingTmuxShellCommands(for: [id])
             unreadTabs.remove(id)
             if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
@@ -1344,6 +1565,7 @@ final class AppStore {
         // Remove tab data
         tabs.removeAll { $0.id == id }
         managedCommandStates[id] = nil
+        claudeTabActivities[id] = nil
         clearPendingTmuxShellCommands(for: [id])
         unreadTabs.remove(id)
         if lastActiveTab[projectId] == id {
@@ -1414,6 +1636,7 @@ final class AppStore {
         let existingTabIds = tabs.filter { $0.projectId == projectId }.map(\.id)
         tabs.removeAll { $0.projectId == projectId }
         clearManagedCommandStates(for: existingTabIds)
+        clearClaudeTabActivities(for: existingTabIds)
         unreadTabs.subtract(existingTabIds)
         lastActiveTab[projectId] = nil
         workspaceViewportOffsets[projectId] = nil
@@ -1662,6 +1885,14 @@ final class AppStore {
         }
     }
 
+    private func clearClaudeTabActivities(for tabIds: [String]) {
+        for tabId in tabIds {
+            claudeTabActivities[tabId] = nil
+            aiTabsAwaitingInitialPromptTitle[tabId] = nil
+            shellDetectedAIPaneKinds[tabId] = nil
+        }
+    }
+
     private func clearPendingTmuxShellCommands(for tabIds: [String]) {
         for tabId in tabIds {
             pendingTmuxShellCommands.removeValue(forKey: tabId)
@@ -1692,18 +1923,18 @@ final class AppStore {
         UUID().uuidString.lowercased()
     }
 
-    private func tmuxAttachCommand(project: Project, paneId: String, workingDirectory: String) -> String {
+    private func tmuxAttachCommand(project: Project, tab: AppTab, workingDirectory: String) -> String {
+        guard let paneId = tab.projectSetupPaneId else { return "exec false" }
         let baseSession = tmuxBaseSessionName(for: project.id)
         let clientSession = tmuxClientSessionName(projectId: project.id, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
         let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
-        let loginShell = shellQuote(shell)
-        let shellCommand = "env -u TMUX \(loginShell) -l"
         let baseTarget = shellQuote(baseSession)
         let clientTarget = shellQuote(clientSession)
         let windowTarget = shellQuote(windowName)
         let sessionWindowTarget = shellQuote("\(clientSession):\(windowName)")
         let workingDirectoryArg = shellQuote(workingDirectory)
+        let shellCommand = tmuxShellLaunchCommand(project: project, tab: tab)
 
         let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
         let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
@@ -1768,9 +1999,10 @@ final class AppStore {
                 text: vimOpenCommand(path: path, line: line, column: column)
             ))
         } else {
+            guard let project = projects.first(where: { $0.id == projectId }) else { return false }
             runDetachedShellCommand(tmuxSendShellCommand(
-                projectId: projectId,
-                paneId: paneId,
+                tab: tab,
+                project: project,
                 workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: projectId),
                 text: NvimLauncher.command(path: path, line: line, column: column)
             ))
@@ -1829,20 +2061,62 @@ final class AppStore {
         "\(tmuxBaseSessionName(for: projectId)):\(tmuxWindowName(for: paneId))"
     }
 
-    private func tmuxShellLaunchCommand() -> String {
+    private func tmuxShellLaunchCommand(project: Project, tab: AppTab) -> String {
         let shell = UserDefaults.standard.string(forKey: "blink.shell")
             ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        return "env -u TMUX \(shellQuote(shell)) -l"
+        let shellName = URL(fileURLWithPath: shell).lastPathComponent
+        var assignments: [(String, String)] = [
+            ("BLINK_TAB_ID", tab.id),
+            ("BLINK_PANE_ID", tab.projectSetupPaneId ?? tab.id),
+            ("BLINK_PROJECT_ID", project.id),
+            ("BLINK_PROJECT_NAME", project.name),
+            ("BLINK_PROJECT_PATH", project.path),
+        ]
+
+        if let hookEventDirectoryPath = claudeHookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
+            assignments.append(("BLINK_HOOK_EVENT_DIR", hookEventDirectoryPath))
+        }
+        if let hookScriptDirectoryPath = claudeHookScriptPath, !hookScriptDirectoryPath.isEmpty {
+            let wrapperPath = (hookScriptDirectoryPath as NSString).appendingPathComponent("claude")
+            assignments.append(("BLINK_CLAUDE_WRAPPER_PATH", wrapperPath))
+            let inheritedPATH = ProcessInfo.processInfo.environment["PATH"] ?? ""
+            let prefixedPath: String
+            if inheritedPATH.split(separator: ":").contains(Substring(hookScriptDirectoryPath)) {
+                prefixedPath = inheritedPATH
+            } else if inheritedPATH.isEmpty {
+                prefixedPath = hookScriptDirectoryPath
+            } else {
+                prefixedPath = "\(hookScriptDirectoryPath):\(inheritedPATH)"
+            }
+            assignments.append(("PATH", prefixedPath))
+        }
+        if let hookShellIntegrationPath = claudeHookShellIntegrationPath, !hookShellIntegrationPath.isEmpty {
+            assignments.append(("BLINK_SHELL_INTEGRATION", "1"))
+            assignments.append(("BLINK_SHELL_INTEGRATION_DIR", hookShellIntegrationPath))
+            if shellName == "zsh" {
+                if let currentZdotdir = ProcessInfo.processInfo.environment["ZDOTDIR"], !currentZdotdir.isEmpty {
+                    assignments.append(("BLINK_ZSH_ZDOTDIR", currentZdotdir))
+                }
+                assignments.append(("ZDOTDIR", hookShellIntegrationPath))
+            }
+        }
+
+        let envAssignments = assignments
+            .map { "\($0.0)=\(shellQuote($0.1))" }
+            .joined(separator: " ")
+        let envPrefix = envAssignments.isEmpty ? "" : "\(envAssignments) "
+        return "env -u TMUX \(envPrefix)\(shellQuote(shell)) -l"
     }
 
-    private func tmuxEnsureWindowCommand(projectId: String, paneId: String, workingDirectory: String) -> String {
+    private func tmuxEnsureWindowCommand(tab: AppTab, project: Project, workingDirectory: String) -> String {
+        guard let paneId = tab.projectSetupPaneId else { return "true" }
         let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
-        let baseSession = tmuxBaseSessionName(for: projectId)
+        let baseSession = tmuxBaseSessionName(for: project.id)
         let windowName = tmuxWindowName(for: paneId)
         let baseTarget = shellQuote(baseSession)
         let windowTarget = shellQuote(windowName)
         let workingDirectoryArg = shellQuote(workingDirectory)
-        let shellCommand = tmuxShellLaunchCommand()
+        let shellCommand = tmuxShellLaunchCommand(project: project, tab: tab)
 
         let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
         let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
@@ -1976,6 +2250,7 @@ final class AppStore {
 
     func handleTerminalSurfaceReady(for tabId: String) {
         _ = sendPendingTmuxShellCommandIfNeeded(for: tabId)
+        syncTmuxForegroundCommandIfNeeded(for: tabId)
     }
 
     private func tmuxPaneCurrentCommand(projectId: String, paneId: String) -> String? {
@@ -1984,6 +2259,227 @@ final class AppStore {
         return runSynchronousShellCommand(
             "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
         )
+    }
+
+    private func startTmuxForegroundCommandPolling() {
+        tmuxForegroundCommandPollTask?.cancel()
+        tmuxForegroundCommandPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(700))
+                guard let self else { return }
+                await self.pollTmuxForegroundCommandForActiveTab()
+            }
+        }
+    }
+
+    private func pollTmuxForegroundCommandForActiveTab() async {
+        guard let activeTabId,
+              let tab = tabsById[activeTabId],
+              shouldUseTmux(for: tab),
+              let paneId = tab.projectSetupPaneId else {
+            return
+        }
+
+        let projectId = tab.projectId
+        let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
+            projectId: projectId,
+            paneId: paneId,
+            socketName: Self.tmuxSocketName()
+        )
+
+        guard !Task.isCancelled,
+              activeTabId == tab.id,
+              tabsById[tab.id] != nil else {
+            return
+        }
+
+        applyForegroundCommandTitle(resolvedCommand, for: tab.id)
+    }
+
+    private func syncTmuxForegroundCommandIfNeeded(for tabId: String) {
+        guard let tab = tabsById[tabId],
+              shouldUseTmux(for: tab),
+              let paneId = tab.projectSetupPaneId else {
+            return
+        }
+
+        let projectId = tab.projectId
+        Task { [weak self] in
+            guard let self else { return }
+            let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
+                projectId: projectId,
+                paneId: paneId,
+                socketName: Self.tmuxSocketName()
+            )
+
+            await MainActor.run {
+                guard self.tabsById[tabId] != nil else { return }
+                self.applyForegroundCommandTitle(resolvedCommand, for: tabId)
+            }
+        }
+    }
+
+    private func applyForegroundCommandTitle(_ command: String?, for tabId: String) {
+        guard let tab = tabsById[tabId] else { return }
+
+        let normalizedCommand = command?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard let normalizedCommand, !normalizedCommand.isEmpty else { return }
+
+        if let displayName = TabTitleFilter.displayName(for: normalizedCommand) {
+            if let aiKind = ShellDetectedAIPaneKind(submittedLine: normalizedCommand) {
+                shellDetectedAIPaneKinds[tabId] = aiKind
+            }
+            if displayName == ShellDetectedAIPaneKind.claude.displayName,
+               claudeTabActivities[tabId]?.kind != .needsInput {
+                claudeTabActivities[tabId] = ClaudeTabActivity(
+                    kind: .running,
+                    summary: nil,
+                    updatedAt: .now
+                )
+            }
+            if !shouldPreserveCustomAITitle(for: tab, displayName: displayName) {
+                setTabTitle(tabId, title: displayName)
+            }
+            return
+        }
+
+        guard TabTitleFilter.isShellPrompt(normalizedCommand) else { return }
+
+        if shouldPreserveShellDetectedAIState(for: tabId, tab: tab) {
+            return
+        }
+
+        aiTabsAwaitingInitialPromptTitle[tabId] = nil
+        shellDetectedAIPaneKinds[tabId] = nil
+        if claudeTabActivities[tabId] != nil {
+            claudeTabActivities[tabId] = nil
+            if activeTabId != tabId {
+                markUnread(tabId)
+            }
+        }
+
+        if tab.label != tab.defaultLabel {
+            revertTabTitle(tabId)
+        }
+    }
+
+    private func shouldPreserveCustomAITitle(for tab: AppTab, displayName: String) -> Bool {
+        return tab.label != tab.defaultLabel && tab.label != displayName
+    }
+
+    private func shouldPreserveShellDetectedAIState(for tabId: String, tab: AppTab) -> Bool {
+        guard let aiKind = shellDetectedAIPaneKinds[tabId] else { return false }
+        if aiTabsAwaitingInitialPromptTitle[tabId] == aiKind {
+            return true
+        }
+        return shouldPreserveCustomAITitle(for: tab, displayName: aiKind.displayName)
+    }
+
+    private func resolvedSelectableTabId(for projectId: String, preferred: [String]) -> String? {
+        let projectTabIds = Set(projectTabs(for: projectId).map(\.id))
+        let projectCols = projectColumns(for: projectId)
+
+        func selectable(_ tabId: String?) -> String? {
+            guard let tabId,
+                  projectTabIds.contains(tabId),
+                  projectCols.contains(where: { $0.tabIds.contains(tabId) }) else {
+                return nil
+            }
+            return tabId
+        }
+
+        for tabId in preferred {
+            if let selectable = selectable(tabId) {
+                return selectable
+            }
+        }
+
+        if let remembered = selectable(lastActiveTab[projectId]) {
+            return remembered
+        }
+
+        for column in projectCols {
+            if let focused = selectable(columnFocusedTab[column.id]) {
+                return focused
+            }
+        }
+
+        return projectCols.first?.tabIds.first ?? projectTabs(for: projectId).first?.id
+    }
+
+    private func shellDetectedAIKind(forDisplayName displayName: String) -> ShellDetectedAIPaneKind? {
+        ShellDetectedAIPaneKind.allCases.first { $0.displayName == displayName }
+    }
+
+    private func aiPromptTitle(from prompt: String, fallback: String) -> String {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return fallback }
+
+        let firstLine = trimmedPrompt
+            .split(whereSeparator: \.isNewline)
+            .first
+            .map(String.init) ?? trimmedPrompt
+
+        let condensed = firstLine
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !condensed.isEmpty else { return fallback }
+        if condensed.count <= 48 {
+            return condensed
+        }
+
+        let truncated = condensed.prefix(45).trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(truncated)..."
+    }
+
+    nonisolated private static func fetchTmuxPaneCurrentCommand(
+        projectId: String,
+        paneId: String,
+        socketName: String
+    ) async -> String? {
+        await Task.detached(priority: .utility) {
+            let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(socketName))"
+            let target = shellQuote("blink-\(projectId):pane-\(paneId)")
+            return runSynchronousShellCommand(
+                "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
+            )
+        }.value
+    }
+
+    nonisolated private static func runSynchronousShellCommand(_ command: String) -> String? {
+        let shellPath = "/bin/zsh"
+        let task = Process()
+        let pipe = Pipe()
+        task.executableURL = URL(fileURLWithPath: shellPath)
+        task.arguments = ["-lc", command]
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+        } catch {
+            return nil
+        }
+
+        task.waitUntilExit()
+        guard task.terminationStatus == 0 else { return nil }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !output.isEmpty else {
+            return nil
+        }
+
+        return output
+    }
+
+    nonisolated private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
     }
 
     private func vimSingleQuoteEscape(_ value: String) -> String {
@@ -2015,21 +2511,18 @@ final class AppStore {
     }
 
     private func tmuxSendShellCommand(
-        projectId: String,
-        paneId: String,
+        tab: AppTab,
+        project: Project,
         workingDirectory: String,
         text: String
     ) -> String {
+        guard let paneId = tab.projectSetupPaneId else { return "true" }
         let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
-        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        let target = shellQuote(tmuxWindowTarget(projectId: project.id, paneId: paneId))
         let literalText = shellQuote(text)
 
         return [
-            tmuxEnsureWindowCommand(
-                projectId: projectId,
-                paneId: paneId,
-                workingDirectory: workingDirectory
-            ),
+            tmuxEnsureWindowCommand(tab: tab, project: project, workingDirectory: workingDirectory),
             "\(tmuxPrefix) send-keys -t \(target) -l \(literalText)",
             "\(tmuxPrefix) send-keys -t \(target) Enter",
         ].joined(separator: "; ")
@@ -2039,13 +2532,13 @@ final class AppStore {
     private func sendPendingTmuxShellCommandIfNeeded(for tabId: String) -> Bool {
         guard let text = pendingTmuxShellCommands.removeValue(forKey: tabId),
               let tab = tabsById[tabId],
-              let paneId = tab.projectSetupPaneId else {
+              let project = projects.first(where: { $0.id == tab.projectId }) else {
             return false
         }
 
         runDetachedShellCommand(tmuxSendShellCommand(
-            projectId: tab.projectId,
-            paneId: paneId,
+            tab: tab,
+            project: project,
             workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: tab.projectId),
             text: text
         ))

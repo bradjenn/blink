@@ -85,6 +85,8 @@
 		8E9F90572424473CFF88504B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C747FAD7B2FD821BC48474F /* Metal.framework */; };
 		92A3D8F325ED0F5B9007ABC3 /* everforest.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E7511997BAA46E9D924A8619 /* everforest.jpg */; };
 		94AFCA55AC929B1ABF3459DF /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188062355388B795F360A5EF /* UpdateChecker.swift */; };
+		98E7410EBA0008B32814292C /* ClaudeHookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */; };
+		9985FE021FAFBD2E70231F02 /* ClaudeHookSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */; };
 		9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */; };
 		9C48AEAB3CAF0F1CB9D98E90 /* TerminalSurfaceViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA861957206778E33F7B90A9 /* TerminalSurfaceViewTests.swift */; };
 		9C54262632D1BA7B1867755D /* WindowTitleBarConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D35AA117D351B3848D14D65 /* WindowTitleBarConfigurator.swift */; };
@@ -102,6 +104,7 @@
 		B45E26D8D5C3A594A913DC78 /* gruvbox-ferns.jpg in Resources */ = {isa = PBXBuildFile; fileRef = C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */; };
 		B515CCF60006105913EE07AC /* StartScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBECED94726237307F2628C /* StartScreen.swift */; };
 		BD201EDC39FA7A2460905140 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728190F85A1AE0DB60BD39AB /* TerminalView.swift */; };
+		BD3A92962A9FC5DFCA89689F /* ClaudeHookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */; };
 		C169A4BB5694B36B944A1D68 /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912BF0925C71AED8B1C12E74 /* Tab.swift */; };
 		C1FEB8B9037706A67ACA78DF /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728190F85A1AE0DB60BD39AB /* TerminalView.swift */; };
 		C24E98B047F971AF4917A522 /* claude-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 36A28D3024E66E791B9C5C7B /* claude-icon.svg */; };
@@ -164,6 +167,7 @@
 		147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-pagoda.jpg"; sourceTree = "<group>"; };
 		15A6DD71E5B2AA71E2603D80 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		188062355388B795F360A5EF /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
+		18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookReceiver.swift; sourceTree = "<group>"; };
 		190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyMonitor.swift; sourceTree = "<group>"; };
 		1DF59E878E1CA4A8B6DD5242 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		1EDE19D0FBE88E948C87BF23 /* Themes */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Themes; path = Blink/Resources/Themes; sourceTree = SOURCE_ROOT; };
@@ -212,6 +216,7 @@
 		B345D8C75FEDF50AD746BBAE /* IOSurface.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOSurface.framework; path = System/Library/Frameworks/IOSurface.framework; sourceTree = SDKROOT; };
 		B8F4550C3731212E497BE7C8 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
 		BE438921AB918C1B441ADCF2 /* SidebarProjectItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarProjectItem.swift; sourceTree = "<group>"; };
+		C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookSummaryTests.swift; sourceTree = "<group>"; };
 		C7B8EB254B92EC5772732E52 /* gruvbox-ferns.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "gruvbox-ferns.jpg"; sourceTree = "<group>"; };
 		C9548147B4FB10C2860D5C78 /* CursorStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorStyle.swift; sourceTree = "<group>"; };
 		D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
@@ -305,6 +310,7 @@
 			isa = PBXGroup;
 			children = (
 				0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */,
+				C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */,
 				7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */,
 				EA861957206778E33F7B90A9 /* TerminalSurfaceViewTests.swift */,
 			);
@@ -337,6 +343,7 @@
 			children = (
 				4BF5F1BD395AB638696B46E9 /* Assets.xcassets */,
 				104F7EE9EE6F91C459A8CC7C /* BApp.swift */,
+				F96C1AC10FE9445A56785718 /* Automation */,
 				C9D3CC1439A512CB2F2EFA74 /* Models */,
 				6B4DFF2978746EEAAA0E3700 /* Resources */,
 				06D0136AFCDEFBC5DB3B80D5 /* Store */,
@@ -429,6 +436,14 @@
 				F9FC872F5D91B5C423DD46FB /* Settings */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		F96C1AC10FE9445A56785718 /* Automation */ = {
+			isa = PBXGroup;
+			children = (
+				18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */,
+			);
+			path = Automation;
 			sourceTree = "<group>";
 		};
 		F9FC872F5D91B5C423DD46FB /* Settings */ = {
@@ -586,6 +601,7 @@
 				747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */,
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
 				5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */,
+				BD3A92962A9FC5DFCA89689F /* ClaudeHookReceiver.swift in Sources */,
 				D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */,
 				278136AE8426957F43E04F7C /* Column.swift in Sources */,
 				A687AD6480DD830314ABD6D1 /* CommandPalette.swift in Sources */,
@@ -636,6 +652,7 @@
 				CB2119354411FD5665D4A7F3 /* AppearanceSettings.swift in Sources */,
 				5CA5C241E8BBD7664174D957 /* BApp.swift in Sources */,
 				7065625D6D71AB3BD5777B7F /* BackgroundPopover.swift in Sources */,
+				98E7410EBA0008B32814292C /* ClaudeHookReceiver.swift in Sources */,
 				35FD8570404CB6C03CBC0D5A /* Color+Hex.swift in Sources */,
 				E440FB889A6A6C821DFE4654 /* Column.swift in Sources */,
 				8B17A5E6958734580DDB6801 /* CommandPalette.swift in Sources */,
@@ -683,6 +700,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */,
+				9985FE021FAFBD2E70231F02 /* ClaudeHookSummaryTests.swift in Sources */,
 				025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */,
 				9C48AEAB3CAF0F1CB9D98E90 /* TerminalSurfaceViewTests.swift in Sources */,
 			);

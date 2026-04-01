@@ -1,18 +1,138 @@
 import AppKit
 import SwiftUI
 import GhosttyKit
+import OSLog
+import QuartzCore
 
 enum SwipeNavigationDirection {
     case previous
     case next
 }
 
+private enum TerminalPerf {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.blink.app",
+        category: "TerminalPerformance"
+    )
+    private static let signposter = OSSignposter(logger: logger)
+    private static let signpostsKey = "blink.perf.signposts"
+
+    static var signpostsEnabled: Bool {
+        UserDefaults.standard.bool(forKey: signpostsKey)
+    }
+
+    static func begin(_ name: StaticString) -> OSSignpostIntervalState? {
+        guard signpostsEnabled else { return nil }
+        return signposter.beginInterval(name)
+    }
+
+    static func end(_ name: StaticString, _ state: OSSignpostIntervalState?) {
+        guard let state else { return }
+        signposter.endInterval(name, state)
+    }
+
+    static func emit(_ name: StaticString) {
+        guard signpostsEnabled else { return }
+        signposter.emitEvent(name)
+    }
+}
+
+private extension NSScreen {
+    var displayID: UInt32? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        if let v = deviceDescription[key] as? UInt32 { return v }
+        if let v = deviceDescription[key] as? Int { return UInt32(v) }
+        if let v = deviceDescription[key] as? NSNumber { return v.uint32Value }
+        return nil
+    }
+}
+
 @MainActor
 protocol TerminalSurfaceCommandSink: AnyObject {
     func setContentScale(x: Double, y: Double)
     func setSize(width: UInt32, height: UInt32)
-    func refresh()
-    func draw()
+}
+
+struct TerminalSubmittedLineBuffer {
+    private var characters: [Character] = []
+    private var cursor = 0
+
+    mutating func insert(_ text: String) -> Bool {
+        var shouldSubmit = false
+        for character in text {
+            if character == "\r" || character == "\n" {
+                shouldSubmit = true
+                continue
+            }
+            characters.insert(character, at: cursor)
+            cursor += 1
+        }
+        return shouldSubmit
+    }
+
+    mutating func handleKeyCode(_ keyCode: UInt16) {
+        switch keyCode {
+        case 51:
+            deleteBackward()
+        case 117:
+            deleteForward()
+        case 123:
+            moveLeft()
+        case 124:
+            moveRight()
+        case 115:
+            moveHome()
+        case 119:
+            moveEnd()
+        default:
+            break
+        }
+    }
+
+    mutating func submit() -> String? {
+        let line = String(characters).trimmingCharacters(in: .whitespacesAndNewlines)
+        clear()
+        guard !line.isEmpty else { return nil }
+        return line
+    }
+
+    mutating func clear() {
+        characters.removeAll(keepingCapacity: true)
+        cursor = 0
+    }
+
+    var currentLine: String {
+        String(characters)
+    }
+
+    private mutating func deleteBackward() {
+        guard cursor > 0 else { return }
+        characters.remove(at: cursor - 1)
+        cursor -= 1
+    }
+
+    private mutating func deleteForward() {
+        guard cursor < characters.count else { return }
+        characters.remove(at: cursor)
+    }
+
+    private mutating func moveLeft() {
+        guard cursor > 0 else { return }
+        cursor -= 1
+    }
+
+    private mutating func moveRight() {
+        guard cursor < characters.count else { return }
+        cursor += 1
+    }
+
+    private mutating func moveHome() {
+        cursor = 0
+    }
+
+    private mutating func moveEnd() {
+        cursor = characters.count
+    }
 }
 
 private final class GhosttyTerminalSurfaceCommandSink: TerminalSurfaceCommandSink {
@@ -29,14 +149,6 @@ private final class GhosttyTerminalSurfaceCommandSink: TerminalSurfaceCommandSin
     func setSize(width: UInt32, height: UInt32) {
         ghostty_surface_set_size(surface, width, height)
     }
-
-    func refresh() {
-        ghostty_surface_refresh(surface)
-    }
-
-    func draw() {
-        ghostty_surface_draw(surface)
-    }
 }
 
 /// NSView subclass that hosts a single ghostty terminal surface.
@@ -51,6 +163,18 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     /// The tab ID this surface belongs to.
     let tabId: String
+    /// Stable pane ID used across restored sessions.
+    private let paneId: String
+    /// The project ID this surface belongs to.
+    private let projectId: String
+    /// The project name this surface belongs to.
+    private let projectName: String
+    /// Optional directory that contains Blink-installed CLI wrappers.
+    private let hookScriptDirectoryPath: String?
+    /// Optional ZDOTDIR wrapper directory for shell integration.
+    private let hookShellIntegrationDirectoryPath: String?
+    /// Optional event directory used for Claude hook integration.
+    private let hookEventDirectoryPath: String?
     /// The working directory for the shell.
     private let workingDirectory: String
     /// Optional command to run instead of the default shell.
@@ -63,10 +187,24 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     var onSwipeNavigation: ((SwipeNavigationDirection) -> Void)?
     /// Called when the user interacts with the surface directly.
     var onInteraction: (() -> Void)?
+    /// Called whenever the user submits a line in the terminal.
+    var onSubmittedLine: ((String) -> Void)?
 
     private var swipeNavigationAccumulatedX: CGFloat = 0
     private var swipeNavigationDirection: SwipeNavigationDirection?
     private var lastSwipeNavigationTimestamp: TimeInterval = 0
+    private var submittedLineBuffer = TerminalSubmittedLineBuffer()
+    private var pendingSurfaceSize: CGSize?
+    private var deferredSurfaceSizeRetryQueued = false
+    private var visibleInUI = true
+    private var needsSurfaceRecoveryOnAttach = false
+    private weak var observedWindow: NSWindow?
+    private var windowScreenObserver: NSObjectProtocol?
+    private var lastDisplayID: UInt32?
+    private var lastSurfacePixelSize: CGSize?
+    private var lastSurfaceScale: CGSize?
+    private var lastDrawableSize: CGSize = .zero
+    private var lastLayerContentsScale: CGFloat?
     var commandSinkOverride: TerminalSurfaceCommandSink?
 
     private static let defaultShellPATHEntries = [
@@ -91,9 +229,26 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     // MARK: - Init
 
-    init(app: GhosttyApp, tabId: String, workingDirectory: String, command: String? = nil) {
+    init(
+        app: GhosttyApp,
+        tabId: String,
+        paneId: String,
+        projectId: String,
+        projectName: String,
+        hookScriptDirectoryPath: String? = nil,
+        hookShellIntegrationDirectoryPath: String? = nil,
+        hookEventDirectoryPath: String? = nil,
+        workingDirectory: String,
+        command: String? = nil
+    ) {
         self.ghosttyApp = app
         self.tabId = tabId
+        self.paneId = paneId
+        self.projectId = projectId
+        self.projectName = projectName
+        self.hookScriptDirectoryPath = hookScriptDirectoryPath
+        self.hookShellIntegrationDirectoryPath = hookShellIntegrationDirectoryPath
+        self.hookEventDirectoryPath = hookEventDirectoryPath
         self.workingDirectory = workingDirectory
         self.command = command
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
@@ -102,6 +257,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         // independently from the background, so transparent bg + crisp text works.
         wantsLayer = true
         layer?.isOpaque = false
+        layer?.masksToBounds = true
 
         // Accept file and text drops from Finder and other apps
         registerForDraggedTypes([.fileURL, .string])
@@ -114,12 +270,46 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         fatalError("init(coder:) is not supported")
     }
 
+    override func makeBackingLayer() -> CALayer {
+        let metalLayer = CAMetalLayer()
+        metalLayer.pixelFormat = .bgra8Unorm
+        metalLayer.isOpaque = false
+        metalLayer.framebufferOnly = false
+        return metalLayer
+    }
+
     // MARK: - Surface Lifecycle
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard !isTearingDown, surface == nil, let _ = window, let app = ghosttyApp.app else { return }
-        createSurface(app: app)
+        updateWindowObservation()
+        updateSurfaceVisibility()
+
+        guard !isTearingDown else { return }
+
+        if surface == nil, let window, let app = ghosttyApp.app {
+            _ = window
+            createSurface(app: app)
+            return
+        }
+
+        guard window != nil else {
+            needsSurfaceRecoveryOnAttach = true
+            return
+        }
+
+        if let surface {
+            applySurfaceDisplayID(surface, force: true)
+            recoverSurfaceIfNeeded(surface, reason: "WindowAttachRecovery")
+        }
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        updateSurfaceVisibility()
+        if superview == nil {
+            needsSurfaceRecoveryOnAttach = true
+        }
     }
 
     private func createSurface(app: ghostty_app_t) {
@@ -143,8 +333,66 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             // Some CLIs only emit OSC-8 hyperlinks when the terminal program is
             // advertised explicitly. Blink embeds Ghostty, so expose that here.
             ghostty_env_var_s(key: strdup("TERM_PROGRAM"), value: strdup("Ghostty")),
-            ghostty_env_var_s(key: strdup("PATH"), value: strdup(Self.shellPATH())),
+            ghostty_env_var_s(key: strdup("PATH"), value: strdup(shellPATH())),
+            ghostty_env_var_s(key: strdup("BLINK_TAB_ID"), value: strdup(tabId)),
+            ghostty_env_var_s(key: strdup("BLINK_PANE_ID"), value: strdup(paneId)),
+            ghostty_env_var_s(key: strdup("BLINK_PROJECT_ID"), value: strdup(projectId)),
+            ghostty_env_var_s(key: strdup("BLINK_PROJECT_NAME"), value: strdup(projectName)),
+            ghostty_env_var_s(key: strdup("BLINK_PROJECT_PATH"), value: strdup(workingDirectory)),
         ]
+        if let hookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_HOOK_EVENT_DIR"),
+                    value: strdup(hookEventDirectoryPath)
+                )
+            )
+        }
+        if let hookScriptDirectoryPath, !hookScriptDirectoryPath.isEmpty {
+            let wrapperPath = (hookScriptDirectoryPath as NSString).appendingPathComponent("claude")
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_CLAUDE_WRAPPER_PATH"),
+                    value: strdup(wrapperPath)
+                )
+            )
+        }
+        if let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_SHELL_INTEGRATION"),
+                    value: strdup("1")
+                )
+            )
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_SHELL_INTEGRATION_DIR"),
+                    value: strdup(hookShellIntegrationDirectoryPath)
+                )
+            )
+        }
+
+        let shell = UserDefaults.standard.string(forKey: "blink.shell")
+            ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shellName = URL(fileURLWithPath: shell).lastPathComponent
+        if shellName == "zsh",
+           let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
+            if let candidateZdotdir = ProcessInfo.processInfo.environment["ZDOTDIR"],
+               !candidateZdotdir.isEmpty {
+                envVars.append(
+                    ghostty_env_var_s(
+                        key: strdup("BLINK_ZSH_ZDOTDIR"),
+                        value: strdup(candidateZdotdir)
+                    )
+                )
+            }
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("ZDOTDIR"),
+                    value: strdup(hookShellIntegrationDirectoryPath)
+                )
+            )
+        }
 
         // Set working directory and optional command
         let createWithConfig = { [self] (cmdPtr: UnsafePointer<CChar>?) in
@@ -158,8 +406,6 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 }
             }
         }
-        let shell = UserDefaults.standard.string(forKey: "blink.shell")
-            ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let wrapped: String
         if let command {
             // Command tabs: non-interactive login shell running a specific command
@@ -181,12 +427,13 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             return
         }
 
+        if let surface {
+            applySurfaceDisplayID(surface, force: true)
+            updateSurfaceVisibility()
+        }
+
         // Set initial size in framebuffer pixels (not points)
-        let fbSize = convertToBacking(frame.size)
-        GhosttyTerminalSurfaceCommandSink(surface: surface!).setSize(
-            width: UInt32(fbSize.width),
-            height: UInt32(fbSize.height)
-        )
+        syncSurfaceSize()
 
         // Auto-focus after surface creation — use DispatchQueue (not Task)
         // so the focus call lands at a deterministic point in the run loop,
@@ -199,7 +446,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
     }
 
-    private static func shellPATH() -> String {
+    private func shellPATH() -> String {
         var entries: [String] = []
         var seen = Set<String>()
 
@@ -212,8 +459,12 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
 
         let home = NSHomeDirectory()
-        for relativePath in defaultShellPATHEntries {
+        for relativePath in Self.defaultShellPATHEntries {
             append((home as NSString).appendingPathComponent(relativePath))
+        }
+
+        if let hookScriptDirectoryPath {
+            append(hookScriptDirectoryPath)
         }
 
         if let inheritedPATH = ProcessInfo.processInfo.environment["PATH"] {
@@ -222,7 +473,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             }
         }
 
-        for entry in systemPATHEntries {
+        for entry in Self.systemPATHEntries {
             append(entry)
         }
 
@@ -243,6 +494,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let result = super.becomeFirstResponder()
         if result, let surface {
             ghostty_surface_set_focus(surface, true)
+            applySurfaceDisplayID(surface, force: true)
+            recoverSurfaceIfNeeded(surface, reason: "FocusRecovery")
         }
         return result
     }
@@ -286,20 +539,185 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        guard let commandSink = surfaceCommandSink, let window else { return }
-        let scale = window.backingScaleFactor
-        commandSink.setContentScale(x: Double(scale), y: Double(scale))
         syncSurfaceSize()
     }
 
     private func syncSurfaceSize() {
+        let interval = TerminalPerf.begin("SurfaceResizeSync")
+        defer { TerminalPerf.end("SurfaceResizeSync", interval) }
+
         guard let commandSink = surfaceCommandSink else { return }
-        let fbSize = convertToBacking(bounds.size)
-        guard fbSize.width > 0, fbSize.height > 0 else { return }
-        commandSink.setSize(width: UInt32(fbSize.width), height: UInt32(fbSize.height))
-        commandSink.refresh()
-        commandSink.draw()
-        needsDisplay = true
+        let logicalSize = resolvedSurfaceSize(preferred: nil)
+        guard logicalSize.width > 0, logicalSize.height > 0 else { return }
+        pendingSurfaceSize = logicalSize
+
+        if Self.shouldDeferSurfaceResizeForActiveDrag() {
+            TerminalPerf.emit("SurfaceResizeDeferred")
+            scheduleDeferredSurfaceSizeRetryIfNeeded()
+            return
+        }
+
+        let fbSize = convertToBacking(NSRect(origin: .zero, size: logicalSize)).size
+        let pixelSize = CGSize(
+            width: floor(max(0, fbSize.width)),
+            height: floor(max(0, fbSize.height))
+        )
+        guard pixelSize.width > 0, pixelSize.height > 0 else { return }
+
+        let xScale = pixelSize.width / logicalSize.width
+        let yScale = pixelSize.height / logicalSize.height
+        let surfaceScale = CGSize(width: xScale, height: yScale)
+        let layerScale = window?.backingScaleFactor ?? max(xScale, yScale)
+
+        if !nearlyEqual(surfaceScale, lastSurfaceScale) {
+            commandSink.setContentScale(x: xScale, y: yScale)
+            lastSurfaceScale = surfaceScale
+            TerminalPerf.emit("SurfaceScaleChanged")
+        }
+
+        if pixelSize != lastSurfacePixelSize {
+            commandSink.setSize(width: UInt32(pixelSize.width), height: UInt32(pixelSize.height))
+            lastSurfacePixelSize = pixelSize
+            TerminalPerf.emit("SurfacePixelSizeChanged")
+        }
+
+        if lastLayerContentsScale != layerScale {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer?.contentsScale = layerScale
+            layer?.masksToBounds = true
+            if let metalLayer = layer as? CAMetalLayer,
+               metalLayer.drawableSize != pixelSize || lastDrawableSize != pixelSize {
+                metalLayer.drawableSize = pixelSize
+                lastDrawableSize = pixelSize
+            }
+            CATransaction.commit()
+            lastLayerContentsScale = layerScale
+        } else if let metalLayer = layer as? CAMetalLayer,
+                  metalLayer.drawableSize != pixelSize || lastDrawableSize != pixelSize {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            metalLayer.drawableSize = pixelSize
+            CATransaction.commit()
+            lastDrawableSize = pixelSize
+        }
+    }
+
+    private func resolvedSurfaceSize(preferred size: CGSize?) -> CGSize {
+        if let size, size.width > 0, size.height > 0 {
+            return size
+        }
+
+        let currentBounds = bounds.size
+        if currentBounds.width > 0, currentBounds.height > 0 {
+            return currentBounds
+        }
+
+        if let pendingSurfaceSize,
+           pendingSurfaceSize.width > 0,
+           pendingSurfaceSize.height > 0 {
+            return pendingSurfaceSize
+        }
+
+        return currentBounds
+    }
+
+    private static func isDragResizeEvent(_ eventType: NSEvent.EventType?) -> Bool {
+        switch eventType {
+        case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func shouldDeferSurfaceResizeForActiveDrag() -> Bool {
+        isDragResizeEvent(NSApp.currentEvent?.type)
+    }
+
+    private func scheduleDeferredSurfaceSizeRetryIfNeeded() {
+        guard window != nil else { return }
+        guard !deferredSurfaceSizeRetryQueued else { return }
+        deferredSurfaceSizeRetryQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.deferredSurfaceSizeRetryQueued = false
+            self.syncSurfaceSize()
+        }
+    }
+
+    private func nearlyEqual(_ lhs: CGSize, _ rhs: CGSize?, epsilon: CGFloat = 0.0001) -> Bool {
+        guard let rhs else { return false }
+        return abs(lhs.width - rhs.width) <= epsilon && abs(lhs.height - rhs.height) <= epsilon
+    }
+
+    func setVisibleInUI(_ visible: Bool) {
+        guard visibleInUI != visible else { return }
+        visibleInUI = visible
+        if !visible {
+            needsSurfaceRecoveryOnAttach = true
+        }
+        updateSurfaceVisibility()
+    }
+
+    private func updateSurfaceVisibility() {
+        guard let surface else { return }
+        let isVisible = visibleInUI
+            && window != nil
+            && superview != nil
+            && !isHiddenOrHasHiddenAncestor
+        ghostty_surface_set_occlusion(surface, isVisible)
+    }
+
+    private func updateWindowObservation() {
+        guard observedWindow !== window else { return }
+
+        if let windowScreenObserver {
+            NotificationCenter.default.removeObserver(windowScreenObserver)
+            self.windowScreenObserver = nil
+        }
+
+        observedWindow = window
+        guard let window else { return }
+
+        windowScreenObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.windowDidChangeScreen()
+        }
+    }
+
+    private func windowDidChangeScreen() {
+        guard let surface else { return }
+        let displayChanged = applySurfaceDisplayID(surface, force: true)
+        if displayChanged {
+            recoverSurfaceIfNeeded(surface, reason: "ScreenChangeRecovery")
+        } else {
+            syncSurfaceSize()
+        }
+    }
+
+    @discardableResult
+    private func applySurfaceDisplayID(_ surface: ghostty_surface_t, force: Bool) -> Bool {
+        guard let displayID = (window?.screen ?? NSScreen.main)?.displayID,
+              displayID != 0 else { return false }
+        guard force || lastDisplayID != displayID else { return false }
+        ghostty_surface_set_display_id(surface, displayID)
+        lastDisplayID = displayID
+        TerminalPerf.emit("SurfaceDisplayIDChanged")
+        return true
+    }
+
+    private func recoverSurfaceIfNeeded(_ surface: ghostty_surface_t, reason: StaticString) {
+        guard needsSurfaceRecoveryOnAttach else { return }
+        let interval = TerminalPerf.begin(reason)
+        syncSurfaceSize()
+        ghostty_surface_refresh(surface)
+        needsSurfaceRecoveryOnAttach = false
+        TerminalPerf.emit("SurfaceRecoveryRefresh")
+        TerminalPerf.end(reason, interval)
     }
 
     private var surfaceCommandSink: TerminalSurfaceCommandSink? {
@@ -359,6 +777,12 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             var key_ev = Self.buildKeyEvent(action: action, event: event)
             key_ev.composing = markedText.length > 0
             _ = ghostty_surface_key(surface, key_ev)
+        }
+
+        if event.keyCode == 36 || event.keyCode == 76 {
+            submitBufferedLineIfNeeded()
+        } else {
+            submittedLineBuffer.handleKeyCode(event.keyCode)
         }
 
     }
@@ -469,14 +893,33 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         // If in keyDown flow, accumulate text — it will be sent via ghostty_surface_key
         if keyTextAccumulator != nil {
             keyTextAccumulator?.append(chars)
+            recordSubmittedLineText(chars)
             return
         }
 
         // Outside keyDown (e.g. paste), send text directly
+        recordSubmittedLineText(chars)
         guard let surface else { return }
         chars.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(chars.utf8.count))
         }
+    }
+
+    private func recordSubmittedLineText(_ text: String) {
+        guard onSubmittedLine != nil, !text.isEmpty else { return }
+        if submittedLineBuffer.insert(text) {
+            submitBufferedLineIfNeeded()
+        }
+    }
+
+    private func submitBufferedLineIfNeeded() {
+        guard onSubmittedLine != nil else {
+            submittedLineBuffer.clear()
+            return
+        }
+
+        guard let line = submittedLineBuffer.submit() else { return }
+        onSubmittedLine?(line)
     }
 
     func characterIndex(for point: NSPoint) -> Int {
@@ -536,6 +979,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         if handleSwipeNavigation(with: event) {
             return
         }
+        TerminalPerf.emit("SurfaceScrollWheel")
         // ghostty_input_scroll_mods_t is a plain int bitmask, not a struct.
         // Bit 0 = precision scrolling (trackpad vs mouse wheel).
         var scrollMods: ghostty_input_scroll_mods_t = 0
@@ -654,6 +1098,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
     /// Send a string to the terminal as if it were typed.
     func sendText(_ text: String) {
+        recordSubmittedLineText(text)
         guard let surface else { return }
         text.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
@@ -701,6 +1146,12 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         onReady = nil
         onSwipeNavigation = nil
         onInteraction = nil
+        onSubmittedLine = nil
+        if let windowScreenObserver {
+            NotificationCenter.default.removeObserver(windowScreenObserver)
+            self.windowScreenObserver = nil
+        }
+        observedWindow = nil
 
         if window?.firstResponder === self {
             window?.makeFirstResponder(nil)

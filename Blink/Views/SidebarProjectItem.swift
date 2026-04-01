@@ -9,6 +9,8 @@ struct SidebarProjectItem: View {
     let isExpanded: Bool
     let terminalCount: Int
     let hasUnread: Bool
+    let claudeTabActivities: [String: ClaudeTabActivity]
+    let shellDetectedAIPaneKinds: [String: ShellDetectedAIPaneKind]
     let tabs: [AppTab]
     let selectedTabId: String?
     let activeTabId: String?
@@ -20,6 +22,29 @@ struct SidebarProjectItem: View {
     @State private var isHovered = false
     @State private var showContextMenu = false
 
+    private var projectClaudeActivitySummary: (tabLabel: String, activity: ClaudeTabActivity)? {
+        let candidates = tabs.compactMap { tab -> (String, ClaudeTabActivity)? in
+            guard let activity = claudeTabActivities[tab.id] else { return nil }
+            return (tab.label, activity)
+        }
+
+        if let needsInput = candidates
+            .filter({ $0.1.kind == .needsInput })
+            .max(by: { $0.1.updatedAt < $1.1.updatedAt }) {
+            return needsInput
+        }
+
+        if let running = candidates
+            .filter({ $0.1.kind == .running })
+            .max(by: { $0.1.updatedAt < $1.1.updatedAt }) {
+            return running
+        }
+
+        return candidates
+            .filter { $0.1.kind == .completed }
+            .max(by: { $0.1.updatedAt < $1.1.updatedAt })
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: Layout.sidebarItemGap) {
@@ -29,11 +54,21 @@ struct SidebarProjectItem: View {
                             .scaleEffect(isHovered ? 1.1 : 1.0)
                             .animation(.easeInOut(duration: 0.15), value: isHovered)
 
-                        Text(project.name)
-                            .font(Fonts.primary(size: 15, weight: .medium))
-                            .foregroundStyle(isSelected ? theme.text : (isActive ? theme.text : theme.textMuted))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(project.name)
+                                .font(Fonts.primary(size: 15, weight: .medium))
+                                .foregroundStyle(isSelected ? theme.text : (isActive ? theme.text : theme.textMuted))
+                                .lineLimit(1)
+
+                            if !isExpanded,
+                               let summary = projectClaudeActivitySummary {
+                                ClaudeActivityLabel(
+                                    activity: summary.activity,
+                                    tabLabel: summary.tabLabel
+                                )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .contentShape(Rectangle())
                 }
@@ -97,6 +132,8 @@ struct SidebarProjectItem: View {
                                 tab: tab,
                                 isActive: activeTabId == tab.id,
                                 isSelected: selectedTabId == tab.id,
+                                detectedAIKind: shellDetectedAIPaneKinds[tab.id],
+                                claudeActivity: claudeTabActivities[tab.id],
                                 onSelect: { onSelectTab(tab.id, true) }
                             )
                         }
@@ -230,6 +267,8 @@ private struct SidebarProjectWindowItem: View {
     let tab: AppTab
     let isActive: Bool
     let isSelected: Bool
+    let detectedAIKind: ShellDetectedAIPaneKind?
+    let claudeActivity: ClaudeTabActivity?
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -245,6 +284,12 @@ private struct SidebarProjectWindowItem: View {
                     .foregroundStyle(isSelected ? theme.text : (isActive ? theme.accent : (isHovered ? theme.textMuted : theme.textDim)))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let claudeActivity {
+                    Image(systemName: statusIconName(for: claudeActivity.kind))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(statusColor(for: claudeActivity.kind))
+                }
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 5)
@@ -262,13 +307,102 @@ private struct SidebarProjectWindowItem: View {
     @ViewBuilder
     private var leadingIcon: some View {
         if tab.command == nil {
-            Image(systemName: "terminal")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isActive ? theme.accent : theme.textDim)
+            if let detectedAIKind {
+                aiIcon(for: detectedAIKind)
+            } else {
+                Image(systemName: "terminal")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isActive ? theme.accent : theme.textDim)
+            }
         } else {
             Image(systemName: "play.rectangle")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        }
+    }
+
+    @ViewBuilder
+    private func aiIcon(for kind: ShellDetectedAIPaneKind) -> some View {
+        switch kind {
+        case .claude:
+            BundledSVGIcon(name: "claude-icon")
+        case .codex:
+            BundledSVGIcon(name: "codex-icon")
+        case .opencode:
+            BundledSVGIcon(name: "opencode-icon")
+        }
+    }
+
+    private func statusIconName(for kind: ClaudeTabActivityKind) -> String {
+        switch kind {
+        case .running:
+            return "bolt.fill"
+        case .needsInput:
+            return "bell.fill"
+        case .completed:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private func statusColor(for kind: ClaudeTabActivityKind) -> Color {
+        switch kind {
+        case .running:
+            return theme.accent
+        case .needsInput:
+            return theme.yellow
+        case .completed:
+            return theme.green
+        }
+    }
+}
+
+private struct ClaudeActivityLabel: View {
+    @Environment(\.theme) private var theme
+
+    let activity: ClaudeTabActivity
+    let tabLabel: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: statusIconName)
+                .font(.system(size: 9, weight: .semibold))
+            Text(statusText)
+                .font(Fonts.primary(size: 10.5))
+                .lineLimit(1)
+        }
+        .foregroundStyle(statusColor)
+    }
+
+    private var statusIconName: String {
+        switch activity.kind {
+        case .running:
+            return "bolt.fill"
+        case .needsInput:
+            return "bell.fill"
+        case .completed:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private var statusText: String {
+        switch activity.kind {
+        case .running:
+            return "\(tabLabel) running"
+        case .needsInput:
+            return "\(tabLabel) needs input"
+        case .completed:
+            return "\(tabLabel) finished"
+        }
+    }
+
+    private var statusColor: Color {
+        switch activity.kind {
+        case .running:
+            return theme.accent
+        case .needsInput:
+            return theme.yellow
+        case .completed:
+            return theme.green
         }
     }
 }

@@ -9,6 +9,45 @@ struct ManagedCommandState: Equatable, Hashable {
     var status: ManagedCommandStatus
 }
 
+enum ShellDetectedAIPaneKind: String, Equatable, Hashable, CaseIterable {
+    case claude
+    case codex
+    case opencode
+
+    init?(submittedLine: String) {
+        let trimmed = submittedLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if trimmed == "claude" || trimmed.hasPrefix("claude ") {
+            self = .claude
+            return
+        }
+
+        if trimmed == "codex" || trimmed.hasPrefix("codex ") {
+            self = .codex
+            return
+        }
+
+        if trimmed == "opencode" || trimmed.hasPrefix("opencode ") {
+            self = .opencode
+            return
+        }
+
+        return nil
+    }
+
+    var displayName: String {
+        switch self {
+        case .claude:
+            "Claude Code"
+        case .codex:
+            "Codex"
+        case .opencode:
+            "OpenCode"
+        }
+    }
+}
+
 struct AppTab: Identifiable, Equatable, Hashable {
     let id: String
     let type: String

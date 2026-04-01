@@ -402,6 +402,16 @@ private struct AllProjectsSidebarView: View {
                             isExpanded: store.isProjectExpanded(project.id),
                             terminalCount: store.terminalCount(for: project.id),
                             hasUnread: store.hasUnread(projectId: project.id),
+                            claudeTabActivities: Dictionary(
+                                uniqueKeysWithValues: liveTabs.compactMap { tab in
+                                    store.claudeActivity(for: tab.id).map { (tab.id, $0) }
+                                }
+                            ),
+                            shellDetectedAIPaneKinds: Dictionary(
+                                uniqueKeysWithValues: liveTabs.compactMap { tab in
+                                    store.shellDetectedAIPaneKinds[tab.id].map { (tab.id, $0) }
+                                }
+                            ),
                             tabs: liveTabs,
                             selectedTabId: {
                                 if case .tab(let projectId, let tabId) = selectedRow, projectId == project.id {

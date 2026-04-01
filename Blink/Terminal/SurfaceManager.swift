@@ -12,8 +12,30 @@ final class SurfaceManager {
     var onSurfaceReady: ((String) -> Void)?
 
     /// Create a new terminal surface for a tab.
-    func createSurface(tabId: String, app: GhosttyApp, workingDirectory: String, command: String? = nil) -> TerminalSurfaceView {
-        let view = TerminalSurfaceView(app: app, tabId: tabId, workingDirectory: workingDirectory, command: command)
+    func createSurface(
+        tabId: String,
+        paneId: String,
+        projectId: String,
+        projectName: String,
+        hookScriptDirectoryPath: String?,
+        hookShellIntegrationDirectoryPath: String?,
+        hookEventDirectoryPath: String?,
+        app: GhosttyApp,
+        workingDirectory: String,
+        command: String? = nil
+    ) -> TerminalSurfaceView {
+        let view = TerminalSurfaceView(
+            app: app,
+            tabId: tabId,
+            paneId: paneId,
+            projectId: projectId,
+            projectName: projectName,
+            hookScriptDirectoryPath: hookScriptDirectoryPath,
+            hookShellIntegrationDirectoryPath: hookShellIntegrationDirectoryPath,
+            hookEventDirectoryPath: hookEventDirectoryPath,
+            workingDirectory: workingDirectory,
+            command: command
+        )
         view.onClose = { [weak self] tabId in
             self?.onProcessExit?(tabId)
         }
