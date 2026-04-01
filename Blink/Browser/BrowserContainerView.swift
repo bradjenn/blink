@@ -49,8 +49,8 @@ final class BrowserHostingView: NSView {
 struct BrowserContainerView: NSViewRepresentable {
     @Environment(AppStore.self) private var store
 
-    let tabId: String
-    let projectId: String
+    let paneTabId: String
+    let browserTabId: String
     let controller: any BrowserHostController
 
     func makeNSView(context: Context) -> BrowserHostingView {
@@ -63,18 +63,19 @@ struct BrowserContainerView: NSViewRepresentable {
                 if store.shouldClearSidebarFocusForTerminalInteraction() {
                     store.sidebarFocused = false
                 }
-                if store.activeTabId != tabId {
-                    store.setActiveTab(tabId)
+                if store.activeTabId != paneTabId {
+                    store.setActiveTab(paneTabId)
                 }
-                store.setBrowserFocusTarget(.webView, for: tabId)
+                store.selectBrowserTab(browserTabId, in: paneTabId)
+                store.setBrowserFocusTarget(.webView, for: browserTabId, in: paneTabId)
             }
         }
         controller.onOpenNewTabRequest = { url in
             DispatchQueue.main.async {
-                store.openBrowserTab(projectId: projectId, url: url.absoluteString, maximizeColumn: false)
+                store.openBrowserTabInPane(paneTabId, url: url.absoluteString)
             }
         }
 
-        container.showWebView(controller.hostView, tabId: tabId)
+        container.showWebView(controller.hostView, tabId: browserTabId)
     }
 }

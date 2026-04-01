@@ -75,7 +75,7 @@ struct AppTab: Identifiable, Equatable, Hashable {
     var role: String? = nil
     var workingDirectory: String? = nil
     var projectSetupPaneId: String? = nil
-    var browserState: BrowserTabState? = nil
+    var browserState: BrowserPaneState? = nil
 
     init(
         id: String,
@@ -87,7 +87,7 @@ struct AppTab: Identifiable, Equatable, Hashable {
         role: String? = nil,
         workingDirectory: String? = nil,
         projectSetupPaneId: String? = nil,
-        browserState: BrowserTabState? = nil
+        browserState: BrowserPaneState? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -111,7 +111,7 @@ struct AppTab: Identifiable, Equatable, Hashable {
         role: String? = nil,
         workingDirectory: String? = nil,
         projectSetupPaneId: String? = nil,
-        browserState: BrowserTabState? = nil
+        browserState: BrowserPaneState? = nil
     ) {
         self.init(
             id: id,

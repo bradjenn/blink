@@ -27,7 +27,7 @@ struct ProjectSetupPane: Identifiable, Equatable, Hashable, Codable {
     var role: String?
     var command: String?
     var workingDirectory: String?
-    var browserState: BrowserTabState?
+    var browserState: BrowserPaneState?
 }
 
 struct ProjectSetupColumn: Identifiable, Equatable, Hashable, Codable {

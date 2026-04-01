@@ -62,6 +62,7 @@
 		1ADD7DEED0C36583893AAC19 /* command_line_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 09C30919A51EC0FE5489A2F6 /* command_line_ctocpp.h */; };
 		1AE923CE3EF3D15424912EC6 /* BrowserEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B72DF31B86995AADD900B8 /* BrowserEngine.swift */; };
 		1BBE58619D05508B1C4B026F /* SettingsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F051F6B723C8DC22255A384 /* SettingsPage.swift */; };
+		1BE9087005CE6F2CC586FA8A /* BrowserPaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6BF8EB52561229F8833293 /* BrowserPaneState.swift */; };
 		1C47263BFC98E2BEEB15AE7A /* media_source_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = AF1C0839BD6366948A640840 /* media_source_ctocpp.cc */; };
 		1C8D33250E669B30F3D11751 /* drag_data_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 28C540CF38E6502289851CBB /* drag_data_ctocpp.cc */; };
 		1D349D6B9CCA919FC49BBD07 /* cef_ref_counted.cc in Sources */ = {isa = PBXBuildFile; fileRef = E9EA45FF92177F13FA4FAAB6 /* cef_ref_counted.cc */; };
@@ -85,6 +86,7 @@
 		229424BAFD9587AB72CAFF66 /* codex-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 24588121A0A9DB5D03163B12 /* codex-icon.svg */; };
 		22DD0E579C7B9DFA55774294 /* binary_value_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8C66B98371C6649B271E39BE /* binary_value_ctocpp.cc */; };
 		22E567ACD8290E6E8BF9FFAC /* before_download_callback_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 84AA8C0F42D512464479E3B5 /* before_download_callback_ctocpp.cc */; };
+		22FD45AA4F28BA6DEFF9FB8E /* BrowserPaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6BF8EB52561229F8833293 /* BrowserPaneState.swift */; };
 		23058C7BD0BB77C975199E67 /* run_context_menu_callback_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 593C5347A4ABB43DBDBFDF78 /* run_context_menu_callback_ctocpp.cc */; };
 		234B202565538A56DC99ACBC /* navigation_entry_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = AD418B04CB9954006318CEA7 /* navigation_entry_ctocpp.h */; };
 		235B28ABD6609A9C06A33270 /* cef_browser_info_map.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 299440E0BF1B19B8F4B5640E /* cef_browser_info_map.h */; };
@@ -272,6 +274,7 @@
 		850D13E51D4D687649E88611 /* browser_process_handler_cpptoc.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4C4DB2FCC31599C74CA7BF69 /* browser_process_handler_cpptoc.h */; };
 		85D9396F52B102AA53A9C1E5 /* textfield_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 29442B0FD7DADCB07265B442 /* textfield_ctocpp.cc */; };
 		86F3540ADCC1582950296EB3 /* fill_layout_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9CD6CA7ADFC6A75BAAF7B589 /* fill_layout_ctocpp.h */; };
+		87CAF335C41CDBD0EBE8DB79 /* BrowserSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B583343B95ADE6544F12C74 /* BrowserSidebarView.swift */; };
 		885CE3949FB8286CF74A18F3 /* menu_button_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = A9F4D830CE1CB6B4BEAD4632 /* menu_button_ctocpp.cc */; };
 		891CA13719284000E6C38D26 /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7AE74F44BB7ADCE54BED50E0 /* GameController.framework */; };
 		8971438E1F4F56414A502EFC /* v8_stack_frame_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = A79E54627B98FA307E9932AA /* v8_stack_frame_ctocpp.h */; };
@@ -283,6 +286,7 @@
 		8E0F6EC0E220D245BD40F45A /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762E93713BEF3B6BAE6DB7CC /* Theme.swift */; };
 		8E3A06867D4C7C535730A36F /* xml_reader_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 21DF9A0E22EE5084F88B7B2A /* xml_reader_ctocpp.h */; };
 		8E9F90572424473CFF88504B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C747FAD7B2FD821BC48474F /* Metal.framework */; };
+		8FD5CB920A7AA7111A1310E0 /* BrowserManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F49106CDB931BF778BF8FFC /* BrowserManagerTests.swift */; };
 		905C92378E12BC0D84B3C6F4 /* libBlinkCEFWrapper.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3AA9C7009B7EC5F1BB040BB6 /* libBlinkCEFWrapper.a */; };
 		908E23A45BDBE7E8DB262729 /* window_delegate_cpptoc.cc in Sources */ = {isa = PBXBuildFile; fileRef = 1E9388F1A40D3DCF184927E2 /* window_delegate_cpptoc.cc */; };
 		90CD817B4E014C0E97DF5A30 /* shared_memory_region_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = 9033FD72404E085C18FF4980 /* shared_memory_region_ctocpp.cc */; };
@@ -380,6 +384,7 @@
 		BE8F069B8FB86941774CCA9D /* BrowserContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7F77BC98D850186700273B /* BrowserContainerView.swift */; };
 		BEDC5E65C6AA2C3D10B3757F /* overlay_controller_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = A7110433B9681A319F298E94 /* overlay_controller_ctocpp.h */; };
 		BF38549966E18173A6BC9FB4 /* cef_scoped_temp_dir.cc in Sources */ = {isa = PBXBuildFile; fileRef = 6008BCCE138D9AB21DBFA05C /* cef_scoped_temp_dir.cc */; };
+		BF73ED74A6D2A54DFE2E35A7 /* BrowserSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B583343B95ADE6544F12C74 /* BrowserSidebarView.swift */; };
 		BF823F166ABE9FF102FB536C /* context_menu_handler_cpptoc.cc in Sources */ = {isa = PBXBuildFile; fileRef = 6C96AA6A4C956DB4F1410F79 /* context_menu_handler_cpptoc.cc */; };
 		BFA07FC3DBDE0A9E526C978D /* textfield_delegate_cpptoc.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 154C3C03F8DF777F6AC310F6 /* textfield_delegate_cpptoc.h */; };
 		C0E8E17FD77A129B3308B70C /* libcef_dll_wrapper.cc in Sources */ = {isa = PBXBuildFile; fileRef = 338BAEBA17B71B9C4065A487 /* libcef_dll_wrapper.cc */; };
@@ -765,8 +770,10 @@
 		09C30919A51EC0FE5489A2F6 /* command_line_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = command_line_ctocpp.h; sourceTree = "<group>"; };
 		09D47A5C0A44933E63A3104C /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		0A93855359141D657D6C3770 /* request_context_handler_cpptoc.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = request_context_handler_cpptoc.cc; sourceTree = "<group>"; };
+		0B583343B95ADE6544F12C74 /* BrowserSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSidebarView.swift; sourceTree = "<group>"; };
 		0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatus.swift; sourceTree = "<group>"; };
 		0B6E1A9BDE5AC685B06A8DC7 /* browser_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = browser_ctocpp.cc; sourceTree = "<group>"; };
+		0C6BF8EB52561229F8833293 /* BrowserPaneState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserPaneState.swift; sourceTree = "<group>"; };
 		0C6F68AAB859808048F7518D /* print_settings_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = print_settings_ctocpp.cc; sourceTree = "<group>"; };
 		0CF128FEFCAFAB670E693B75 /* cef_stream_resource_handler.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cef_stream_resource_handler.cc; sourceTree = "<group>"; };
 		0DDD609A0EDF9B9201207BBA /* audio_handler_cpptoc.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = audio_handler_cpptoc.cc; sourceTree = "<group>"; };
@@ -1026,6 +1033,7 @@
 		9CD6CA7ADFC6A75BAAF7B589 /* fill_layout_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fill_layout_ctocpp.h; sourceTree = "<group>"; };
 		9E4DF32EA1AC8F71A6CA3CEB /* jsdialog_callback_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = jsdialog_callback_ctocpp.cc; sourceTree = "<group>"; };
 		9E915BB95D18A86EC6898317 /* browser_process_handler_cpptoc.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = browser_process_handler_cpptoc.cc; sourceTree = "<group>"; };
+		9F49106CDB931BF778BF8FFC /* BrowserManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserManagerTests.swift; sourceTree = "<group>"; };
 		9FC0517425E902D680C63321 /* image_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = image_ctocpp.h; sourceTree = "<group>"; };
 		A2E0C1BEC11E79BCD49BCAD0 /* v8_accessor_cpptoc.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = v8_accessor_cpptoc.cc; sourceTree = "<group>"; };
 		A3515B9801B682FEBB58E9F8 /* transfer_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = transfer_util.h; sourceTree = "<group>"; };
@@ -1446,7 +1454,9 @@
 				03B72DF31B86995AADD900B8 /* BrowserEngine.swift */,
 				9B74C6071AF0777C6DC4C114 /* BrowserHostController.swift */,
 				F5E6CE37B17F06FC055AB927 /* BrowserManager.swift */,
+				0C6BF8EB52561229F8833293 /* BrowserPaneState.swift */,
 				5C3AC1F0C4E288A2D7D031C5 /* BrowserSessionModel.swift */,
+				0B583343B95ADE6544F12C74 /* BrowserSidebarView.swift */,
 				01CCBFD155E44D107B923B2E /* BrowserTabState.swift */,
 				1ADA7024A206C60AB6E0DB25 /* BrowserURLResolver.swift */,
 				57AE43C3EFED2952F0F0D21D /* BrowserView.swift */,
@@ -1494,6 +1504,7 @@
 				0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */,
 				DF9B9ABE5070FDDE8DD1C2EB /* BrowserAppStoreTests.swift */,
 				7335F0329D45995F1DCA513A /* BrowserControllerTests.swift */,
+				9F49106CDB931BF778BF8FFC /* BrowserManagerTests.swift */,
 				9358E6A6BAD09CFBD6BED7BE /* BrowserURLResolverTests.swift */,
 				C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */,
 				7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */,
@@ -2194,7 +2205,9 @@
 				1AE923CE3EF3D15424912EC6 /* BrowserEngine.swift in Sources */,
 				B7A79EC23C993C62F6E2D513 /* BrowserHostController.swift in Sources */,
 				1ACA3C15FD9C709EDDC92934 /* BrowserManager.swift in Sources */,
+				1BE9087005CE6F2CC586FA8A /* BrowserPaneState.swift in Sources */,
 				5BE0F7679B83F8F0CC0FFBDE /* BrowserSessionModel.swift in Sources */,
+				87CAF335C41CDBD0EBE8DB79 /* BrowserSidebarView.swift in Sources */,
 				738FE0499E2DCBAA402FF683 /* BrowserTabState.swift in Sources */,
 				B191288580675F013041B755 /* BrowserURLResolver.swift in Sources */,
 				A5E403256B8B58AEB591CB28 /* BrowserView.swift in Sources */,
@@ -2444,7 +2457,9 @@
 				647A6E66265461A7F9F8F7BC /* BrowserEngine.swift in Sources */,
 				BAC09049B1AA1018A5DE7D16 /* BrowserHostController.swift in Sources */,
 				6D33C1319C1C18ED82B5E8FD /* BrowserManager.swift in Sources */,
+				22FD45AA4F28BA6DEFF9FB8E /* BrowserPaneState.swift in Sources */,
 				2099A26D6372EAB34E89BFBA /* BrowserSessionModel.swift in Sources */,
+				BF73ED74A6D2A54DFE2E35A7 /* BrowserSidebarView.swift in Sources */,
 				1D86A2625B0C384691261F3A /* BrowserTabState.swift in Sources */,
 				FE142300439F61F985C020B2 /* BrowserURLResolver.swift in Sources */,
 				D1582E3FC37215D0AD6D3F4A /* BrowserView.swift in Sources */,
@@ -2515,6 +2530,7 @@
 				9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */,
 				19A7388011B32BAA1810F986 /* BrowserAppStoreTests.swift in Sources */,
 				D0062996A905AA81F6C68ADD /* BrowserControllerTests.swift in Sources */,
+				8FD5CB920A7AA7111A1310E0 /* BrowserManagerTests.swift in Sources */,
 				E1A1C078E0B859B939B00579 /* BrowserURLResolverTests.swift in Sources */,
 				9985FE021FAFBD2E70231F02 /* ClaudeHookSummaryTests.swift in Sources */,
 				025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */,

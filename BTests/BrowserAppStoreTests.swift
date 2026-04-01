@@ -38,15 +38,16 @@ final class BrowserAppStoreTests: XCTestCase {
         store.setActiveProject("project-1")
 
         let tab = try XCTUnwrap(store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false))
+        let browserTab = try XCTUnwrap(tab.browserState?.selectedTab)
 
         XCTAssertEqual(tab.kind, .browser)
-        XCTAssertEqual(tab.browserState?.urlString, BrowserDefaults.homePageURLString)
-        XCTAssertEqual(tab.browserState?.preferredFocus, .webView)
+        XCTAssertEqual(browserTab.state.urlString, BrowserDefaults.homePageURLString)
+        XCTAssertEqual(browserTab.state.preferredFocus, .webView)
         XCTAssertEqual(store.activeTabId, tab.id)
         XCTAssertTrue(store.projectColumns(for: "project-1").contains { $0.tabIds == [tab.id] })
     }
 
-    func testOpenNewTabForActiveSurfaceCreatesBrowserTabWhenBrowserIsFocused() throws {
+    func testOpenNewTabForActiveSurfaceCreatesInternalBrowserTabWhenBrowserIsFocused() throws {
         let store = makeStore()
         let existing = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
         store.setActiveTab(existing.id)
@@ -54,8 +55,9 @@ final class BrowserAppStoreTests: XCTestCase {
         store.openNewTabForActiveSurface()
 
         let browserTabs = store.projectTabs(for: "project-1").filter(\.isBrowser)
-        XCTAssertEqual(browserTabs.count, 2)
-        XCTAssertEqual(browserTabs.last?.browserState?.urlString, BrowserDefaults.homePageURLString)
+        XCTAssertEqual(browserTabs.count, 1)
+        XCTAssertEqual(browserTabs.first?.browserState?.tabs.count, 2)
+        XCTAssertEqual(browserTabs.first?.browserState?.selectedTab?.state.urlString, BrowserDefaults.homePageURLString)
     }
 
     func testOpenNewTabForActiveSurfaceCreatesTerminalTabWhenTerminalIsFocused() {
@@ -97,17 +99,18 @@ final class BrowserAppStoreTests: XCTestCase {
         store.browserManager = manager
 
         let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        let browserTab = try! XCTUnwrap(tab.browserState?.selectedTab)
         let firstController = manager.controller(
-            for: tab.id,
+            for: browserTab.id,
             projectId: "project-1",
-            initialState: tab.browserState ?? .blank
+            initialState: browserTab.state
         ) { _ in }
 
         store.closeTab(tab.id)
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
 
         let secondController = manager.controller(
-            for: tab.id,
+            for: browserTab.id,
             projectId: "project-1",
             initialState: .blank
         ) { _ in }
@@ -117,10 +120,23 @@ final class BrowserAppStoreTests: XCTestCase {
     func testSetBrowserFocusTargetUpdatesStoredBrowserState() {
         let store = makeStore()
         let tab = store.openBrowserTab(projectId: "project-1", url: nil)
+        let browserTabId = try! XCTUnwrap(tab.browserState?.selectedTab?.id)
 
-        store.setBrowserFocusTarget(.webView, for: tab.id)
+        store.setBrowserFocusTarget(.webView, for: browserTabId, in: tab.id)
 
-        XCTAssertEqual(store.tabsById[tab.id]?.browserState?.preferredFocus, .webView)
+        XCTAssertEqual(store.tabsById[tab.id]?.browserState?.selectedTab?.state.preferredFocus, .webView)
+    }
+
+    func testCloseActiveTabClosesSelectedInternalBrowserTabBeforeClosingPane() {
+        let store = makeStore()
+        let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        _ = store.openBrowserTabInPane(tab.id, url: "https://daily.dev")
+        store.setActiveTab(tab.id)
+
+        store.closeActiveTab()
+
+        XCTAssertEqual(store.projectTabs(for: "project-1").filter(\.isBrowser).count, 1)
+        XCTAssertEqual(store.tabsById[tab.id]?.browserState?.tabs.count, 1)
     }
 
     private func makeStore() -> AppStore {
