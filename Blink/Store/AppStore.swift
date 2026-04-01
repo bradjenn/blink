@@ -1468,6 +1468,14 @@ final class AppStore {
         tabs[idx].browserState = paneState
     }
 
+    func toggleActiveBrowserSidebarPinned() {
+        guard let paneTabId = activeTabId,
+              let paneTab = tabsById[paneTabId],
+              paneTab.isBrowser else { return }
+
+        toggleBrowserSidebarPinned(for: paneTabId)
+    }
+
     func updateBrowserState(_ state: BrowserTabState, for browserTabId: String, in paneTabId: String) {
         guard let idx = tabs.firstIndex(where: { $0.id == paneTabId && $0.isBrowser }),
               var paneState = tabs[idx].browserState else { return }
@@ -1499,6 +1507,10 @@ final class AppStore {
             return nil
         }
         return (paneTabId, browserTabId)
+    }
+
+    var hasActiveBrowserSelection: Bool {
+        activeBrowserSelection != nil
     }
 
     func focusBrowserAddressBar() {

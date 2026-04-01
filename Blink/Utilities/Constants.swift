@@ -22,8 +22,8 @@ enum Layout {
     static let workspaceColumnMaxWidth: CGFloat = 4000
     static let workspaceColumnDefaultFraction: CGFloat = 0.5
     static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0]
-    static let browserRailWidth: CGFloat = 52
-    static let browserSidebarWidth: CGFloat = 264
+    static let browserSidebarHotspotWidth: CGFloat = 18
+    static let browserSidebarWidth: CGFloat = 296
 
     // Overview (Niri-style horizontal strip)
     static let overviewPadding: CGFloat = 40

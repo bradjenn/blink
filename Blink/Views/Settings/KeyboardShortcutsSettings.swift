@@ -14,16 +14,18 @@ private struct ShortcutCategory: Identifiable {
 
 private let shortcutCategories: [ShortcutCategory] = [
     ShortcutCategory(name: "Navigation", shortcuts: [
-        ShortcutEntry(action: "Focus Left", keys: "⌘H / ⌘←"),
-        ShortcutEntry(action: "Focus Right", keys: "⌘L / ⌘→"),
+        ShortcutEntry(action: "Focus Left", keys: "⌘←"),
+        ShortcutEntry(action: "Focus Right", keys: "⌘→"),
         ShortcutEntry(action: "Focus Down", keys: "⌘J"),
         ShortcutEntry(action: "Focus Up", keys: "⌘K"),
     ]),
     ShortcutCategory(name: "Windows", shortcuts: [
-        ShortcutEntry(action: "New Window", keys: "⌘T"),
+        ShortcutEntry(action: "New Tab", keys: "⌘T"),
+        ShortcutEntry(action: "New Browser Window", keys: "⌥⌘B"),
+        ShortcutEntry(action: "Toggle Browser Sidebar", keys: "⌘S"),
         ShortcutEntry(action: "Split Below", keys: "⇧⌘_"),
         ShortcutEntry(action: "Split Right", keys: "⇧⌘|"),
-        ShortcutEntry(action: "Close Window", keys: "⌘W"),
+        ShortcutEntry(action: "Close Tab", keys: "⌘W"),
         ShortcutEntry(action: "Window 1–9", keys: "⌘1–9"),
     ]),
     ShortcutCategory(name: "Columns", shortcuts: [
@@ -32,8 +34,6 @@ private let shortcutCategories: [ShortcutCategory] = [
         ShortcutEntry(action: "Absorb from Left", keys: "⇧⌘J"),
         ShortcutEntry(action: "Absorb from Right", keys: "⇧⌘K"),
         ShortcutEntry(action: "Expel Pane", keys: "⇧⌘E"),
-        ShortcutEntry(action: "Increase Column Size", keys: "⌘]"),
-        ShortcutEntry(action: "Decrease Column Size", keys: "⌘["),
         ShortcutEntry(action: "Maximize Column", keys: "⌘F"),
     ]),
     ShortcutCategory(name: "Workspace", shortcuts: [

@@ -127,6 +127,16 @@ final class BrowserAppStoreTests: XCTestCase {
         XCTAssertEqual(store.tabsById[tab.id]?.browserState?.selectedTab?.state.preferredFocus, .webView)
     }
 
+    func testToggleActiveBrowserSidebarPinnedUpdatesActiveBrowserPane() {
+        let store = makeStore()
+        let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        store.setActiveTab(tab.id)
+
+        store.toggleActiveBrowserSidebarPinned()
+
+        XCTAssertEqual(store.tabsById[tab.id]?.browserState?.isSidebarPinned, true)
+    }
+
     func testCloseActiveTabClosesSelectedInternalBrowserTabBeforeClosingPane() {
         let store = makeStore()
         let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")

@@ -162,27 +162,36 @@ struct CommandPalette: View {
             },
             PaletteCommand(
                 id: "new-window",
-                title: "New Window",
-                subtitle: "Open a new terminal window in the active project",
+                title: "New Tab",
+                subtitle: "Open a tab in the active surface",
                 category: "Windows",
                 shortcut: "Cmd-T",
-                keywords: ["new", "window", "tab", "terminal"],
+                keywords: ["new", "window", "tab", "terminal", "browser"],
                 isEnabled: hasProject
             ) {
-                if let projectId = store.activeProjectId {
-                    store.openTab(projectId: projectId)
-                }
+                store.openNewTabForActiveSurface()
             },
             PaletteCommand(
                 id: "new-browser",
-                title: "Open Browser",
-                subtitle: "Open a browser pane in the active project",
+                title: "Open Browser Window",
+                subtitle: "Open a new browser pane in the active project",
                 category: "Windows",
-                shortcut: "Cmd-Shift-B",
+                shortcut: "Cmd-Opt-B",
                 keywords: ["browser", "web", "safari", "page"],
                 isEnabled: hasProject
             ) {
                 store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+            },
+            PaletteCommand(
+                id: "toggle-browser-sidebar",
+                title: "Toggle Browser Sidebar",
+                subtitle: "Pin or unpin the active browser sidebar",
+                category: "Windows",
+                shortcut: "Cmd-S",
+                keywords: ["browser", "sidebar", "zen", "tabs", "panel"],
+                isEnabled: store.hasActiveBrowserSelection
+            ) {
+                store.toggleActiveBrowserSidebarPinned()
             },
             PaletteCommand(
                 id: "split-below",
@@ -208,11 +217,11 @@ struct CommandPalette: View {
             },
             PaletteCommand(
                 id: "close-window",
-                title: "Close Window",
-                subtitle: "Close the active window",
+                title: "Close Tab",
+                subtitle: "Close the active pane or browser tab",
                 category: "Windows",
                 shortcut: "Cmd-W",
-                keywords: ["close", "window", "tab"],
+                keywords: ["close", "window", "tab", "browser"],
                 isEnabled: store.activeTabId != nil
             ) {
                 store.closeActiveTab()
@@ -271,7 +280,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: "Cmd-L",
                 keywords: ["browser", "url", "address", "omnibar", "location"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserAddressBar()
             },
@@ -282,7 +291,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: nil,
                 keywords: ["browser", "page", "content", "web"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserWebView()
             },
@@ -293,7 +302,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: "Cmd-[",
                 keywords: ["browser", "back", "history", "previous"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserBack()
             },
@@ -304,7 +313,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: "Cmd-]",
                 keywords: ["browser", "forward", "history", "next"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserForward()
             },
@@ -315,7 +324,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: "Cmd-R",
                 keywords: ["browser", "reload", "refresh", "page"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.reloadActiveBrowser()
             },
@@ -326,7 +335,7 @@ struct CommandPalette: View {
                 category: "Browser",
                 shortcut: nil,
                 keywords: ["browser", "default", "open", "external", "safari"],
-                isEnabled: hasProject
+                isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.openActiveBrowserInDefaultBrowser()
             },

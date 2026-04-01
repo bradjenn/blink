@@ -160,6 +160,14 @@ struct BApp: App {
                 .disabled(themeManager.availableThemes.isEmpty)
             }
 
+            CommandGroup(replacing: .saveItem) {
+                Button("Toggle Browser Sidebar") {
+                    store.toggleActiveBrowserSidebarPinned()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(store.tabsById[store.activeTabId ?? ""]?.isBrowser != true)
+            }
+
             CommandGroup(after: .toolbar) {
                 Button(store.sidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
                     if store.sidebarVisible {
@@ -252,45 +260,45 @@ struct BApp: App {
 
                 Divider()
 
-                Button("Open Browser") {
+                Button("Open Browser Window") {
                     store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
                 }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .keyboardShortcut("b", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)
 
                 Button("Focus Browser Address Bar") {
                     store.focusBrowserAddressBar()
                 }
                 .keyboardShortcut("l", modifiers: .command)
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Focus Browser Content") {
                     store.focusBrowserWebView()
                 }
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Browser Back") {
                     store.navigateActiveBrowserBack()
                 }
                 .keyboardShortcut("[", modifiers: .command)
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Browser Forward") {
                     store.navigateActiveBrowserForward()
                 }
                 .keyboardShortcut("]", modifiers: .command)
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Browser Reload") {
                     store.reloadActiveBrowser()
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Open Page in Default Browser") {
                     store.openActiveBrowserInDefaultBrowser()
                 }
-                .disabled(store.activeProjectId == nil)
+                .disabled(!store.hasActiveBrowserSelection)
             }
 
             CommandGroup(replacing: .newItem) {
@@ -300,10 +308,10 @@ struct BApp: App {
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(store.activeProjectId == nil)
 
-                Button("New Browser") {
+                Button("New Browser Window") {
                     store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
                 }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .keyboardShortcut("b", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)
 
                 Button("Split Below") {
@@ -318,7 +326,7 @@ struct BApp: App {
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
                 .disabled(store.activeProjectId == nil)
 
-                Button("Close Window") {
+                Button("Close Tab") {
                     store.closeActiveTab()
                 }
                 .keyboardShortcut("w", modifiers: .command)
