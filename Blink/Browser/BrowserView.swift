@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct BrowserView: View {
+    private static let sidebarTransition = Animation.snappy(duration: 0.24, extraBounce: 0)
+
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
@@ -53,6 +55,7 @@ struct BrowserView: View {
                     )
                     .padding(.leading, sidebarContentInset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .animation(Self.sidebarTransition, value: sidebarContentInset)
 
                     if !paneState.isSidebarPinned {
                         BrowserSidebarHoverRegion { isHovered in
@@ -84,6 +87,7 @@ struct BrowserView: View {
                 }
                 .background(theme.bg)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .animation(Self.sidebarTransition, value: paneState.isSidebarPinned)
                 .onAppear {
                     syncAddressText(from: selectedBrowserTab.state)
                     if isFocused {

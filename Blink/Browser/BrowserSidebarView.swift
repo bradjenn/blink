@@ -20,6 +20,10 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         return isPresented ? 0 : -(Layout.browserSidebarWidth + 24)
     }
 
+    private var transitionAnimation: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .snappy(duration: 0.24, extraBounce: 0)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerContent()
@@ -54,7 +58,8 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         .padding(.vertical, isPinned ? 0 : 10)
         .offset(x: sidebarOffset)
         .opacity(isPresented ? 1 : 0.001)
-        .animation(reduceMotion ? .linear(duration: 0.01) : .snappy(duration: 0.22, extraBounce: 0), value: isPresented)
+        .animation(transitionAnimation, value: isPresented)
+        .animation(transitionAnimation, value: isPinned)
         .allowsHitTesting(isPresented)
         .onHover(perform: onHoverChange)
         .accessibilityHidden(!isPresented)
