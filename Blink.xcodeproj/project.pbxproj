@@ -130,6 +130,7 @@
 		CC7054AC6113E3F45C8F0147 /* StyledControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9A3835FD4C5895690F442D /* StyledControls.swift */; };
 		CEC516E6EED0DAFCDECC1AE9 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 454E601831980C64BDA0BDD1 /* ThemeManager.swift */; };
 		CFF0C08BBF86F73165533564 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6618A8E5B5F25A3A6EE1E389 /* GhosttyKit.xcframework */; };
+		D0062996A905AA81F6C68ADD /* BrowserControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7335F0329D45995F1DCA513A /* BrowserControllerTests.swift */; };
 		D1582E3FC37215D0AD6D3F4A /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AE43C3EFED2952F0F0D21D /* BrowserView.swift */; };
 		D1CF3AB56481E22FFD1F390F /* ProjectFavicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B93A6E2E9ED0C72D614E69 /* ProjectFavicon.swift */; };
 		D2C75F05263636DD86332FCF /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D489A0D89375AE8ABDB0AC7B /* Color+Hex.swift */; };
@@ -217,6 +218,7 @@
 		6DC1AE3F0FF45D5DE4839EF9 /* pink-lakeside.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "pink-lakeside.png"; sourceTree = "<group>"; };
 		728190F85A1AE0DB60BD39AB /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		733316E4538EF5998654016C /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		7335F0329D45995F1DCA513A /* BrowserControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserControllerTests.swift; sourceTree = "<group>"; };
 		762E93713BEF3B6BAE6DB7CC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		7784244D94B53A844D2AE256 /* BackgroundPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPopover.swift; sourceTree = "<group>"; };
 		7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHexTests.swift; sourceTree = "<group>"; };
@@ -348,6 +350,7 @@
 			children = (
 				0E9C50A4E1B32D17C3B7D7EB /* AppStoreTests.swift */,
 				DF9B9ABE5070FDDE8DD1C2EB /* BrowserAppStoreTests.swift */,
+				7335F0329D45995F1DCA513A /* BrowserControllerTests.swift */,
 				9358E6A6BAD09CFBD6BED7BE /* BrowserURLResolverTests.swift */,
 				C1A2E1F73A57893F29A36E52 /* ClaudeHookSummaryTests.swift */,
 				7A659FDC5978B7FCC0C2D488 /* ColorHexTests.swift */,
@@ -754,6 +757,7 @@
 			files = (
 				9B8EEAEEF79093BC634B2F57 /* AppStoreTests.swift in Sources */,
 				19A7388011B32BAA1810F986 /* BrowserAppStoreTests.swift in Sources */,
+				D0062996A905AA81F6C68ADD /* BrowserControllerTests.swift in Sources */,
 				E1A1C078E0B859B939B00579 /* BrowserURLResolverTests.swift in Sources */,
 				9985FE021FAFBD2E70231F02 /* ClaudeHookSummaryTests.swift in Sources */,
 				025CCB1ADFA5227D4D510540 /* ColorHexTests.swift in Sources */,
