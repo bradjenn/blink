@@ -33,7 +33,9 @@ struct BrowserView: View {
     }
 
     private var hoverRegionWidth: CGFloat {
-        isSidebarExpanded ? Layout.browserSidebarHoverBridgeWidth : Layout.browserSidebarHotspotWidth
+        isSidebarExpanded
+            ? (Layout.browserSidebarWidth + Layout.browserSidebarHoverBridgeWidth)
+            : Layout.browserSidebarHotspotWidth
     }
 
     private var isSidebarExpanded: Bool {
@@ -100,7 +102,7 @@ struct BrowserView: View {
                     }
                 }
                 .background(theme.bg)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous))
                 .animation(Self.sidebarTransition, value: paneState.isSidebarPinned)
                 .onAppear {
                     syncAddressText(from: selectedBrowserTab.state)
@@ -123,16 +125,12 @@ struct BrowserView: View {
                     requestAddressBarFocus()
                 }
                 .onChange(of: addressBarFocused) { _, focused in
-                    if focused {
-                        latchSidebarHover()
-                    } else {
+                    if !focused {
                         scheduleSidebarHoverDismissIfNeeded()
                     }
                 }
                 .onChange(of: selectedBrowserTab.state.preferredFocus) { _, preferredFocus in
-                    if preferredFocus == .addressBar {
-                        latchSidebarHover()
-                    } else {
+                    if preferredFocus != .addressBar {
                         scheduleSidebarHoverDismissIfNeeded()
                     }
                 }
@@ -147,10 +145,7 @@ struct BrowserView: View {
                         return
                     }
 
-                    if !addressBarFocused,
-                       selectedBrowserTab.state.preferredFocus != .addressBar {
-                        scheduleSidebarHoverDismissIfNeeded()
-                    }
+                    scheduleSidebarHoverDismissIfNeeded()
                 }
                 .onDisappear {
                     cancelSidebarHoverDismiss()
@@ -329,9 +324,7 @@ struct BrowserView: View {
 
         guard !paneState.isSidebarPinned,
               !isSidebarHotspotHovered,
-              !isSidebarPanelHovered,
-              !addressBarFocused,
-              selectedBrowserTab?.state.preferredFocus != .addressBar else {
+              !isSidebarPanelHovered else {
             return
         }
 

@@ -71,7 +71,7 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         if isPinned {
             theme.bg.opacity(0.98)
         } else {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous)
                 .fill(theme.bg.opacity(0.97))
         }
     }
@@ -84,7 +84,7 @@ struct BrowserSidebarView<HeaderContent: View>: View {
                 .frame(width: 1)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }
     }
