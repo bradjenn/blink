@@ -2,6 +2,7 @@
 
 #import <AppKit/AppKit.h>
 
+#include <climits>
 #include <memory>
 
 #include "include/base/cef_logging.h"
@@ -16,6 +17,8 @@
 namespace {
 
 NSString *const BlinkChromiumRuntimeErrorDomain = @"BlinkChromiumRuntime";
+const int32_t BlinkChromiumTimerDelayPlaceholder = INT_MAX;
+const int64_t BlinkChromiumMaxTimerDelay = 1000 / 30;
 
 NSString *BlinkChromiumApplicationName(void) {
     NSString *displayName = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
@@ -208,14 +211,18 @@ private:
 
 @interface BlinkChromiumRuntime ()
 - (void)scheduleMessagePumpWorkAfterDelay:(int64_t)delayMS;
+- (void)handleScheduledMessagePumpWork:(NSNumber *)delayMS;
+- (void)handleMessagePumpTimer:(NSTimer *)timer;
 - (void)performMessageLoopWork;
 @end
 
 @implementation BlinkChromiumRuntime {
 @private
     BOOL _started;
-    NSInteger _messagePumpGeneration;
+    BOOL _messagePumpActive;
+    BOOL _messagePumpReentrancyDetected;
     NSMutableDictionary<NSString *, BlinkChromiumRequestContext *> *_requestContexts;
+    NSTimer *_messagePumpTimer;
     std::unique_ptr<CefScopedLibraryLoader> _libraryLoader;
     CefRefPtr<BlinkChromiumApp> _app;
 }
@@ -327,6 +334,7 @@ private:
     }
 
     _started = YES;
+    [self handleScheduledMessagePumpWork:@0];
     return YES;
 }
 
@@ -340,7 +348,7 @@ private:
     }
 
     [_requestContexts removeAllObjects];
-    _messagePumpGeneration += 1;
+    [self invalidateMessagePumpTimer];
 
     CefShutdown();
 
@@ -366,21 +374,51 @@ private:
 }
 
 - (void)scheduleMessagePumpWorkAfterDelay:(int64_t)delayMS {
-    _messagePumpGeneration += 1;
-    NSInteger generation = _messagePumpGeneration;
-    uint64_t clampedDelay = delayMS > 0 ? (uint64_t)delayMS : 0;
+    [self performSelectorOnMainThread:@selector(handleScheduledMessagePumpWork:)
+                           withObject:@(delayMS)
+                        waitUntilDone:NO];
+}
 
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)clampedDelay * NSEC_PER_MSEC),
-        dispatch_get_main_queue(),
-        ^{
-            if (generation != self->_messagePumpGeneration || !self->_started) {
-                return;
-            }
+- (void)handleScheduledMessagePumpWork:(NSNumber *)delayMS {
+    if (!_started) {
+        return;
+    }
 
-            [self performMessageLoopWork];
-        }
-    );
+    int64_t delay = delayMS.longLongValue;
+    if (delay == BlinkChromiumTimerDelayPlaceholder && _messagePumpTimer != nil) {
+        return;
+    }
+
+    [self invalidateMessagePumpTimer];
+
+    if (delay <= 0) {
+        [self performMessageLoopWork];
+        return;
+    }
+
+    if (delay > BlinkChromiumMaxTimerDelay) {
+        delay = BlinkChromiumMaxTimerDelay;
+    }
+
+    NSTimer *timer = [NSTimer timerWithTimeInterval:(double)delay / 1000.0
+                                             target:self
+                                           selector:@selector(handleMessagePumpTimer:)
+                                           userInfo:nil
+                                            repeats:NO];
+    _messagePumpTimer = timer;
+
+    NSRunLoop *runLoop = NSRunLoop.currentRunLoop;
+    [runLoop addTimer:timer forMode:NSRunLoopCommonModes];
+    [runLoop addTimer:timer forMode:NSEventTrackingRunLoopMode];
+}
+
+- (void)handleMessagePumpTimer:(NSTimer *)timer {
+    if (timer != _messagePumpTimer) {
+        return;
+    }
+
+    [self invalidateMessagePumpTimer];
+    [self performMessageLoopWork];
 }
 
 - (void)performMessageLoopWork {
@@ -388,7 +426,30 @@ private:
         return;
     }
 
+    if (_messagePumpActive) {
+        _messagePumpReentrancyDetected = YES;
+        return;
+    }
+
+    _messagePumpReentrancyDetected = NO;
+    _messagePumpActive = YES;
     CefDoMessageLoopWork();
+    _messagePumpActive = NO;
+
+    if (_messagePumpReentrancyDetected) {
+        [self scheduleMessagePumpWorkAfterDelay:0];
+    } else if (_messagePumpTimer == nil) {
+        [self scheduleMessagePumpWorkAfterDelay:BlinkChromiumTimerDelayPlaceholder];
+    }
+}
+
+- (void)invalidateMessagePumpTimer {
+    if (_messagePumpTimer == nil) {
+        return;
+    }
+
+    [_messagePumpTimer invalidate];
+    _messagePumpTimer = nil;
 }
 
 @end

@@ -59,16 +59,20 @@ struct BrowserContainerView: NSViewRepresentable {
 
     func updateNSView(_ container: BrowserHostingView, context: Context) {
         controller.onInteraction = {
-            if store.shouldClearSidebarFocusForTerminalInteraction() {
-                store.sidebarFocused = false
+            DispatchQueue.main.async {
+                if store.shouldClearSidebarFocusForTerminalInteraction() {
+                    store.sidebarFocused = false
+                }
+                if store.activeTabId != tabId {
+                    store.setActiveTab(tabId)
+                }
+                store.setBrowserFocusTarget(.webView, for: tabId)
             }
-            if store.activeTabId != tabId {
-                store.setActiveTab(tabId)
-            }
-            store.setBrowserFocusTarget(.webView, for: tabId)
         }
         controller.onOpenNewTabRequest = { url in
-            store.openBrowserTab(projectId: projectId, url: url.absoluteString, maximizeColumn: false)
+            DispatchQueue.main.async {
+                store.openBrowserTab(projectId: projectId, url: url.absoluteString, maximizeColumn: false)
+            }
         }
 
         container.showWebView(controller.hostView, tabId: tabId)

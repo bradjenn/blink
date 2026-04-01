@@ -18,7 +18,6 @@ final class BrowserManager {
         onStateChange: @escaping (BrowserTabState) -> Void
     ) -> any BrowserHostController {
         if let existing = controllers[tabId] {
-            existing.update(initialState: initialState, onStateChange: onStateChange)
             return existing
         }
 

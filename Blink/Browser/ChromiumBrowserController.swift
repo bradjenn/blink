@@ -58,11 +58,14 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
             }
         }
 
-        let currentURLString = host.snapshot?.urlString ?? state.urlString
-        if let requestedURLString = initialState.urlString,
-           requestedURLString != currentURLString,
-           let url = BrowserURLResolver.resolve(requestedURLString) {
-            host.loadURLString(url.absoluteString)
+        let requestedURLString = normalizedURLString(initialState.urlString)
+        let currentURLString = normalizedURLString(state.urlString)
+        if let requestedURLString,
+           requestedURLString != currentURLString {
+            state.urlString = requestedURLString
+            state.title = nil
+            state.isLoading = true
+            host.loadURLString(requestedURLString)
             return
         }
 
@@ -123,8 +126,9 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     }
 
     private func refreshState(from snapshot: BlinkChromiumBrowserStateSnapshot?) {
+        let snapshotURLString = normalizedURLString(snapshot?.urlString)
         let nextState = BrowserTabState(
-            urlString: snapshot?.urlString ?? state.urlString,
+            urlString: mergedURLString(snapshotURLString),
             title: sanitizedTitle(snapshot?.title) ?? state.title,
             canGoBack: snapshot?.canGoBack ?? state.canGoBack,
             canGoForward: snapshot?.canGoForward ?? state.canGoForward,
@@ -145,6 +149,24 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         guard let title else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func normalizedURLString(_ value: String?) -> String? {
+        guard let value else { return nil }
+        return BrowserURLResolver.resolve(value)?.absoluteString ?? value
+    }
+
+    private func mergedURLString(_ snapshotURLString: String?) -> String? {
+        guard let snapshotURLString else { return state.urlString }
+
+        if snapshotURLString == "about:blank",
+           state.isLoading,
+           let currentURLString = state.urlString,
+           currentURLString != "about:blank" {
+            return currentURLString
+        }
+
+        return snapshotURLString
     }
 
     private func handleHostInteraction() {

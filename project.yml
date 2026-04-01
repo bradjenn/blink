@@ -75,10 +75,35 @@ targets:
         script: |
           set -euo pipefail
           SRC="${BUILT_PRODUCTS_DIR}/${CEF_HELPER_NAME}.app"
-          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/${CEF_HELPER_NAME}.app"
+          FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks"
+          DST="${FRAMEWORKS_DIR}/${CEF_HELPER_NAME}.app"
+          BASE_HELPER_BUNDLE_ID="${PRODUCT_BUNDLE_IDENTIFIER}.helper"
           rm -rf "${DST}"
-          mkdir -p "$(dirname "${DST}")"
+          mkdir -p "${FRAMEWORKS_DIR}"
           ditto "${SRC}" "${DST}"
+
+          create_helper_variant() {
+            local label="$1"
+            local bundle_suffix="$2"
+            local variant_name="${CEF_HELPER_NAME} (${label})"
+            local variant_app="${FRAMEWORKS_DIR}/${variant_name}.app"
+            local plist="${variant_app}/Contents/Info.plist"
+
+            rm -rf "${variant_app}"
+            ditto "${SRC}" "${variant_app}"
+            mv "${variant_app}/Contents/MacOS/${CEF_HELPER_NAME}" \
+               "${variant_app}/Contents/MacOS/${variant_name}"
+
+            /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleName ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BASE_HELPER_BUNDLE_ID}${bundle_suffix}" "${plist}"
+          }
+
+          create_helper_variant "Alerts" ".alerts"
+          create_helper_variant "GPU" ".gpu"
+          create_helper_variant "Plugin" ".plugin"
+          create_helper_variant "Renderer" ".renderer"
   BlinkDev:
     type: application
     platform: macOS
@@ -146,10 +171,35 @@ targets:
         script: |
           set -euo pipefail
           SRC="${BUILT_PRODUCTS_DIR}/${CEF_HELPER_NAME}.app"
-          DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/${CEF_HELPER_NAME}.app"
+          FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks"
+          DST="${FRAMEWORKS_DIR}/${CEF_HELPER_NAME}.app"
+          BASE_HELPER_BUNDLE_ID="${PRODUCT_BUNDLE_IDENTIFIER}.helper"
           rm -rf "${DST}"
-          mkdir -p "$(dirname "${DST}")"
+          mkdir -p "${FRAMEWORKS_DIR}"
           ditto "${SRC}" "${DST}"
+
+          create_helper_variant() {
+            local label="$1"
+            local bundle_suffix="$2"
+            local variant_name="${CEF_HELPER_NAME} (${label})"
+            local variant_app="${FRAMEWORKS_DIR}/${variant_name}.app"
+            local plist="${variant_app}/Contents/Info.plist"
+
+            rm -rf "${variant_app}"
+            ditto "${SRC}" "${variant_app}"
+            mv "${variant_app}/Contents/MacOS/${CEF_HELPER_NAME}" \
+               "${variant_app}/Contents/MacOS/${variant_name}"
+
+            /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleName ${variant_name}" "${plist}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BASE_HELPER_BUNDLE_ID}${bundle_suffix}" "${plist}"
+          }
+
+          create_helper_variant "Alerts" ".alerts"
+          create_helper_variant "GPU" ".gpu"
+          create_helper_variant "Plugin" ".plugin"
+          create_helper_variant "Renderer" ".renderer"
   BlinkCEFWrapper:
     type: library.static
     platform: macOS

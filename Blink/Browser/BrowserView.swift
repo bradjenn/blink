@@ -12,23 +12,23 @@ struct BrowserView: View {
     @State private var addressText = ""
     @FocusState private var addressBarFocused: Bool
 
-    private var browserState: BrowserTabState {
-        controller.session.state
-    }
-
-    private var controller: any BrowserHostController {
+    private func resolveController() -> any BrowserHostController {
         browserManager.controller(
             for: tab.id,
             projectId: project.id,
             initialState: tab.browserState ?? .blank
         ) { state in
-            store.updateBrowserState(state, for: tab.id)
+            DispatchQueue.main.async {
+                store.updateBrowserState(state, for: tab.id)
+            }
         }
     }
 
     var body: some View {
+        let controller = resolveController()
+
         VStack(spacing: 0) {
-            chrome
+            chrome(controller: controller)
             Divider()
                 .overlay(theme.border)
             BrowserContainerView(
@@ -40,14 +40,16 @@ struct BrowserView: View {
         .background(theme.bg)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onAppear {
-            syncAddressTextFromState()
+            syncAddressTextFromState(controller: controller)
             if isFocused, controller.session.state.preferredFocus == .addressBar {
                 requestAddressBarFocus()
+            } else if isFocused {
+                browserManager.focusWebView(tabId: tab.id)
             }
         }
         .onChange(of: controller.session.state.urlString) { _, _ in
             if !addressBarFocused {
-                syncAddressTextFromState()
+                syncAddressTextFromState(controller: controller)
             }
         }
         .onChange(of: controller.session.addressBarFocusRequestID) { _, _ in
@@ -63,7 +65,7 @@ struct BrowserView: View {
         }
     }
 
-    private var chrome: some View {
+    private func chrome(controller: any BrowserHostController) -> some View {
         HStack(spacing: 10) {
             navigationButton(systemName: "chevron.left", isEnabled: controller.session.state.canGoBack) {
                 browserManager.goBack(tabId: tab.id)
@@ -154,7 +156,7 @@ struct BrowserView: View {
         .disabled(!isEnabled)
     }
 
-    private func syncAddressTextFromState() {
+    private func syncAddressTextFromState(controller: any BrowserHostController) {
         addressText = controller.session.state.urlString ?? ""
     }
 

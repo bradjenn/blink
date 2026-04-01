@@ -21,6 +21,8 @@
 @interface BlinkChromiumBrowserHost ()
 - (void)hostViewDidMoveToWindow;
 - (void)hostViewDidLayout;
+- (void)clientDidCreateBrowser;
+- (void)clientDidCloseBrowser;
 - (void)clientDidReceiveInteraction;
 - (void)clientDidUpdateURLString:(nullable NSString *)urlString
                            title:(nullable NSString *)title
@@ -231,6 +233,9 @@ public:
     void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
         CEF_REQUIRE_UI_THREAD();
         browser_ = browser;
+        if (host_ != nil) {
+            [host_ clientDidCreateBrowser];
+        }
         if (!pending_url_.empty()) {
             browser_->GetMainFrame()->LoadURL(pending_url_);
         }
@@ -244,6 +249,9 @@ public:
     void OnBeforeClose(CefRefPtr<CefBrowser> browser) override {
         CEF_REQUIRE_UI_THREAD();
         browser_ = nullptr;
+        if (host_ != nil) {
+            [host_ clientDidCloseBrowser];
+        }
     }
 
     void OnGotFocus(CefRefPtr<CefBrowser> browser) override {
@@ -310,6 +318,7 @@ private:
 @private
     NSString *_tabIdentifier;
     NSString *_projectIdentifier;
+    BOOL _browserCreationPending;
     BlinkChromiumHostView *_hostView;
     BlinkChromiumBrowserStateSnapshot *_snapshot;
     CefRefPtr<BlinkChromiumClient> _client;
@@ -387,6 +396,14 @@ private:
     }
 }
 
+- (void)clientDidCreateBrowser {
+    _browserCreationPending = NO;
+}
+
+- (void)clientDidCloseBrowser {
+    _browserCreationPending = NO;
+}
+
 - (void)clientDidReceiveInteraction {
     [self.delegate chromiumBrowserHostDidReceiveInteraction:self];
 }
@@ -409,7 +426,8 @@ private:
 }
 
 - (void)ensureBrowserCreatedIfPossible {
-    if (_client->HasBrowser() || _hostView.window == nil || NSIsEmptyRect(_hostView.bounds)) {
+    if (_browserCreationPending || _client->HasBrowser() || _hostView.window == nil ||
+        NSIsEmptyRect(_hostView.bounds)) {
         return;
     }
 
@@ -427,7 +445,7 @@ private:
     windowInfo.runtime_style = CEF_RUNTIME_STYLE_ALLOY;
 
     CefBrowserSettings settings;
-    CefBrowserHost::CreateBrowser(
+    _browserCreationPending = CefBrowserHost::CreateBrowser(
         windowInfo,
         _client,
         BlinkChromiumStartupURL(_snapshot.urlString ?: @"about:blank"),
