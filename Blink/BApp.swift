@@ -240,6 +240,48 @@ struct BApp: App {
                     store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Open Browser") {
+                    store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
+
+                Button("Focus Browser Address Bar") {
+                    store.focusBrowserAddressBar()
+                }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(store.activeProjectId == nil)
+
+                Button("Focus Browser Content") {
+                    store.focusBrowserWebView()
+                }
+                .disabled(store.activeProjectId == nil)
+
+                Button("Browser Back") {
+                    store.navigateActiveBrowserBack()
+                }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(store.activeProjectId == nil)
+
+                Button("Browser Forward") {
+                    store.navigateActiveBrowserForward()
+                }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(store.activeProjectId == nil)
+
+                Button("Browser Reload") {
+                    store.reloadActiveBrowser()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(store.activeProjectId == nil)
+
+                Button("Open Page in Default Browser") {
+                    store.openActiveBrowserInDefaultBrowser()
+                }
+                .disabled(store.activeProjectId == nil)
             }
 
             CommandGroup(replacing: .newItem) {
@@ -249,6 +291,12 @@ struct BApp: App {
                     }
                 }
                 .keyboardShortcut("t", modifiers: .command)
+
+                Button("New Browser") {
+                    store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .disabled(store.activeProjectId == nil)
 
                 Button("Split Below") {
                     store.splitActivePaneWithNewTab()

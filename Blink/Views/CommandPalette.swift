@@ -174,6 +174,17 @@ struct CommandPalette: View {
                 }
             },
             PaletteCommand(
+                id: "new-browser",
+                title: "Open Browser",
+                subtitle: "Open a browser pane in the active project",
+                category: "Windows",
+                shortcut: "Cmd-Shift-B",
+                keywords: ["browser", "web", "safari", "page"],
+                isEnabled: hasProject
+            ) {
+                store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+            },
+            PaletteCommand(
                 id: "split-below",
                 title: "Split Below",
                 subtitle: "Open a new terminal beneath the active pane",
@@ -252,6 +263,72 @@ struct CommandPalette: View {
             ) {
                 let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
                 store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+            },
+            PaletteCommand(
+                id: "browser-focus-address-bar",
+                title: "Focus Browser Address Bar",
+                subtitle: "Move keyboard focus to the browser URL field",
+                category: "Browser",
+                shortcut: "Cmd-L",
+                keywords: ["browser", "url", "address", "omnibar", "location"],
+                isEnabled: hasProject
+            ) {
+                store.focusBrowserAddressBar()
+            },
+            PaletteCommand(
+                id: "browser-focus-content",
+                title: "Focus Browser Content",
+                subtitle: "Return keyboard focus to the active browser page",
+                category: "Browser",
+                shortcut: nil,
+                keywords: ["browser", "page", "content", "web"],
+                isEnabled: hasProject
+            ) {
+                store.focusBrowserWebView()
+            },
+            PaletteCommand(
+                id: "browser-back",
+                title: "Browser Back",
+                subtitle: "Go back in the active browser tab",
+                category: "Browser",
+                shortcut: "Cmd-[",
+                keywords: ["browser", "back", "history", "previous"],
+                isEnabled: hasProject
+            ) {
+                store.navigateActiveBrowserBack()
+            },
+            PaletteCommand(
+                id: "browser-forward",
+                title: "Browser Forward",
+                subtitle: "Go forward in the active browser tab",
+                category: "Browser",
+                shortcut: "Cmd-]",
+                keywords: ["browser", "forward", "history", "next"],
+                isEnabled: hasProject
+            ) {
+                store.navigateActiveBrowserForward()
+            },
+            PaletteCommand(
+                id: "browser-reload",
+                title: "Browser Reload",
+                subtitle: "Reload the active browser page",
+                category: "Browser",
+                shortcut: "Cmd-R",
+                keywords: ["browser", "reload", "refresh", "page"],
+                isEnabled: hasProject
+            ) {
+                store.reloadActiveBrowser()
+            },
+            PaletteCommand(
+                id: "browser-open-in-default",
+                title: "Open Page in Default Browser",
+                subtitle: "Open the active browser page in the system browser",
+                category: "Browser",
+                shortcut: nil,
+                keywords: ["browser", "default", "open", "external", "safari"],
+                isEnabled: hasProject
+            ) {
+                store.openActiveBrowserInDefaultBrowser()
             },
             PaletteCommand(
                 id: "focus-left",

@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, lazygit, yazi, neovim
+    case terminal, browser, lazygit, yazi, neovim
 }
 
 struct NewTabMenu: View {
@@ -60,6 +60,8 @@ struct NewTabMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             menuRow("Terminal", icon: "terminal") { onAction(.terminal) }
+            Divider().overlay(theme.border)
+            menuRow("Browser", icon: "safari") { onAction(.browser) }
             Divider().overlay(theme.border)
             menuRow("lazygit", icon: "point.3.connected.trianglepath.dotted") { onAction(.lazygit) }
             Divider().overlay(theme.border)
