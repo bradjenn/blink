@@ -329,6 +329,17 @@ struct CommandPalette: View {
                 store.reloadActiveBrowser()
             },
             PaletteCommand(
+                id: "browser-developer-tools",
+                title: "Toggle Browser Developer Tools",
+                subtitle: "Open or close DevTools for the active browser tab",
+                category: "Browser",
+                shortcut: "Cmd-Opt-I",
+                keywords: ["browser", "devtools", "inspect", "developer", "console"],
+                isEnabled: store.hasActiveBrowserSelection
+            ) {
+                store.toggleActiveBrowserDeveloperTools()
+            },
+            PaletteCommand(
                 id: "browser-open-in-default",
                 title: "Open Page in Default Browser",
                 subtitle: "Open the active browser page in the system browser",

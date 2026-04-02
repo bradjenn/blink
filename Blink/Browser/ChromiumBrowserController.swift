@@ -119,6 +119,10 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         host.reload()
     }
 
+    func toggleDeveloperTools() {
+        host.toggleDeveloperTools()
+    }
+
     func openInDefaultBrowser() {
         guard let urlString = host.snapshot?.urlString ?? state.urlString,
               let url = BrowserURLResolver.resolve(urlString) else { return }

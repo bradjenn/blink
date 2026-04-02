@@ -41,6 +41,13 @@ private let shortcutCategories: [ShortcutCategory] = [
         ShortcutEntry(action: "Overview", keys: "⌘O"),
         ShortcutEntry(action: "Open Git", keys: "⌘G"),
     ]),
+    ShortcutCategory(name: "Browser", shortcuts: [
+        ShortcutEntry(action: "Focus Browser Address Bar", keys: "⌘L"),
+        ShortcutEntry(action: "Browser Back", keys: "⌘["),
+        ShortcutEntry(action: "Browser Forward", keys: "⌘]"),
+        ShortcutEntry(action: "Browser Reload", keys: "⌘R"),
+        ShortcutEntry(action: "Toggle Browser Developer Tools", keys: "⌥⌘I"),
+    ]),
     ShortcutCategory(name: "App", shortcuts: [
         ShortcutEntry(action: "Settings", keys: "⌘,"),
         ShortcutEntry(action: "Switch Project", keys: "⌘P"),

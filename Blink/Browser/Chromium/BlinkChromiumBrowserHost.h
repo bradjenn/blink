@@ -48,6 +48,7 @@ didRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
 - (void)goBack;
 - (void)goForward;
 - (void)reload;
+- (void)toggleDeveloperTools;
 - (void)invalidate;
 
 @end

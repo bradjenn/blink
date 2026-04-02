@@ -20,6 +20,7 @@ protocol BrowserHostController: AnyObject {
     func goBack()
     func goForward()
     func reload()
+    func toggleDeveloperTools()
     func openInDefaultBrowser()
     func invalidate()
 }

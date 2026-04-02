@@ -72,7 +72,7 @@ struct BrowserSidebarView<HeaderContent: View>: View {
     @ViewBuilder
     private var backgroundSurface: some View {
         if isPinned {
-            theme.bg.opacity(0.98)
+            Color.clear
         } else {
             RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous)
                 .fill(theme.bg.opacity(0.97))

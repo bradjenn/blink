@@ -164,6 +164,10 @@ final class BrowserController: NSObject, BrowserHostController {
         webView.reload()
     }
 
+    func toggleDeveloperTools() {
+        // WebKit remains the test/fallback engine. DevTools are only exposed for Chromium panes.
+    }
+
     func openInDefaultBrowser() {
         guard let url = webView.url ?? state.urlString.flatMap(BrowserURLResolver.resolve) else { return }
         NSWorkspace.shared.open(url)

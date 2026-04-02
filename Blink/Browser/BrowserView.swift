@@ -100,7 +100,7 @@ struct BrowserView: View {
                             )
                         }
                     }
-                    .background(theme.bg)
+                    .background(paneState.isSidebarPinned ? Color.clear : theme.bg)
                     .clipShape(RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous))
 
                     if !paneState.isSidebarPinned {

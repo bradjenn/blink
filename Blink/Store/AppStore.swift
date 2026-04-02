@@ -1540,6 +1540,11 @@ final class AppStore {
         browserManager?.reload(tabId: selection.browserTabId)
     }
 
+    func toggleActiveBrowserDeveloperTools() {
+        guard let selection = activeBrowserSelection else { return }
+        browserManager?.toggleDeveloperTools(tabId: selection.browserTabId)
+    }
+
     func openActiveBrowserInDefaultBrowser() {
         guard let selection = activeBrowserSelection else { return }
         browserManager?.openInDefaultBrowser(tabId: selection.browserTabId)

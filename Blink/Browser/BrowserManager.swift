@@ -109,6 +109,10 @@ final class BrowserManager {
         controllers[tabId]?.reload()
     }
 
+    func toggleDeveloperTools(tabId: String) {
+        controllers[tabId]?.toggleDeveloperTools()
+    }
+
     func openInDefaultBrowser(tabId: String) {
         controllers[tabId]?.openInDefaultBrowser()
     }

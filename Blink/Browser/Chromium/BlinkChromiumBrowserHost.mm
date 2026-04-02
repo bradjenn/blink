@@ -350,6 +350,27 @@ public:
         }
     }
 
+    void ToggleDeveloperTools() {
+        CEF_REQUIRE_UI_THREAD();
+        if (browser_ == nullptr) {
+            return;
+        }
+
+        CefRefPtr<CefBrowserHost> host = browser_->GetHost();
+        if (host == nullptr) {
+            return;
+        }
+
+        if (host->HasDevTools()) {
+            host->CloseDevTools();
+            return;
+        }
+
+        CefWindowInfo windowInfo;
+        CefBrowserSettings settings;
+        host->ShowDevTools(windowInfo, nullptr, settings, CefPoint());
+    }
+
     void CloseBrowser() {
         CEF_REQUIRE_UI_THREAD();
         if (browser_ != nullptr) {
@@ -953,6 +974,10 @@ private:
 
 - (void)reload {
     _client->Reload();
+}
+
+- (void)toggleDeveloperTools {
+    _client->ToggleDeveloperTools();
 }
 
 - (void)invalidate {

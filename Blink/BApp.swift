@@ -296,6 +296,12 @@ struct BApp: App {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
+                Button("Toggle Browser Developer Tools") {
+                    store.toggleActiveBrowserDeveloperTools()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(!store.hasActiveBrowserSelection)
+
                 Button("Open Page in Default Browser") {
                     store.openActiveBrowserInDefaultBrowser()
                 }
