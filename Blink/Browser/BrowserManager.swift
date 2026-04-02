@@ -4,11 +4,23 @@ import Observation
 @MainActor
 @Observable
 final class BrowserManager {
+    static let willTerminateNotification = Notification.Name("BlinkBrowserManagerWillTerminate")
+
     let engine: BrowserEngine
     private var controllers: [String: any BrowserHostController] = [:]
+    @ObservationIgnored private var terminationObserver: NSObjectProtocol?
 
     init() {
         self.engine = Self.resolveEngine()
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: Self.willTerminateNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.invalidateAllControllers()
+            }
+        }
     }
 
     func controller(
@@ -68,7 +80,7 @@ final class BrowserManager {
     }
 
     func destroyController(tabId: String) {
-        controllers.removeValue(forKey: tabId)
+        controllers.removeValue(forKey: tabId)?.invalidate()
     }
 
     func destroyControllers(tabIds: [String]) {
@@ -99,5 +111,13 @@ final class BrowserManager {
 
     func openInDefaultBrowser(tabId: String) {
         controllers[tabId]?.openInDefaultBrowser()
+    }
+
+    private func invalidateAllControllers() {
+        let activeControllers = Array(controllers.values)
+        controllers.removeAll()
+        for controller in activeControllers {
+            controller.invalidate()
+        }
     }
 }

@@ -125,6 +125,10 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         NSWorkspace.shared.open(url)
     }
 
+    func invalidate() {
+        host.invalidate()
+    }
+
     private func refreshState(from snapshot: BlinkChromiumBrowserStateSnapshot?) {
         let snapshotURLString = normalizedURLString(snapshot?.urlString)
         let nextState = BrowserTabState(

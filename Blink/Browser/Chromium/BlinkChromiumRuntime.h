@@ -18,6 +18,10 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface BlinkChromiumRequestContext : NSObject
+
+- (BOOL)isReady;
+- (void)whenReady:(dispatch_block_t)callback;
+
 @end
 
 NS_ASSUME_NONNULL_END

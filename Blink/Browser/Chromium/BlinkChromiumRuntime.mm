@@ -2,6 +2,7 @@
 
 #import <AppKit/AppKit.h>
 
+#include <atomic>
 #include <climits>
 #include <memory>
 
@@ -10,6 +11,7 @@
 #include "include/cef_application_mac.h"
 #include "include/cef_browser_process_handler.h"
 #include "include/cef_command_line.h"
+#include "include/cef_cookie.h"
 #include "include/cef_request_context.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
@@ -84,10 +86,6 @@ NSString *BlinkChromiumSupportRootPath(void) {
     return [rootURL URLByAppendingPathComponent:@"Chromium" isDirectory:YES].path;
 }
 
-NSString *BlinkChromiumGlobalCachePath(void) {
-    return [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:@"global"];
-}
-
 NSString *BlinkChromiumSanitizedProjectIdentifier(NSString *projectIdentifier) {
     if (projectIdentifier.length == 0) {
         return @"project";
@@ -111,6 +109,11 @@ NSString *BlinkChromiumSanitizedProjectIdentifier(NSString *projectIdentifier) {
 
 NSString *BlinkChromiumProjectCachePath(NSString *projectIdentifier) {
     NSString *sanitized = BlinkChromiumSanitizedProjectIdentifier(projectIdentifier);
+    return [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:sanitized];
+}
+
+NSString *BlinkChromiumLegacyProjectCachePath(NSString *projectIdentifier) {
+    NSString *sanitized = BlinkChromiumSanitizedProjectIdentifier(projectIdentifier);
     NSString *profilesRoot = [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:@"profiles"];
     return [profilesRoot stringByAppendingPathComponent:sanitized];
 }
@@ -120,6 +123,33 @@ BOOL BlinkChromiumEnsureDirectory(NSString *path, NSError **error) {
                                    withIntermediateDirectories:YES
                                                     attributes:nil
                                                          error:error];
+}
+
+void BlinkChromiumMigrateLegacyProjectCachePathIfNeeded(NSString *projectIdentifier) {
+    NSString *cachePath = BlinkChromiumProjectCachePath(projectIdentifier);
+    NSString *legacyPath = BlinkChromiumLegacyProjectCachePath(projectIdentifier);
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    BOOL cacheExists = [fileManager fileExistsAtPath:cachePath];
+    BOOL legacyExists = [fileManager fileExistsAtPath:legacyPath];
+    if (cacheExists || !legacyExists) {
+        return;
+    }
+
+    NSError *error = nil;
+    NSString *rootPath = BlinkChromiumSupportRootPath();
+    if (!BlinkChromiumEnsureDirectory(rootPath, &error)) {
+        NSLog(@"[ChromiumProfile] failed to prepare root cache path %@: %@", rootPath, error);
+        return;
+    }
+
+    if ([fileManager moveItemAtPath:legacyPath toPath:cachePath error:&error]) {
+        NSLog(@"[ChromiumProfile] migrated project cache %@ -> %@", legacyPath, cachePath);
+    } else {
+        NSLog(@"[ChromiumProfile] failed to migrate project cache %@ -> %@: %@",
+              legacyPath,
+              cachePath,
+              error);
+    }
 }
 
 class BlinkChromiumApp final : public CefApp, public CefBrowserProcessHandler {
@@ -151,6 +181,25 @@ private:
     DISALLOW_COPY_AND_ASSIGN(BlinkChromiumApp);
 };
 
+class BlinkChromiumCompletionCallback final : public CefCompletionCallback {
+public:
+    BlinkChromiumCompletionCallback() : completed_(false) {}
+
+    void OnComplete() override {
+        completed_ = true;
+    }
+
+    bool completed() const {
+        return completed_;
+    }
+
+private:
+    std::atomic_bool completed_;
+
+    IMPLEMENT_REFCOUNTING(BlinkChromiumCompletionCallback);
+    DISALLOW_COPY_AND_ASSIGN(BlinkChromiumCompletionCallback);
+};
+
 }  // namespace
 
 @interface BlinkChromiumApplication : NSApplication <CefAppProtocol> {
@@ -179,11 +228,41 @@ private:
 @interface BlinkChromiumRequestContext ()
 - (instancetype)initWithProjectIdentifier:(NSString *)projectIdentifier;
 - (CefRefPtr<CefRequestContext>)requestContext;
+- (void)requestContextDidInitialize;
 @end
+
+namespace {
+
+class BlinkChromiumRequestContextHandler final : public CefRequestContextHandler {
+public:
+    explicit BlinkChromiumRequestContextHandler(BlinkChromiumRequestContext *owner)
+        : owner_(owner) {}
+
+    void OnRequestContextInitialized(CefRefPtr<CefRequestContext> request_context) override {
+        if (owner_ == nil) {
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [owner_ requestContextDidInitialize];
+        });
+    }
+
+private:
+    __weak BlinkChromiumRequestContext *owner_ = nil;
+
+    IMPLEMENT_REFCOUNTING(BlinkChromiumRequestContextHandler);
+    DISALLOW_COPY_AND_ASSIGN(BlinkChromiumRequestContextHandler);
+};
+
+}  // namespace
 
 @implementation BlinkChromiumRequestContext {
 @private
     CefRefPtr<CefRequestContext> _requestContext;
+    NSMutableArray<dispatch_block_t> *_readyCallbacks;
+    NSString *_projectIdentifier;
+    BOOL _ready;
 }
 
 - (instancetype)initWithProjectIdentifier:(NSString *)projectIdentifier {
@@ -192,19 +271,56 @@ private:
         return nil;
     }
 
+    BlinkChromiumMigrateLegacyProjectCachePathIfNeeded(projectIdentifier);
     NSString *cachePath = BlinkChromiumProjectCachePath(projectIdentifier);
     BlinkChromiumEnsureDirectory(cachePath, nil);
+    _readyCallbacks = [NSMutableArray array];
+    _projectIdentifier = [projectIdentifier copy];
 
     CefRequestContextSettings settings;
     CefString(&settings.cache_path) = cachePath.UTF8String;
     settings.persist_session_cookies = true;
 
-    _requestContext = CefRequestContext::CreateContext(settings, nullptr);
+    _requestContext = CefRequestContext::CreateContext(
+        settings,
+        new BlinkChromiumRequestContextHandler(self)
+    );
     return self;
 }
 
 - (CefRefPtr<CefRequestContext>)requestContext {
     return _requestContext;
+}
+
+- (BOOL)isReady {
+    return _ready;
+}
+
+- (void)whenReady:(dispatch_block_t)callback {
+    if (callback == nil) {
+        return;
+    }
+
+    if (_ready) {
+        dispatch_async(dispatch_get_main_queue(), callback);
+        return;
+    }
+
+    [_readyCallbacks addObject:[callback copy]];
+}
+
+- (void)requestContextDidInitialize {
+    if (_ready) {
+        return;
+    }
+
+    _ready = YES;
+    NSArray<dispatch_block_t> *callbacks = [_readyCallbacks copy];
+    [_readyCallbacks removeAllObjects];
+
+    for (dispatch_block_t callback in callbacks) {
+        callback();
+    }
 }
 
 @end
@@ -214,6 +330,8 @@ private:
 - (void)handleScheduledMessagePumpWork:(NSNumber *)delayMS;
 - (void)handleMessagePumpTimer:(NSTimer *)timer;
 - (void)performMessageLoopWork;
+- (void)drainMessageLoopForDuration:(NSTimeInterval)duration;
+- (void)flushCookieStores;
 @end
 
 @implementation BlinkChromiumRuntime {
@@ -282,9 +400,7 @@ private:
     [[self class] prepareApplicationIfNeeded];
 
     NSString *rootPath = BlinkChromiumSupportRootPath();
-    NSString *globalCachePath = BlinkChromiumGlobalCachePath();
-    if (!BlinkChromiumEnsureDirectory(rootPath, error) ||
-        !BlinkChromiumEnsureDirectory(globalCachePath, error)) {
+    if (!BlinkChromiumEnsureDirectory(rootPath, error)) {
         return NO;
     }
 
@@ -316,7 +432,7 @@ private:
     CefString(&settings.resources_dir_path) = [BlinkChromiumFrameworkResourcesPath() UTF8String];
     CefString(&settings.locales_dir_path) = [BlinkChromiumFrameworkResourcesPath() UTF8String];
     CefString(&settings.root_cache_path) = [rootPath UTF8String];
-    CefString(&settings.cache_path) = [globalCachePath UTF8String];
+    CefString(&settings.cache_path) = [rootPath UTF8String];
 
     if (!CefInitialize(mainArgs, settings, _app.get(), nullptr)) {
         const int exitCode = CefGetExitCode();
@@ -347,6 +463,9 @@ private:
         return;
     }
 
+    [self drainMessageLoopForDuration:0.25];
+    [self flushCookieStores];
+    [self drainMessageLoopForDuration:0.25];
     [_requestContexts removeAllObjects];
     [self invalidateMessagePumpTimer];
 
@@ -450,6 +569,45 @@ private:
 
     [_messagePumpTimer invalidate];
     _messagePumpTimer = nil;
+}
+
+- (void)drainMessageLoopForDuration:(NSTimeInterval)duration {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:MAX(0.0, duration)];
+    while ([deadline timeIntervalSinceNow] > 0) {
+        [self performMessageLoopWork];
+        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode
+                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+}
+
+- (void)flushCookieStores {
+    NSArray<BlinkChromiumRequestContext *> *contexts = [_requestContexts.allValues copy];
+    CefRefPtr<CefRequestContext> globalContext = CefRequestContext::GetGlobalContext();
+    auto flushManager = ^(CefRefPtr<CefCookieManager> manager) {
+        if (manager == nullptr) {
+            return;
+        }
+
+        CefRefPtr<BlinkChromiumCompletionCallback> callback = new BlinkChromiumCompletionCallback();
+        if (!manager->FlushStore(callback)) {
+            return;
+        }
+
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+        while (!callback->completed() && [deadline timeIntervalSinceNow] > 0) {
+            [self performMessageLoopWork];
+            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
+    };
+
+    if (globalContext != nullptr) {
+        flushManager(globalContext->GetCookieManager(nullptr));
+    }
+
+    for (BlinkChromiumRequestContext *context in contexts) {
+        CefRefPtr<CefRequestContext> requestContext = [context requestContext];
+        flushManager(requestContext != nullptr ? requestContext->GetCookieManager(nullptr) : nullptr);
+    }
 }
 
 @end

@@ -91,10 +91,6 @@ final class BrowserController: NSObject, BrowserHostController {
         }
     }
 
-    deinit {
-        observations.forEach { $0.invalidate() }
-    }
-
     func update(
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
@@ -171,6 +167,15 @@ final class BrowserController: NSObject, BrowserHostController {
     func openInDefaultBrowser() {
         guard let url = webView.url ?? state.urlString.flatMap(BrowserURLResolver.resolve) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func invalidate() {
+        webView.stopLoading()
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.onInteraction = nil
     }
 
     private func load(url: URL) {

@@ -167,18 +167,33 @@ BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
     NSString *absoluteString = url.absoluteString.lowercaseString;
     NSString *provider = nil;
     NSString *idp = nil;
+    BOOL referencesDailyDev = [absoluteString containsString:@"daily.dev"];
 
     for (NSURLQueryItem *item in components.queryItems) {
         NSString *name = item.name.lowercaseString;
         NSString *value = item.value.lowercaseString;
+        if (value.length > 0 && [value containsString:@"daily.dev"]) {
+            referencesDailyDev = YES;
+        }
         if ([name isEqualToString:@"provider"]) {
             provider = value;
         } else if ([name isEqualToString:@"idp"]) {
             idp = value;
+        } else if ([name isEqualToString:@"redirect_uri"] ||
+                   [name isEqualToString:@"redirecturl"] ||
+                   [name isEqualToString:@"callbackurl"] ||
+                   [name isEqualToString:@"returnto"] ||
+                   [name isEqualToString:@"next"] ||
+                   [name isEqualToString:@"continue"]) {
+            referencesDailyDev = referencesDailyDev || [value containsString:@"daily.dev"];
         }
     }
 
     if (host.length == 0) {
+        return NO;
+    }
+
+    if (referencesDailyDev) {
         return NO;
     }
 
@@ -192,7 +207,7 @@ BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
 
     if (([host isEqualToString:@"api.daily.dev"] && [path hasPrefix:@"/auth/"]) ||
         ([host isEqualToString:@"app.daily.dev"] && [path hasPrefix:@"/callback"])) {
-        return YES;
+        return NO;
     }
 
     if (([host hasSuffix:@".daily.dev"] || [host isEqualToString:@"daily.dev"]) &&
@@ -204,7 +219,7 @@ BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
          ([provider isEqualToString:@"google"] ||
           [idp isEqualToString:@"google"] ||
           [absoluteString containsString:@"google"]))) {
-        return YES;
+        return NO;
     }
 
     if ([host isEqualToString:@"accounts.google.com"]) {
@@ -1110,6 +1125,13 @@ private:
     BlinkChromiumRequestContext *requestContext =
         [[BlinkChromiumRuntime sharedRuntime] requestContextForProjectIdentifier:_projectIdentifier];
     if (requestContext == nil) {
+        return;
+    }
+    if (![requestContext isReady]) {
+        __weak BlinkChromiumBrowserHost *weakSelf = self;
+        [requestContext whenReady:^{
+            [weakSelf ensureBrowserCreatedIfPossible];
+        }];
         return;
     }
 
