@@ -2810,6 +2810,7 @@
 					"$(CEF_DIST_DIR)",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = "Blink Dev";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -2939,6 +2940,7 @@
 					"$(CEF_DIST_DIR)",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = Blink;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -2972,6 +2974,7 @@
 					"$(CEF_DIST_DIR)",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = "Blink Dev";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -3022,6 +3025,7 @@
 					"$(CEF_DIST_DIR)",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = Blink;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

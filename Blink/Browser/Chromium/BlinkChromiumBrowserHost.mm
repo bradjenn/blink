@@ -9,6 +9,7 @@
 #include "include/cef_frame.h"
 #include "include/cef_life_span_handler.h"
 #include "include/cef_load_handler.h"
+#include "include/cef_request_handler.h"
 #include "include/cef_request_context.h"
 #include "include/wrapper/cef_helpers.h"
 
@@ -37,6 +38,7 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading;
 - (void)clientDidRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
+- (BOOL)clientHandleExternalNavigationForURLString:(nullable NSString *)urlString;
 - (BOOL)clientConfigurePopupWithID:(int)popupID
                    targetURLString:(nullable NSString *)targetURLString
                  targetDisposition:(CefLifeSpanHandler::WindowOpenDisposition)targetDisposition
@@ -66,6 +68,7 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading;
 - (void)clientDidRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
+- (BOOL)clientHandleExternalNavigationForURLString:(nullable NSString *)urlString;
 - (BOOL)clientConfigurePopupWithID:(int)popupID
                    targetURLString:(nullable NSString *)targetURLString
                  targetDisposition:(CefLifeSpanHandler::WindowOpenDisposition)targetDisposition
@@ -141,6 +144,88 @@ NSString *BlinkChromiumStringOrNil(const CefString& value) {
     return [NSString stringWithUTF8String:value.ToString().c_str()];
 }
 
+void BlinkChromiumOpenURLExternally(NSString *urlString) {
+    NSURL *externalURL = [NSURL URLWithString:urlString];
+    if (externalURL == nil) {
+        return;
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSWorkspace sharedWorkspace] openURL:externalURL];
+    });
+}
+
+BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
+    if (urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    NSString *host = url.host.lowercaseString;
+    NSString *path = url.path.lowercaseString;
+    NSString *absoluteString = url.absoluteString.lowercaseString;
+    NSString *provider = nil;
+    NSString *idp = nil;
+
+    for (NSURLQueryItem *item in components.queryItems) {
+        NSString *name = item.name.lowercaseString;
+        NSString *value = item.value.lowercaseString;
+        if ([name isEqualToString:@"provider"]) {
+            provider = value;
+        } else if ([name isEqualToString:@"idp"]) {
+            idp = value;
+        }
+    }
+
+    if (host.length == 0) {
+        return NO;
+    }
+
+    if (([provider isEqualToString:@"google"] || [idp isEqualToString:@"google"]) &&
+        (([host containsString:@"supabase"] && [path containsString:@"/auth/"]) ||
+         [path containsString:@"/authorize"] ||
+         [path containsString:@"/callback"] ||
+         [absoluteString containsString:@"oauth"])) {
+        return YES;
+    }
+
+    if (([host isEqualToString:@"api.daily.dev"] && [path hasPrefix:@"/auth/"]) ||
+        ([host isEqualToString:@"app.daily.dev"] && [path hasPrefix:@"/callback"])) {
+        return YES;
+    }
+
+    if (([host hasSuffix:@".daily.dev"] || [host isEqualToString:@"daily.dev"]) &&
+        (([path containsString:@"/auth"] ||
+          [path containsString:@"/oauth"] ||
+          [path containsString:@"/signin"] ||
+          [path containsString:@"/login"] ||
+          [path containsString:@"/callback"]) &&
+         ([provider isEqualToString:@"google"] ||
+          [idp isEqualToString:@"google"] ||
+          [absoluteString containsString:@"google"]))) {
+        return YES;
+    }
+
+    if ([host isEqualToString:@"accounts.google.com"]) {
+        return YES;
+    }
+
+    if ([host hasSuffix:@".accounts.google.com"]) {
+        return YES;
+    }
+
+    if (([host hasSuffix:@".google.com"] || [host isEqualToString:@"google.com"]) &&
+        ([path containsString:@"/o/oauth"] ||
+         [path containsString:@"/signin/oauth"] ||
+         [absoluteString containsString:@"oauth"] ||
+         [absoluteString containsString:@"googleusercontent.com"])) {
+        return YES;
+    }
+
+    return NO;
+}
+
 BOOL BlinkChromiumTargetDispositionOpensTab(CefLifeSpanHandler::WindowOpenDisposition targetDisposition) {
     switch (targetDisposition) {
     case CEF_WOD_NEW_FOREGROUND_TAB:
@@ -197,7 +282,8 @@ class BlinkChromiumClient final : public CefClient,
                                   public CefDisplayHandler,
                                   public CefLoadHandler,
                                   public CefLifeSpanHandler,
-                                  public CefFocusHandler {
+                                  public CefFocusHandler,
+                                  public CefRequestHandler {
 public:
     explicit BlinkChromiumClient(id<BlinkChromiumClientHost> host)
         : host_(host) {}
@@ -279,6 +365,10 @@ public:
         return this;
     }
 
+    CefRefPtr<CefRequestHandler> GetRequestHandler() override {
+        return this;
+    }
+
     void OnAddressChange(
         CefRefPtr<CefBrowser> browser,
         CefRefPtr<CefFrame> frame,
@@ -318,6 +408,20 @@ public:
         PublishSnapshot();
     }
 
+    bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
+                        CefRefPtr<CefFrame> frame,
+                        CefRefPtr<CefRequest> request,
+                        bool user_gesture,
+                        bool is_redirect) override {
+        CEF_REQUIRE_UI_THREAD();
+        if (host_ == nil || frame == nullptr || !frame->IsMain() || request == nullptr) {
+            return false;
+        }
+
+        NSString *requestURLString = BlinkChromiumStringOrNil(request->GetURL());
+        return [host_ clientHandleExternalNavigationForURLString:requestURLString];
+    }
+
     bool OnBeforePopup(
         CefRefPtr<CefBrowser> browser,
         CefRefPtr<CefFrame> frame,
@@ -339,6 +443,21 @@ public:
         }
 
         NSString *targetURLString = BlinkChromiumStringOrNil(target_url);
+        if (no_javascript_access != nullptr) {
+            *no_javascript_access = false;
+        }
+
+        if (targetURLString == nil || [targetURLString isEqualToString:@"about:blank"]) {
+            client = nullptr;
+            return false;
+        }
+
+        if (BlinkChromiumShouldOpenPopupExternally(targetURLString)) {
+            if ([host_ clientHandleExternalNavigationForURLString:targetURLString]) {
+                return true;
+            }
+        }
+
         if (BlinkChromiumTargetDispositionOpensTab(target_disposition)) {
             [host_ clientDidRequestOpenNewTabWithURLString:targetURLString];
             return true;
@@ -445,6 +564,7 @@ private:
 @private
     NSString *_initialURLString;
     BOOL _didCreateBrowser;
+    BOOL _didHandOffExternalNavigation;
     BOOL _didFinishClosing;
     BOOL _isClosingBrowser;
     BOOL _isInLiveResize;
@@ -615,6 +735,10 @@ private:
                        canGoBack:(BOOL)canGoBack
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading {
+    if ([self clientHandleExternalNavigationForURLString:urlString]) {
+        return;
+    }
+
     _snapshot = [[BlinkChromiumBrowserStateSnapshot alloc] initWithURLString:urlString
                                                                        title:title
                                                                    canGoBack:canGoBack
@@ -627,6 +751,24 @@ private:
     if (_onOpenNewTab != nil) {
         _onOpenNewTab(urlString);
     }
+}
+
+- (BOOL)clientHandleExternalNavigationForURLString:(NSString *)urlString {
+    if (_didHandOffExternalNavigation || !BlinkChromiumShouldOpenPopupExternally(urlString)) {
+        return NO;
+    }
+
+    _didHandOffExternalNavigation = YES;
+    BlinkChromiumOpenURLExternally(urlString);
+
+    if (_client != nullptr && _client->HasBrowser()) {
+        _isClosingBrowser = YES;
+        _client->CloseBrowser();
+    } else {
+        [self abortPendingPopup];
+    }
+
+    return YES;
 }
 
 - (BOOL)clientConfigurePopupWithID:(int)popupID
@@ -910,6 +1052,10 @@ private:
 
 - (void)clientDidRequestOpenNewTabWithURLString:(NSString *)urlString {
     [self.delegate chromiumBrowserHost:self didRequestOpenNewTabWithURLString:urlString];
+}
+
+- (BOOL)clientHandleExternalNavigationForURLString:(NSString *)urlString {
+    return NO;
 }
 
 - (BOOL)clientConfigurePopupWithID:(int)popupID

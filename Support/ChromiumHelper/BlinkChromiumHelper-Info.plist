@@ -31,6 +31,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<string>1</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 </dict>
