@@ -7,26 +7,8 @@ final class BrowserHostingView: NSView {
 
     override var isOpaque: Bool { false }
 
-    override func resizeSubviews(withOldSize oldSize: NSSize) {
-        super.resizeSubviews(withOldSize: oldSize)
-        syncCurrentWebViewFrame()
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        syncCurrentWebViewFrame()
-    }
-
-    override func layout() {
-        super.layout()
-        syncCurrentWebViewFrame()
-    }
-
     func showWebView(_ webView: NSView, tabId: String) {
         if currentTabId == tabId, currentWebView === webView {
-            if webView.frame != bounds {
-                webView.frame = bounds
-            }
             return
         }
 
@@ -39,19 +21,34 @@ final class BrowserHostingView: NSView {
         currentTabId = tabId
         currentWebView = webView
     }
-
-    private func syncCurrentWebViewFrame() {
-        guard let currentWebView, currentWebView.frame != bounds else { return }
-        currentWebView.frame = bounds
-    }
 }
 
 final class BrowserSidebarHoverTrackingView: NSView {
     var onHoverChange: ((Bool) -> Void)?
+    var hotspotWidth: CGFloat = 0
+    var leadingEdgeInset: CGFloat = 0
 
     private var trackingArea: NSTrackingArea?
+    private var eventMonitor: Any?
+    private var isHovering = false
 
     override var isOpaque: Bool { false }
+
+    deinit {
+        removeEventMonitor()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        if window != nil {
+            installEventMonitorIfNeeded()
+            evaluateHoverState()
+        } else {
+            removeEventMonitor()
+            setHovering(false)
+        }
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -74,26 +71,87 @@ final class BrowserSidebarHoverTrackingView: NSView {
         nil
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        evaluateHoverState(for: event)
+    }
+
     override func mouseEntered(with event: NSEvent) {
-        onHoverChange?(true)
+        evaluateHoverState(for: event)
     }
 
     override func mouseExited(with event: NSEvent) {
-        onHoverChange?(false)
+        evaluateHoverState(for: event)
+    }
+
+    private func installEventMonitorIfNeeded() {
+        guard eventMonitor == nil else { return }
+
+        window?.acceptsMouseMovedEvents = true
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            self?.evaluateHoverState(for: event)
+            return event
+        }
+    }
+
+    private func removeEventMonitor() {
+        if let eventMonitor {
+            NSEvent.removeMonitor(eventMonitor)
+            self.eventMonitor = nil
+        }
+    }
+
+    private func evaluateHoverState(for event: NSEvent? = nil) {
+        guard let window else {
+            setHovering(false)
+            return
+        }
+
+        let location = event?.window === window
+            ? event?.locationInWindow
+            : window.mouseLocationOutsideOfEventStream
+        guard let location else {
+            setHovering(false)
+            return
+        }
+
+        let frameInWindow = convert(bounds, to: nil)
+        let triggerMinX = frameInWindow.minX - leadingEdgeInset
+        let triggerMaxX = frameInWindow.minX + hotspotWidth
+        let isWithinVerticalBounds = location.y >= frameInWindow.minY && location.y <= frameInWindow.maxY
+        let isWithinTriggerBand = location.x >= triggerMinX && location.x <= triggerMaxX
+
+        setHovering(isWithinVerticalBounds && isWithinTriggerBand)
+    }
+
+    private func setHovering(_ hovering: Bool) {
+        guard isHovering != hovering else { return }
+        isHovering = hovering
+        onHoverChange?(hovering)
     }
 }
 
 struct BrowserSidebarHoverRegion: NSViewRepresentable {
     let onHoverChange: (Bool) -> Void
+    let hotspotWidth: CGFloat
+    let leadingEdgeInset: CGFloat
 
     func makeNSView(context: Context) -> BrowserSidebarHoverTrackingView {
         let view = BrowserSidebarHoverTrackingView()
         view.onHoverChange = onHoverChange
+        view.hotspotWidth = hotspotWidth
+        view.leadingEdgeInset = leadingEdgeInset
         return view
     }
 
     func updateNSView(_ nsView: BrowserSidebarHoverTrackingView, context: Context) {
+        let didChangeGeometry = nsView.hotspotWidth != hotspotWidth || nsView.leadingEdgeInset != leadingEdgeInset
         nsView.onHoverChange = onHoverChange
+        nsView.hotspotWidth = hotspotWidth
+        nsView.leadingEdgeInset = leadingEdgeInset
+        if didChangeGeometry {
+            nsView.needsLayout = true
+        }
     }
 }
 

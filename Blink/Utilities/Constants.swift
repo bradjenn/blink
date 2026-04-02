@@ -23,8 +23,9 @@ enum Layout {
     static let workspaceColumnDefaultFraction: CGFloat = 0.5
     static let workspaceColumnPresets: [CGFloat] = [1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0]
     static let browserSurfaceCornerRadius: CGFloat = 6
-    static let browserSidebarHotspotWidth: CGFloat = 22
-    static let browserSidebarHoverBridgeWidth: CGFloat = 72
+    static let browserSidebarHotspotWidth: CGFloat = 2
+    static let browserSidebarFloatingInset: CGFloat = 10
+    static let browserSidebarHoverBridgeWidth: CGFloat = workspacePaddingH + browserSidebarFloatingInset
     static let browserSidebarWidth: CGFloat = 296
 
     // Overview (Niri-style horizontal strip)

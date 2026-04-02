@@ -21,6 +21,8 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
 
 - (void)hostViewDidMoveToWindow;
 - (void)hostViewDidLayout;
+- (void)hostViewWillStartLiveResize;
+- (void)hostViewDidEndLiveResize;
 
 @end
 
@@ -87,6 +89,10 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
     return YES;
 }
 
+- (BOOL)preservesContentDuringLiveResize {
+    return YES;
+}
+
 - (BOOL)acceptsFirstResponder {
     return YES;
 }
@@ -96,9 +102,18 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
     [self.owner hostViewDidMoveToWindow];
 }
 
+- (void)viewWillStartLiveResize {
+    [super viewWillStartLiveResize];
+    [self.owner hostViewWillStartLiveResize];
+}
+
+- (void)viewDidEndLiveResize {
+    [super viewDidEndLiveResize];
+    [self.owner hostViewDidEndLiveResize];
+}
+
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
-    [self.owner hostViewDidLayout];
 }
 
 - (void)layout {
@@ -432,6 +447,9 @@ private:
     BOOL _didCreateBrowser;
     BOOL _didFinishClosing;
     BOOL _isClosingBrowser;
+    BOOL _isInLiveResize;
+    NSSize _lastReportedHostSize;
+    dispatch_block_t _pendingResizeWorkItem;
     NSWindow *_window;
     BlinkChromiumHostView *_hostView;
     BlinkChromiumBrowserStateSnapshot *_snapshot;
@@ -491,6 +509,7 @@ private:
 }
 
 - (void)abortPendingPopup {
+    [self cancelPendingResizeWorkItem];
     [self finishClosing];
     if (_window != nil) {
         [_window orderOut:nil];
@@ -500,12 +519,70 @@ private:
 }
 
 - (void)hostViewDidMoveToWindow {
+    _window.preservesContentDuringLiveResize = YES;
+}
+
+- (void)hostViewWillStartLiveResize {
+    _isInLiveResize = YES;
+    [self cancelPendingResizeWorkItem];
+}
+
+- (void)hostViewDidEndLiveResize {
+    _isInLiveResize = NO;
+    [self cancelPendingResizeWorkItem];
+    [self flushPendingResizeIfNeeded];
 }
 
 - (void)hostViewDidLayout {
-    if (_client != nullptr && _client->HasBrowser()) {
-        _client->WasResized();
+    [self scheduleResizeIfNeeded];
+}
+
+- (void)scheduleResizeIfNeeded {
+    if (_client == nullptr || !_client->HasBrowser()) {
+        return;
     }
+
+    NSSize hostSize = _hostView.bounds.size;
+    if (NSEqualSizes(_lastReportedHostSize, hostSize)) {
+        return;
+    }
+
+    if (_isInLiveResize) {
+        return;
+    }
+
+    [self flushResizeForSize:hostSize];
+}
+
+- (void)flushPendingResizeIfNeeded {
+    if (_client == nullptr || !_client->HasBrowser()) {
+        return;
+    }
+
+    NSSize hostSize = _hostView.bounds.size;
+    if (NSEqualSizes(_lastReportedHostSize, hostSize)) {
+        return;
+    }
+
+    [self flushResizeForSize:hostSize];
+}
+
+- (void)flushResizeForSize:(NSSize)hostSize {
+    if (hostSize.width <= 0.0 || hostSize.height <= 0.0) {
+        return;
+    }
+
+    _lastReportedHostSize = hostSize;
+    _client->WasResized();
+}
+
+- (void)cancelPendingResizeWorkItem {
+    if (_pendingResizeWorkItem == nil) {
+        return;
+    }
+
+    dispatch_block_cancel(_pendingResizeWorkItem);
+    _pendingResizeWorkItem = nil;
 }
 
 - (void)clientDidCreateBrowser {
@@ -516,6 +593,7 @@ private:
     }
     [_window makeKeyAndOrderFront:nil];
     _client->FocusBrowser();
+    [self flushPendingResizeIfNeeded];
 }
 
 - (void)clientDidCloseBrowser {
@@ -612,6 +690,7 @@ private:
     }
 
     _didFinishClosing = YES;
+    [self cancelPendingResizeWorkItem];
     NSArray<BlinkChromiumPopupWindowController *> *pendingPopups = _pendingPopupControllers.allValues;
     [_pendingPopupControllers removeAllObjects];
     for (BlinkChromiumPopupWindowController *popupController in pendingPopups) {
@@ -656,6 +735,9 @@ private:
     NSString *_tabIdentifier;
     NSString *_projectIdentifier;
     BOOL _browserCreationPending;
+    BOOL _isInLiveResize;
+    NSSize _lastReportedHostSize;
+    dispatch_block_t _pendingResizeWorkItem;
     BlinkChromiumHostView *_hostView;
     BlinkChromiumBrowserStateSnapshot *_snapshot;
     NSMutableDictionary<NSNumber *, BlinkChromiumPopupWindowController *> *_pendingPopupControllers;
@@ -717,6 +799,7 @@ private:
 }
 
 - (void)invalidate {
+    [self cancelPendingResizeWorkItem];
     NSArray<BlinkChromiumPopupWindowController *> *pendingPopups = _pendingPopupControllers.allValues;
     [_pendingPopupControllers removeAllObjects];
     for (BlinkChromiumPopupWindowController *popupController in pendingPopups) {
@@ -731,18 +814,77 @@ private:
 }
 
 - (void)hostViewDidMoveToWindow {
+    _hostView.window.preservesContentDuringLiveResize = YES;
     [self ensureBrowserCreatedIfPossible];
+}
+
+- (void)hostViewWillStartLiveResize {
+    _isInLiveResize = YES;
+    [self cancelPendingResizeWorkItem];
+}
+
+- (void)hostViewDidEndLiveResize {
+    _isInLiveResize = NO;
+    [self cancelPendingResizeWorkItem];
+    [self flushPendingResizeIfNeeded];
 }
 
 - (void)hostViewDidLayout {
     [self ensureBrowserCreatedIfPossible];
-    if (_client != nullptr && _client->HasBrowser()) {
-        _client->WasResized();
+    [self scheduleResizeIfNeeded];
+}
+
+- (void)scheduleResizeIfNeeded {
+    if (_client == nullptr || !_client->HasBrowser()) {
+        return;
     }
+
+    NSSize hostSize = _hostView.bounds.size;
+    if (NSEqualSizes(_lastReportedHostSize, hostSize)) {
+        return;
+    }
+
+    if (_isInLiveResize) {
+        return;
+    }
+
+    [self flushResizeForSize:hostSize];
+}
+
+- (void)flushPendingResizeIfNeeded {
+    if (_client == nullptr || !_client->HasBrowser()) {
+        return;
+    }
+
+    NSSize hostSize = _hostView.bounds.size;
+    if (NSEqualSizes(_lastReportedHostSize, hostSize)) {
+        return;
+    }
+
+    [self flushResizeForSize:hostSize];
+}
+
+- (void)flushResizeForSize:(NSSize)hostSize {
+    if (hostSize.width <= 0.0 || hostSize.height <= 0.0) {
+        return;
+    }
+
+    _lastReportedHostSize = hostSize;
+    _client->WasResized();
+}
+
+- (void)cancelPendingResizeWorkItem {
+    if (_pendingResizeWorkItem == nil) {
+        return;
+    }
+
+    dispatch_block_cancel(_pendingResizeWorkItem);
+    _pendingResizeWorkItem = nil;
 }
 
 - (void)clientDidCreateBrowser {
     _browserCreationPending = NO;
+    [self flushPendingResizeIfNeeded];
 }
 
 - (void)clientDidCloseBrowser {

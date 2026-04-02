@@ -2,7 +2,8 @@ import SwiftUI
 
 struct BrowserView: View {
     private static let sidebarTransition = Animation.snappy(duration: 0.24, extraBounce: 0)
-    private static let sidebarHoverDismissDelay: TimeInterval = 0.18
+    private static let sidebarHoverKeepOpenDuration: TimeInterval = 0.7
+    private static let sidebarHoverDismissDelay: TimeInterval = 0.12
 
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
@@ -16,9 +17,11 @@ struct BrowserView: View {
     @State private var isSidebarHotspotHovered = false
     @State private var isSidebarPanelHovered = false
     @State private var isSidebarHoverLatched = false
+    @State private var isSidebarHoverDismissProtected = false
     @FocusState private var addressBarFocused: Bool
 
     @State private var sidebarHoverDismissWorkItem: DispatchWorkItem?
+    @State private var sidebarHoverProtectionWorkItem: DispatchWorkItem?
 
     private var paneState: BrowserPaneState {
         tab.browserState ?? .empty
@@ -32,10 +35,8 @@ struct BrowserView: View {
         paneState.isSidebarPinned ? Layout.browserSidebarWidth : 0
     }
 
-    private var hoverRegionWidth: CGFloat {
-        isSidebarExpanded
-            ? (Layout.browserSidebarWidth + Layout.browserSidebarHoverBridgeWidth)
-            : Layout.browserSidebarHotspotWidth
+    private var browserContentAnimation: Animation? {
+        browserManager.engine == .chromium ? nil : Self.sidebarTransition
     }
 
     private var isSidebarExpanded: Bool {
@@ -62,48 +63,62 @@ struct BrowserView: View {
             if let selectedBrowserTab {
                 let controller = resolveController(for: selectedBrowserTab)
                 ZStack(alignment: .leading) {
-                    BrowserContainerView(
-                        paneTabId: tab.id,
-                        browserTabId: selectedBrowserTab.id,
-                        controller: controller
-                    )
-                    .padding(.leading, sidebarContentInset)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .animation(Self.sidebarTransition, value: sidebarContentInset)
-
-                    if !paneState.isSidebarPinned {
-                        BrowserSidebarHoverRegion { isHovered in
-                            handleSidebarHotspotHoverChange(isHovered)
-                        }
-                        .frame(width: hoverRegionWidth)
-                        .frame(maxHeight: .infinity, alignment: .leading)
-                        .zIndex(1)
-                    }
-
-                    BrowserSidebarView(
-                        paneState: paneState,
-                        isPresented: isSidebarExpanded,
-                        isPinned: paneState.isSidebarPinned,
-                        onHoverChange: { isHovered in
-                            handleSidebarPanelHoverChange(isHovered)
-                        },
-                        onSelectTab: { browserTabId in
-                            store.selectBrowserTab(browserTabId, in: tab.id)
-                            store.setActiveTab(tab.id)
-                        },
-                        onCloseTab: { browserTabId in
-                            store.closeBrowserTab(browserTabId, in: tab.id)
-                        }
-                    ) {
-                        sidebarHeader(
-                            browserTab: selectedBrowserTab,
+                    ZStack(alignment: .leading) {
+                        BrowserContainerView(
+                            paneTabId: tab.id,
+                            browserTabId: selectedBrowserTab.id,
                             controller: controller
                         )
+                        .padding(.leading, sidebarContentInset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .animation(browserContentAnimation, value: sidebarContentInset)
+
+                        if isSidebarExpanded {
+                            BrowserSidebarView(
+                                paneState: paneState,
+                                isPresented: true,
+                                isPinned: paneState.isSidebarPinned,
+                                onHoverChange: { isHovered in
+                                    handleSidebarPanelHoverChange(isHovered)
+                                },
+                                onSelectTab: { browserTabId in
+                                    store.selectBrowserTab(browserTabId, in: tab.id)
+                                    store.setActiveTab(tab.id)
+                                },
+                                onCloseTab: { browserTabId in
+                                    store.closeBrowserTab(browserTabId, in: tab.id)
+                                }
+                            ) {
+                                sidebarHeader(
+                                    browserTab: selectedBrowserTab,
+                                    controller: controller
+                                )
+                            }
+                            .transition(
+                                .offset(x: -(Layout.browserSidebarWidth + Layout.browserSidebarFloatingInset))
+                                .combined(with: .opacity)
+                            )
+                        }
+                    }
+                    .background(theme.bg)
+                    .clipShape(RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous))
+
+                    if !paneState.isSidebarPinned {
+                        BrowserSidebarHoverRegion(
+                            onHoverChange: { isHovered in
+                                handleSidebarHotspotHoverChange(isHovered)
+                            },
+                            hotspotWidth: Layout.browserSidebarHotspotWidth,
+                            leadingEdgeInset: Layout.workspacePaddingH
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .opacity(0.001)
+                        .zIndex(3)
                     }
                 }
-                .background(theme.bg)
-                .clipShape(RoundedRectangle(cornerRadius: Layout.browserSurfaceCornerRadius, style: .continuous))
-                .animation(Self.sidebarTransition, value: paneState.isSidebarPinned)
+                .animation(Self.sidebarTransition, value: isSidebarExpanded)
                 .onAppear {
                     syncAddressText(from: selectedBrowserTab.state)
                     if isFocused {
@@ -141,6 +156,8 @@ struct BrowserView: View {
                 .onChange(of: paneState.isSidebarPinned) { _, isPinned in
                     guard !isPinned else {
                         cancelSidebarHoverDismiss()
+                        cancelSidebarHoverProtection()
+                        isSidebarHoverDismissProtected = false
                         isSidebarHoverLatched = true
                         return
                     }
@@ -149,6 +166,7 @@ struct BrowserView: View {
                 }
                 .onDisappear {
                     cancelSidebarHoverDismiss()
+                    cancelSidebarHoverProtection()
                 }
             } else {
                 VStack(spacing: 12) {
@@ -298,7 +316,7 @@ struct BrowserView: View {
         isSidebarHotspotHovered = isHovered
 
         if isHovered {
-            latchSidebarHover()
+            latchSidebarHover(protectDismissal: true)
         } else {
             scheduleSidebarHoverDismissIfNeeded()
         }
@@ -314,17 +332,21 @@ struct BrowserView: View {
         }
     }
 
-    private func latchSidebarHover() {
+    private func latchSidebarHover(protectDismissal: Bool = false) {
         cancelSidebarHoverDismiss()
         isSidebarHoverLatched = true
+
+        if protectDismissal {
+            protectSidebarHoverDismissal()
+        }
     }
 
     private func scheduleSidebarHoverDismissIfNeeded() {
         cancelSidebarHoverDismiss()
 
         guard !paneState.isSidebarPinned,
-              !isSidebarHotspotHovered,
-              !isSidebarPanelHovered else {
+              !isSidebarPanelHovered,
+              !isSidebarHoverDismissProtected else {
             return
         }
 
@@ -341,6 +363,26 @@ struct BrowserView: View {
     private func cancelSidebarHoverDismiss() {
         sidebarHoverDismissWorkItem?.cancel()
         sidebarHoverDismissWorkItem = nil
+    }
+
+    private func protectSidebarHoverDismissal() {
+        cancelSidebarHoverProtection()
+        isSidebarHoverDismissProtected = true
+
+        let workItem = DispatchWorkItem {
+            isSidebarHoverDismissProtected = false
+            scheduleSidebarHoverDismissIfNeeded()
+        }
+        sidebarHoverProtectionWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.sidebarHoverKeepOpenDuration,
+            execute: workItem
+        )
+    }
+
+    private func cancelSidebarHoverProtection() {
+        sidebarHoverProtectionWorkItem?.cancel()
+        sidebarHoverProtectionWorkItem = nil
     }
 
     private func syncFocus(

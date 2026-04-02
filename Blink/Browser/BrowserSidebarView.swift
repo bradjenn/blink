@@ -27,9 +27,9 @@ struct BrowserSidebarView<HeaderContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             headerContent()
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 9)
 
             Divider()
                 .overlay(theme.border.opacity(0.9))
@@ -45,8 +45,8 @@ struct BrowserSidebarView<HeaderContent: View>: View {
                         )
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 7)
             }
         }
         .frame(width: Layout.browserSidebarWidth)
@@ -54,14 +54,17 @@ struct BrowserSidebarView<HeaderContent: View>: View {
         .background(backgroundSurface)
         .overlay(overlaySurface)
         .shadow(color: Color.black.opacity(isPresented && !isPinned ? 0.26 : 0), radius: 18, y: 10)
-        .padding(.leading, isPinned ? 0 : 8)
-        .padding(.vertical, isPinned ? 0 : 8)
+        .padding(.leading, isPinned ? 0 : Layout.browserSidebarFloatingInset)
+        .padding(.vertical, isPinned ? 0 : 9)
         .offset(x: sidebarOffset)
         .opacity(isPresented ? 1 : 0.001)
         .animation(transitionAnimation, value: isPresented)
         .animation(transitionAnimation, value: isPinned)
         .allowsHitTesting(isPresented)
-        .onHover(perform: onHoverChange)
+        .onHover { isHovered in
+            guard isPresented else { return }
+            onHoverChange(isHovered)
+        }
         .accessibilityHidden(!isPresented)
         .zIndex(2)
     }
@@ -102,10 +105,10 @@ private struct BrowserSidebarTabRow: View {
 
     private var rowFill: Color {
         if isSelected {
-            return theme.bg2.opacity(0.9)
+            return theme.bg2
         }
         if isHovered {
-            return theme.bg2.opacity(0.55)
+            return theme.bg2
         }
         return .clear
     }
@@ -117,48 +120,33 @@ private struct BrowserSidebarTabRow: View {
         return theme.bg
     }
 
+    private var closeButtonBackground: Color {
+        if isSelected || isHovered {
+            return theme.bg2
+        }
+        return theme.bg2
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             favicon
 
-            Text(browserTab.displayTitle)
-                .font(Fonts.primary(size: 11.5, weight: isSelected ? .bold : .regular))
-                .foregroundStyle(theme.text)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .trailing) {
-                    LinearGradient(
-                        colors: [Color.clear, titleFadeColor],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 28)
-                    .allowsHitTesting(false)
-                }
-
-            Spacer(minLength: 0)
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(theme.textDim)
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.plain)
-            .pointerCursor()
-            .opacity(isHovered ? 1 : 0.001)
-            .allowsHitTesting(isHovered)
-            .accessibilityHidden(!isHovered)
-            .accessibilityLabel("Close \(browserTab.displayTitle)")
+            titleLabel
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.leading, 10)
+        .padding(.trailing, 7)
+        .padding(.vertical, 7)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(rowFill)
         )
+        .overlay(alignment: .trailing) {
+            if isHovered {
+                closeButton
+                    .transition(.opacity)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .onHover { isHovered = $0 }
@@ -167,6 +155,52 @@ private struct BrowserSidebarTabRow: View {
         .accessibilityLabel(browserTab.displayTitle)
         .accessibilityValue(browserTab.host ?? "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var titleLabel: some View {
+        GeometryReader { geometry in
+            Text(browserTab.displayTitle)
+                .font(Fonts.primary(size: 11.5, weight: isSelected ? .bold : .regular))
+                .foregroundStyle(theme.text)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(
+                    width: geometry.size.width,
+                    height: geometry.size.height,
+                    alignment: .leading
+                )
+                .clipped()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 20)
+        .overlay(alignment: .trailing) {
+            LinearGradient(
+                colors: [Color.clear, titleFadeColor],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: isHovered ? 34 : 16)
+            .allowsHitTesting(false)
+        }
+        .animation(.snappy(duration: 0.18, extraBounce: 0), value: isHovered)
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(theme.textDim)
+                .frame(width: 28)
+                .frame(maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(closeButtonBackground)
+                )
+        }
+        .buttonStyle(.plain)
+        .frame(width: 28)
+        .frame(maxHeight: .infinity)
+        .pointerCursor()
+        .accessibilityLabel("Close \(browserTab.displayTitle)")
     }
 
     @ViewBuilder
