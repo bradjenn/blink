@@ -29,6 +29,7 @@ struct WindowTitleBarConfigurator: NSViewRepresentable {
     }
 
     private static func apply(to window: NSWindow) {
+        window.identifier = NSUserInterfaceItemIdentifier("BlinkMainWorkspaceWindow")
         window.styleMask.insert(.fullSizeContentView)
         window.standardWindowButton(.closeButton)?.isHidden = true
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true

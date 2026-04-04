@@ -21,6 +21,24 @@ namespace {
 NSString *const BlinkChromiumRuntimeErrorDomain = @"BlinkChromiumRuntime";
 const int32_t BlinkChromiumTimerDelayPlaceholder = INT_MAX;
 const int64_t BlinkChromiumMaxTimerDelay = 1000 / 30;
+NSString *const BlinkMainWorkspaceWindowIdentifier = @"BlinkMainWorkspaceWindow";
+NSString *const BlinkChromiumPopupWindowIdentifier = @"BlinkChromiumPopupWindow";
+
+BOOL BlinkChromiumIsMainWorkspaceWindow(NSWindow *window) {
+    if (window == nil) {
+        return NO;
+    }
+
+    return [window.identifier isEqualToString:BlinkMainWorkspaceWindowIdentifier];
+}
+
+BOOL BlinkChromiumIsPopupWindow(NSWindow *window) {
+    if (window == nil) {
+        return NO;
+    }
+
+    return [window.identifier isEqualToString:BlinkChromiumPopupWindowIdentifier];
+}
 
 NSString *BlinkChromiumApplicationName(void) {
     NSString *displayName = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
@@ -219,8 +237,41 @@ private:
 }
 
 - (void)sendEvent:(NSEvent *)event {
+    if (event.type == NSEventTypeKeyDown) {
+        NSEventModifierFlags modifiers = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+        NSString *characters = event.charactersIgnoringModifiers.lowercaseString;
+        NSWindow *keyWindow = self.keyWindow;
+        if (modifiers == NSEventModifierFlagCommand &&
+            [characters isEqualToString:@"w"] &&
+            !BlinkChromiumIsPopupWindow(keyWindow)) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"BlinkCloseActiveTabShortcut" object:nil];
+            return;
+        }
+    }
+
     CefScopedSendingEvent sendingEventScoper;
     [super sendEvent:event];
+}
+
+- (BOOL)sendAction:(SEL)action to:(id)target from:(id)sender {
+    if (action == @selector(performClose:) || action == @selector(terminate:)) {
+        NSWindow *keyWindow = self.keyWindow;
+        BOOL isCloseShortcutMenuItem = NO;
+        if ([sender isKindOfClass:[NSMenuItem class]]) {
+            NSMenuItem *menuItem = (NSMenuItem *)sender;
+            NSEventModifierFlags modifiers = menuItem.keyEquivalentModifierMask & NSEventModifierFlagDeviceIndependentFlagsMask;
+            isCloseShortcutMenuItem = [menuItem.keyEquivalent.lowercaseString isEqualToString:@"w"] &&
+                modifiers == NSEventModifierFlagCommand;
+        }
+
+        if (!BlinkChromiumIsPopupWindow(keyWindow) &&
+            (action == @selector(performClose:) || isCloseShortcutMenuItem || BlinkChromiumIsMainWorkspaceWindow(keyWindow))) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"BlinkCloseActiveTabShortcut" object:nil];
+            return YES;
+        }
+    }
+
+    return [super sendAction:action to:target from:sender];
 }
 
 @end

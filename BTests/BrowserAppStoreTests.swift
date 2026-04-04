@@ -149,6 +149,20 @@ final class BrowserAppStoreTests: XCTestCase {
         XCTAssertEqual(store.tabsById[tab.id]?.browserState?.tabs.count, 1)
     }
 
+    func testCloseActiveTabKeepsSingleBrowserPaneOpen() throws {
+        let store = makeStore()
+        let tab = store.openBrowserTab(projectId: "project-1", url: "https://example.com")
+        store.setActiveTab(tab.id)
+
+        store.closeActiveTab()
+
+        let remainingPane = try XCTUnwrap(store.tabsById[tab.id])
+        let remainingBrowserTab = try XCTUnwrap(remainingPane.browserState?.selectedTab)
+        XCTAssertEqual(store.projectTabs(for: "project-1").filter(\.isBrowser).count, 1)
+        XCTAssertEqual(remainingPane.browserState?.tabs.count, 1)
+        XCTAssertEqual(remainingBrowserTab.state.urlString, BrowserDefaults.homePageURLString)
+    }
+
     private func makeStore() -> AppStore {
         let store = AppStore()
         store.projects = [

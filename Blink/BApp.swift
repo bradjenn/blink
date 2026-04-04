@@ -1,27 +1,58 @@
+import AppKit
 import SwiftUI
 import GhosttyKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let closeShortcutNotification = Notification.Name("BlinkCloseActiveTabShortcut")
+    private let popupWindowIdentifier = NSUserInterfaceItemIdentifier("BlinkChromiumPopupWindow")
+
     private var menuObserver: Any?
+    private var closeShortcutObserver: Any?
+    private var closeShortcutMonitor: Any?
+    private var closeTabTerminationGuardUntil: Date?
+
+    var closeActiveTab: () -> Void = {}
+    var canCloseActiveTab: () -> Bool = { false }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
-            self?.clearReservedKeyboardShortcuts()
+            self?.configureKeyboardShortcuts()
         }
+
         // SwiftUI rebuilds menus on state changes, re-adding system shortcuts.
-        // Observe menu updates to re-clear them.
+        // Observe menu updates to re-apply Blink's command routing.
         menuObserver = NotificationCenter.default.addObserver(
             forName: NSMenu.didAddItemNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.clearReservedKeyboardShortcuts()
+            self?.configureKeyboardShortcuts()
         }
 
+        closeShortcutObserver = NotificationCenter.default.addObserver(
+            forName: closeShortcutNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.requestCloseActiveTab()
+        }
+
+        closeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let characters = event.charactersIgnoringModifiers?.lowercased()
+            guard modifiers == [.command],
+                  characters == "w",
+                  self?.shouldHandleCloseShortcut(for: NSApp.keyWindow) == true else {
+                return event
+            }
+
+            self?.requestCloseActiveTab()
+            return nil
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        clearReservedKeyboardShortcuts()
+        configureKeyboardShortcuts()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -29,8 +60,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BlinkChromiumRuntime.shared().shutdown()
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
 
-    private func clearReservedKeyboardShortcuts() {
+    func requestCloseActiveTab() {
+        closeTabTerminationGuardUntil = Date().addingTimeInterval(1)
+        closeActiveTab()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if let deadline = closeTabTerminationGuardUntil,
+           deadline > Date() {
+            closeTabTerminationGuardUntil = nil
+            return .terminateCancel
+        }
+
+        return .terminateNow
+    }
+
+    @objc func handleCloseMenuCommand(_ sender: Any?) {
+        guard shouldHandleCloseShortcut(for: NSApp.keyWindow) else {
+            NSApp.keyWindow?.performClose(sender)
+            return
+        }
+
+        requestCloseActiveTab()
+    }
+
+    private func configureKeyboardShortcuts() {
         guard let mainMenu = NSApp.mainMenu else { return }
 
         clearKeyEquivalent(
@@ -39,6 +97,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             key: "h",
             modifiers: [.command]
         )
+
+        configureCloseCommand(in: mainMenu)
+    }
+
+    private func configureCloseCommand(in menu: NSMenu) {
+        for item in menu.items {
+            if item.keyEquivalent.lowercased() == "w",
+               item.keyEquivalentModifierMask.intersection(.deviceIndependentFlagsMask) == [.command] {
+                item.action = #selector(handleCloseMenuCommand(_:))
+                item.target = self
+            }
+
+            if let submenu = item.submenu {
+                configureCloseCommand(in: submenu)
+            }
+        }
     }
 
     private func clearKeyEquivalent(
@@ -59,6 +133,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 clearKeyEquivalent(in: submenu, action: action, key: key, modifiers: modifiers)
             }
         }
+    }
+
+    private func shouldHandleCloseShortcut(for window: NSWindow?) -> Bool {
+        guard let window else { return false }
+        return window.identifier != popupWindowIdentifier
+    }
+}
+
+extension AppDelegate: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard menuItem.action == #selector(handleCloseMenuCommand(_:)) else { return true }
+
+        let shouldHandleShortcut = shouldHandleCloseShortcut(for: NSApp.keyWindow)
+        menuItem.title = shouldHandleShortcut ? "Close Tab" : "Close"
+        return shouldHandleShortcut ? canCloseActiveTab() : NSApp.keyWindow != nil
     }
 }
 
@@ -82,7 +171,7 @@ struct BApp: App {
             )
                 .background(
                     WindowTitleBarConfigurator(
-                        onCloseRequest: { store.closeActiveTab() }
+                        onCloseRequest: { appDelegate.requestCloseActiveTab() }
                     )
                 )
                 .environment(store)
@@ -97,6 +186,22 @@ struct BApp: App {
                 )
                 .preferredColorScheme(.dark)
                 .onAppear {
+                    appDelegate.closeActiveTab = {
+                        guard store.activeProjectId != nil,
+                              !store.showProjectSwitcher,
+                              !store.showThemePicker,
+                              !store.showCommandPalette,
+                              store.activeView == .projects else { return }
+                        store.closeActiveTab()
+                    }
+                    appDelegate.canCloseActiveTab = {
+                        store.activeProjectId != nil &&
+                        !store.showProjectSwitcher &&
+                        !store.showThemePicker &&
+                        !store.showCommandPalette &&
+                        store.activeView == .projects
+                    }
+
                     updateChecker.checkIfNeeded()
                     if store.spotifyEnabled {
                         spotifyMonitor.startMonitoring(performInitialRefresh: false)
@@ -332,11 +437,6 @@ struct BApp: App {
                 }
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
                 .disabled(store.activeProjectId == nil)
-
-                Button("Close Tab") {
-                    store.closeActiveTab()
-                }
-                .keyboardShortcut("w", modifiers: .command)
 
                 Divider()
 

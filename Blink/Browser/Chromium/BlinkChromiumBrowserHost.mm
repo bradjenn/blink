@@ -913,6 +913,7 @@ private:
     NSString *_tabIdentifier;
     NSString *_projectIdentifier;
     BOOL _browserCreationPending;
+    BOOL _isInvalidated;
     BOOL _isInLiveResize;
     NSSize _lastReportedHostSize;
     dispatch_block_t _pendingResizeWorkItem;
@@ -953,11 +954,17 @@ private:
 }
 
 - (void)loadURLString:(NSString *)urlString {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     _client->LoadURL(BlinkChromiumStartupURL(urlString));
     [self ensureBrowserCreatedIfPossible];
 }
 
 - (void)focusBrowserView {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     if (_hostView.window != nil) {
         [_hostView.window makeFirstResponder:_hostView];
     }
@@ -965,23 +972,43 @@ private:
 }
 
 - (void)goBack {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     _client->GoBack();
 }
 
 - (void)goForward {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     _client->GoForward();
 }
 
 - (void)reload {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     _client->Reload();
 }
 
 - (void)toggleDeveloperTools {
+    if (_isInvalidated || _client == nullptr) {
+        return;
+    }
     _client->ToggleDeveloperTools();
 }
 
 - (void)invalidate {
+    if (_isInvalidated) {
+        return;
+    }
+
+    _isInvalidated = YES;
     [self cancelPendingResizeWorkItem];
+    _browserCreationPending = NO;
+    _hostView.owner = nil;
+    self.delegate = nil;
     NSArray<BlinkChromiumPopupWindowController *> *pendingPopups = _pendingPopupControllers.allValues;
     [_pendingPopupControllers removeAllObjects];
     for (BlinkChromiumPopupWindowController *popupController in pendingPopups) {
@@ -996,22 +1023,34 @@ private:
 }
 
 - (void)hostViewDidMoveToWindow {
+    if (_isInvalidated) {
+        return;
+    }
     _hostView.window.preservesContentDuringLiveResize = YES;
     [self ensureBrowserCreatedIfPossible];
 }
 
 - (void)hostViewWillStartLiveResize {
+    if (_isInvalidated) {
+        return;
+    }
     _isInLiveResize = YES;
     [self cancelPendingResizeWorkItem];
 }
 
 - (void)hostViewDidEndLiveResize {
+    if (_isInvalidated) {
+        return;
+    }
     _isInLiveResize = NO;
     [self cancelPendingResizeWorkItem];
     [self flushPendingResizeIfNeeded];
 }
 
 - (void)hostViewDidLayout {
+    if (_isInvalidated) {
+        return;
+    }
     [self ensureBrowserCreatedIfPossible];
     [self scheduleResizeIfNeeded];
 }
@@ -1065,6 +1104,9 @@ private:
 }
 
 - (void)clientDidCreateBrowser {
+    if (_isInvalidated) {
+        return;
+    }
     _browserCreationPending = NO;
     [self flushPendingResizeIfNeeded];
 }
@@ -1074,6 +1116,9 @@ private:
 }
 
 - (void)clientDidReceiveInteraction {
+    if (_isInvalidated) {
+        return;
+    }
     [self.delegate chromiumBrowserHostDidReceiveInteraction:self];
 }
 
@@ -1082,6 +1127,9 @@ private:
                        canGoBack:(BOOL)canGoBack
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading {
+    if (_isInvalidated) {
+        return;
+    }
     _snapshot = [[BlinkChromiumBrowserStateSnapshot alloc] initWithURLString:urlString
                                                                        title:title
                                                                    canGoBack:canGoBack
@@ -1091,6 +1139,9 @@ private:
 }
 
 - (void)clientDidRequestOpenNewTabWithURLString:(NSString *)urlString {
+    if (_isInvalidated) {
+        return;
+    }
     [self.delegate chromiumBrowserHost:self didRequestOpenNewTabWithURLString:urlString];
 }
 
@@ -1142,7 +1193,8 @@ private:
 }
 
 - (void)ensureBrowserCreatedIfPossible {
-    if (_browserCreationPending || _client->HasBrowser() || _hostView.window == nil ||
+    if (_isInvalidated || _client == nullptr ||
+        _browserCreationPending || _client->HasBrowser() || _hostView.window == nil ||
         NSIsEmptyRect(_hostView.bounds)) {
         return;
     }
