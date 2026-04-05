@@ -89,6 +89,18 @@ struct BrowserPaneState: Codable, Equatable, Hashable {
         return tabs.firstIndex(where: { $0.id == selectedTab.id })
     }
 
+    var pinnedTabs: [BrowserPaneTab] {
+        tabs.filter(\.isPinned)
+    }
+
+    var unpinnedTabs: [BrowserPaneTab] {
+        tabs.filter { !$0.isPinned }
+    }
+
+    var orderedTabs: [BrowserPaneTab] {
+        pinnedTabs + unpinnedTabs
+    }
+
     func containsTab(_ browserTabId: String) -> Bool {
         tabs.contains(where: { $0.id == browserTabId })
     }
@@ -99,7 +111,12 @@ struct BrowserPaneState: Codable, Equatable, Hashable {
     }
 
     mutating func appendTab(_ tab: BrowserPaneTab, selecting: Bool = true) {
-        tabs.append(tab)
+        if tab.isPinned {
+            let insertionIndex = tabs.lastIndex(where: \.isPinned).map { tabs.index(after: $0) } ?? tabs.startIndex
+            tabs.insert(tab, at: insertionIndex)
+        } else {
+            tabs.append(tab)
+        }
         if selecting || selectedTabId == nil {
             selectedTabId = tab.id
         }
@@ -130,7 +147,15 @@ struct BrowserPaneState: Codable, Equatable, Hashable {
 
     mutating func setPinned(_ isPinned: Bool, for browserTabId: String) {
         guard let index = tabs.firstIndex(where: { $0.id == browserTabId }) else { return }
+        guard tabs[index].isPinned != isPinned else { return }
         tabs[index].isPinned = isPinned
+        let tab = tabs.remove(at: index)
+        if isPinned {
+            let insertionIndex = tabs.lastIndex(where: \.isPinned).map { tabs.index(after: $0) } ?? tabs.startIndex
+            tabs.insert(tab, at: insertionIndex)
+        } else {
+            tabs.append(tab)
+        }
     }
 
     private mutating func normalizeSelection() {
@@ -150,14 +175,17 @@ struct BrowserPaneState: Codable, Equatable, Hashable {
 extension BrowserPaneState {
     static let empty = BrowserPaneState(tabs: [])
 
-    static func singleTab(urlString: String?) -> BrowserPaneState {
+    static func singleTab(
+        urlString: String?,
+        preferredFocus: BrowserFocusTarget? = nil
+    ) -> BrowserPaneState {
         let resolvedState = BrowserTabState(
             urlString: urlString,
             title: nil,
             canGoBack: false,
             canGoForward: false,
             isLoading: false,
-            preferredFocus: urlString == nil ? .addressBar : .webView
+            preferredFocus: preferredFocus ?? (urlString == nil ? .addressBar : .webView)
         )
         let tab = BrowserPaneTab(state: resolvedState)
         return BrowserPaneState(tabs: [tab], selectedTabId: tab.id)

@@ -42,6 +42,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app
         INFOPLIST_KEY_CFBundleDisplayName: Blink
+        INFOPLIST_KEY_NSPrincipalClass: BlinkChromiumApplication
         INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website."
         GENERATE_INFOPLIST_FILE: true
         PRODUCT_NAME: Blink
@@ -138,6 +139,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.blink.app.dev
         INFOPLIST_KEY_CFBundleDisplayName: "Blink Dev"
+        INFOPLIST_KEY_NSPrincipalClass: BlinkChromiumApplication
         INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Blink uses Bluetooth only when embedded Chromium requests nearby device access from a website."
         GENERATE_INFOPLIST_FILE: true
         PRODUCT_NAME: "Blink Dev"

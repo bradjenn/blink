@@ -694,10 +694,10 @@ final class AppStore {
         return projects.first { $0.id == id }
     }
 
-    func openProjectSession(_ id: String) {
+    func openProjectSession(_ id: String, restoringSavedSetup: Bool = true) {
         setActiveProject(id)
         if activeTabId == nil {
-            if hasProjectSetup(for: id) {
+            if restoringSavedSetup, hasProjectSetup(for: id) {
                 restoreProjectSetup(for: id)
             } else {
                 _ = openTab(projectId: id)
@@ -1048,15 +1048,17 @@ final class AppStore {
     func openBrowserTab(
         projectId: String,
         url: String? = nil,
-        maximizeColumn: Bool = false,
+        maximizeColumn: Bool = true,
         projectSetupPaneId: String? = nil,
-        browserState: BrowserPaneState? = nil
+        browserState: BrowserPaneState? = nil,
+        preferredFocus: BrowserFocusTarget? = nil
     ) -> AppTab {
         let tab = makeBrowserTab(
             projectId: projectId,
             url: url,
             projectSetupPaneId: projectSetupPaneId,
-            browserState: browserState
+            browserState: browserState,
+            preferredFocus: preferredFocus
         )
         insertTab(tab, for: projectId, after: nil)
 
@@ -1077,11 +1079,16 @@ final class AppStore {
     @discardableResult
     func openBrowserTabForActiveProject(
         url: String? = nil,
-        maximizeColumn: Bool = false
+        maximizeColumn: Bool = true
     ) -> AppTab? {
         guard let projectId = activeProjectId else { return nil }
         let resolvedURL = url ?? BrowserDefaults.homePageURLString
-        return openBrowserTab(projectId: projectId, url: resolvedURL, maximizeColumn: maximizeColumn)
+        return openBrowserTab(
+            projectId: projectId,
+            url: resolvedURL,
+            maximizeColumn: maximizeColumn,
+            preferredFocus: .addressBar
+        )
     }
 
     func openNewTabForActiveSurface() {
@@ -1092,7 +1099,11 @@ final class AppStore {
            let activeTab = tabsById[activeTabId],
            activeTab.projectId == projectId,
            activeTab.isBrowser {
-            _ = openBrowserTabInPane(activeTabId, url: BrowserDefaults.homePageURLString)
+            _ = openBrowserTabInPane(
+                activeTabId,
+                url: BrowserDefaults.homePageURLString,
+                preferredFocus: .addressBar
+            )
             return
         }
 
@@ -1411,7 +1422,11 @@ final class AppStore {
     }
 
     @discardableResult
-    func openBrowserTabInPane(_ paneTabId: String, url: String? = nil) -> BrowserPaneTab? {
+    func openBrowserTabInPane(
+        _ paneTabId: String,
+        url: String? = nil,
+        preferredFocus: BrowserFocusTarget? = nil
+    ) -> BrowserPaneTab? {
         guard let idx = tabs.firstIndex(where: { $0.id == paneTabId && $0.isBrowser }) else { return nil }
         let rawURLString = url ?? BrowserDefaults.homePageURLString
         let resolvedURLString = BrowserURLResolver.resolve(rawURLString)?.absoluteString ?? rawURLString
@@ -1424,7 +1439,7 @@ final class AppStore {
                 canGoBack: false,
                 canGoForward: false,
                 isLoading: false,
-                preferredFocus: .webView
+                preferredFocus: preferredFocus ?? .webView
             )
         )
         paneState.appendTab(browserTab)
@@ -1440,6 +1455,12 @@ final class AppStore {
               var paneState = tabs[idx].browserState else { return }
         guard paneState.selectedTabId != browserTabId else { return }
         paneState.selectTab(browserTabId)
+        if let selectedTab = paneState.selectedTab,
+           selectedTab.state.preferredFocus != .webView {
+            var updatedState = selectedTab.state
+            updatedState.preferredFocus = .webView
+            paneState.updateState(updatedState, for: selectedTab.id)
+        }
         tabs[idx].browserState = paneState
         tabs[idx].label = browserPaneLabel(for: paneState, fallback: tabs[idx].defaultLabel)
     }
@@ -1466,6 +1487,15 @@ final class AppStore {
               var paneState = tabs[idx].browserState else { return }
         paneState.isSidebarPinned.toggle()
         tabs[idx].browserState = paneState
+    }
+
+    func toggleBrowserTabPinned(_ browserTabId: String, in paneTabId: String) {
+        guard let idx = tabs.firstIndex(where: { $0.id == paneTabId && $0.isBrowser }),
+              var paneState = tabs[idx].browserState,
+              let browserTab = paneState.tabs.first(where: { $0.id == browserTabId }) else { return }
+        paneState.setPinned(!browserTab.isPinned, for: browserTabId)
+        tabs[idx].browserState = paneState
+        tabs[idx].label = browserPaneLabel(for: paneState, fallback: tabs[idx].defaultLabel)
     }
 
     func toggleActiveBrowserSidebarPinned() {
@@ -1870,7 +1900,12 @@ final class AppStore {
         guard let activeTabId else { return }
         if let activeTab = tabsById[activeTabId],
            activeTab.isBrowser,
-           let selectedBrowserTabId = activeTab.browserState?.selectedTab?.id {
+           let paneState = activeTab.browserState,
+           let selectedBrowserTabId = paneState.selectedTab?.id {
+            if paneState.tabs.count <= 1 {
+                closeTab(activeTabId)
+                return
+            }
             closeBrowserTab(selectedBrowserTabId, in: activeTabId)
             return
         }
@@ -2145,12 +2180,16 @@ final class AppStore {
         projectId: String,
         url: String?,
         projectSetupPaneId: String? = nil,
-        browserState: BrowserPaneState? = nil
+        browserState: BrowserPaneState? = nil,
+        preferredFocus: BrowserFocusTarget? = nil
     ) -> AppTab {
         let resolvedURLString = url.flatMap { BrowserURLResolver.resolve($0)?.absoluteString ?? $0 }
         let count = tabs.filter { $0.projectId == projectId && $0.isBrowser }.count + 1
         let defaultLabel = "Browser \(count)"
-        let resolvedState = browserState ?? BrowserPaneState.singleTab(urlString: resolvedURLString)
+        let resolvedState = browserState ?? BrowserPaneState.singleTab(
+            urlString: resolvedURLString,
+            preferredFocus: preferredFocus
+        )
 
         return AppTab(
             id: UUID().uuidString,

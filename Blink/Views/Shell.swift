@@ -133,13 +133,6 @@ struct Shell: View {
                             }
                             return nil
                         case "l":
-                            if let activeTabId = store.activeTabId,
-                               store.tabsById[activeTabId]?.isBrowser == true {
-                                DispatchQueue.main.async {
-                                    store.focusBrowserAddressBar()
-                                }
-                                return nil
-                            }
                             DispatchQueue.main.async {
                                 store.focusRight()
                             }
@@ -1047,9 +1040,14 @@ private struct WorkspaceColumnView: View {
     }
 
     var body: some View {
+        @Bindable var browserManager = browserManager
+
         VStack(spacing: Layout.workspaceColumnSpacing) {
             ForEach(columnTabs) { tab in
                 let isFocused = activeTabId == tab.id && !store.sidebarFocused
+                let projectDownloads = browserManager.downloads
+                    .filter { $0.projectId == project.id }
+                    .sorted { $0.updatedAt > $1.updatedAt }
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -1077,6 +1075,7 @@ private struct WorkspaceColumnView: View {
                             tab: tab,
                             project: project,
                             browserManager: browserManager,
+                            projectDownloads: projectDownloads,
                             isFocused: isFocused
                         )
                     case .chat:

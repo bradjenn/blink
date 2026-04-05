@@ -84,7 +84,7 @@ struct SidebarView: View {
         case .terminal:
             store.openTab(projectId: projectId)
         case .browser:
-            store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+            store.openBrowserTabForActiveProject()
         case .lazygit:
             store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
         case .yazi:
@@ -231,7 +231,7 @@ struct SidebarView: View {
         selectedRow = row
         switch row {
         case .project(let projectId):
-            store.openProjectSession(projectId)
+            store.openProjectSession(projectId, restoringSavedSetup: false)
         case .tab(let projectId, let tabId):
             store.openProjectSession(projectId)
             store.setActiveTab(tabId)

@@ -3,6 +3,7 @@ import Foundation
 enum BrowserURLResolver {
     private static let localHostSuffixes = [".local", ".localhost", ".test", ".internal"]
     private static let explicitlyAllowedSchemes = Set(["http", "https", "file", "about"])
+    private static let searchEngineBaseURL = "https://www.google.com/search"
 
     static func resolve(_ rawValue: String) -> URL? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -14,7 +15,9 @@ enum BrowserURLResolver {
             return url
         }
 
-        guard trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return nil }
+        guard trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else {
+            return searchURL(for: trimmed)
+        }
 
         if trimmed.hasPrefix("//") {
             return URL(string: "https:\(trimmed)")
@@ -22,11 +25,19 @@ enum BrowserURLResolver {
 
         guard let host = hostCandidate(from: trimmed),
               looksLikeBrowsableHost(host) else {
-            return nil
+            return searchURL(for: trimmed)
         }
 
         let scheme = defaultScheme(forHost: host)
         return URL(string: "\(scheme)\(trimmed)")
+    }
+
+    private static func searchURL(for query: String) -> URL? {
+        var components = URLComponents(string: searchEngineBaseURL)
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: query)
+        ]
+        return components?.url
     }
 
     private static func hostCandidate(from value: String) -> String? {
@@ -38,15 +49,7 @@ enum BrowserURLResolver {
         let normalizedHost = host.lowercased()
         let hostWithoutPort = normalizedHost.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? normalizedHost
 
-        if normalizedHost == "localhost" || normalizedHost.hasPrefix("localhost:") {
-            return true
-        }
-
-        if normalizedHost == "127.0.0.1" || normalizedHost.hasPrefix("127.0.0.1:") {
-            return true
-        }
-
-        if localHostSuffixes.contains(where: { hostWithoutPort.hasSuffix($0) }) {
+        if isLocalHost(normalizedHost, hostWithoutPort: hostWithoutPort) {
             return true
         }
 
@@ -57,14 +60,33 @@ enum BrowserURLResolver {
         let normalizedHost = host.lowercased()
         let hostWithoutPort = normalizedHost.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? normalizedHost
 
-        if hostWithoutPort == "localhost" || hostWithoutPort == "127.0.0.1" {
-            return "http://"
-        }
-
-        if localHostSuffixes.contains(where: { hostWithoutPort.hasSuffix($0) }) {
+        if isLocalHost(normalizedHost, hostWithoutPort: hostWithoutPort) {
             return "http://"
         }
 
         return "https://"
+    }
+
+    static func isLocalURLString(_ rawValue: String?) -> Bool {
+        guard let rawValue,
+              let resolvedURL = resolve(rawValue) ?? URL(string: rawValue),
+              let host = resolvedURL.host(percentEncoded: false)?.lowercased() else {
+            return false
+        }
+
+        let hostWithoutPort = host.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? host
+        return isLocalHost(host, hostWithoutPort: hostWithoutPort)
+    }
+
+    private static func isLocalHost(_ normalizedHost: String, hostWithoutPort: String) -> Bool {
+        if normalizedHost == "localhost" || normalizedHost.hasPrefix("localhost:") {
+            return true
+        }
+
+        if normalizedHost == "127.0.0.1" || normalizedHost.hasPrefix("127.0.0.1:") {
+            return true
+        }
+
+        return localHostSuffixes.contains(where: { hostWithoutPort.hasSuffix($0) })
     }
 }

@@ -4,6 +4,7 @@
 
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
+#include "include/cef_download_handler.h"
 #include "include/cef_display_handler.h"
 #include "include/cef_focus_handler.h"
 #include "include/cef_frame.h"
@@ -15,8 +16,26 @@
 
 #import "BlinkChromiumRuntime.h"
 
+#ifndef NDEBUG
+#define BlinkChromiumPopupDebugLog(fmt, ...) NSLog((@"[BlinkPopup] " fmt), ##__VA_ARGS__)
+#else
+#define BlinkChromiumPopupDebugLog(...)
+#endif
+
 typedef void (^BlinkChromiumOpenNewTabHandler)(NSString *_Nullable urlString);
 typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
+typedef void (^BlinkChromiumDownloadUpdateHandler)(NSString *downloadIdentifier,
+                                                   NSString *_Nullable urlString,
+                                                   NSString *suggestedFileName,
+                                                   NSString *_Nullable fullPath,
+                                                   int64_t receivedBytes,
+                                                   int64_t totalBytes,
+                                                   NSInteger percentComplete,
+                                                   int64_t currentSpeed,
+                                                   BOOL isInProgress,
+                                                   BOOL isComplete,
+                                                   BOOL isCanceled,
+                                                   BOOL isInterrupted);
 
 @protocol BlinkChromiumHostViewOwner <NSObject>
 
@@ -38,6 +57,18 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading;
 - (void)clientDidRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
+- (void)clientDidUpdateDownloadWithIdentifier:(NSString *)downloadIdentifier
+                                    urlString:(nullable NSString *)urlString
+                            suggestedFileName:(NSString *)suggestedFileName
+                                     fullPath:(nullable NSString *)fullPath
+                                receivedBytes:(int64_t)receivedBytes
+                                   totalBytes:(int64_t)totalBytes
+                              percentComplete:(NSInteger)percentComplete
+                                 currentSpeed:(int64_t)currentSpeed
+                                 isInProgress:(BOOL)isInProgress
+                                   isComplete:(BOOL)isComplete
+                                   isCanceled:(BOOL)isCanceled
+                                isInterrupted:(BOOL)isInterrupted;
 - (BOOL)clientHandleExternalNavigationForURLString:(nullable NSString *)urlString;
 - (BOOL)clientConfigurePopupWithID:(int)popupID
                    targetURLString:(nullable NSString *)targetURLString
@@ -67,6 +98,18 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
                        canGoBack:(BOOL)canGoBack
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading;
+- (void)clientDidUpdateDownloadWithIdentifier:(NSString *)downloadIdentifier
+                                    urlString:(nullable NSString *)urlString
+                            suggestedFileName:(NSString *)suggestedFileName
+                                     fullPath:(nullable NSString *)fullPath
+                                receivedBytes:(int64_t)receivedBytes
+                                   totalBytes:(int64_t)totalBytes
+                              percentComplete:(NSInteger)percentComplete
+                                 currentSpeed:(int64_t)currentSpeed
+                                 isInProgress:(BOOL)isInProgress
+                                   isComplete:(BOOL)isComplete
+                                   isCanceled:(BOOL)isCanceled
+                                isInterrupted:(BOOL)isInterrupted;
 - (void)clientDidRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
 - (BOOL)clientHandleExternalNavigationForURLString:(nullable NSString *)urlString;
 - (BOOL)clientConfigurePopupWithID:(int)popupID
@@ -87,6 +130,20 @@ typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
 @end
 
 @implementation BlinkChromiumHostView
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSEventModifierFlags modifiers = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+    NSString *characters = event.charactersIgnoringModifiers.lowercaseString;
+    NSString *windowIdentifier = self.window.identifier;
+    if (modifiers == NSEventModifierFlagCommand &&
+        [characters isEqualToString:@"w"] &&
+        ![windowIdentifier isEqualToString:@"BlinkChromiumPopupWindow"]) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"BlinkCloseActiveTabShortcut" object:nil];
+        return YES;
+    }
+
+    return [super performKeyEquivalent:event];
+}
 
 - (BOOL)isFlipped {
     return YES;
@@ -144,6 +201,45 @@ NSString *BlinkChromiumStringOrNil(const CefString& value) {
     return [NSString stringWithUTF8String:value.ToString().c_str()];
 }
 
+NSString *BlinkChromiumSafeDownloadFileName(NSString *suggestedName, NSString *urlString) {
+    NSString *trimmedSuggestedName = [suggestedName.lastPathComponent stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmedSuggestedName.length > 0) {
+        return trimmedSuggestedName;
+    }
+
+    NSURL *url = urlString.length > 0 ? [NSURL URLWithString:urlString] : nil;
+    NSString *candidate = [url.lastPathComponent stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (candidate.length > 0) {
+        return candidate;
+    }
+
+    return @"download";
+}
+
+NSString *BlinkChromiumUniqueDownloadPath(NSString *suggestedName, NSString *urlString) {
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    NSURL *downloadsDirectory = [fileManager URLsForDirectory:NSDownloadsDirectory inDomains:NSUserDomainMask].firstObject;
+    if (downloadsDirectory == nil) {
+        downloadsDirectory = [NSURL fileURLWithPath:[@"~/Downloads" stringByExpandingTildeInPath] isDirectory:YES];
+    }
+
+    NSString *fileName = BlinkChromiumSafeDownloadFileName(suggestedName, urlString);
+    NSString *baseName = fileName.stringByDeletingPathExtension;
+    NSString *fileExtension = fileName.pathExtension;
+
+    NSURL *candidateURL = [downloadsDirectory URLByAppendingPathComponent:fileName isDirectory:NO];
+    NSUInteger suffix = 2;
+    while ([fileManager fileExistsAtPath:candidateURL.path]) {
+        NSString *dedupedName = fileExtension.length > 0
+            ? [NSString stringWithFormat:@"%@ %lu.%@", baseName, (unsigned long)suffix, fileExtension]
+            : [NSString stringWithFormat:@"%@ %lu", baseName, (unsigned long)suffix];
+        candidateURL = [downloadsDirectory URLByAppendingPathComponent:dedupedName isDirectory:NO];
+        suffix += 1;
+    }
+
+    return candidateURL.path;
+}
+
 void BlinkChromiumOpenURLExternally(NSString *urlString) {
     NSURL *externalURL = [NSURL URLWithString:urlString];
     if (externalURL == nil) {
@@ -153,6 +249,18 @@ void BlinkChromiumOpenURLExternally(NSString *urlString) {
     dispatch_async(dispatch_get_main_queue(), ^{
         [[NSWorkspace sharedWorkspace] openURL:externalURL];
     });
+}
+
+void BlinkChromiumDispatchToMainQueue(dispatch_block_t block) {
+    if (block == nil) {
+        return;
+    }
+
+    if (NSThread.isMainThread) {
+        block();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), block);
+    }
 }
 
 BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
@@ -253,6 +361,130 @@ BOOL BlinkChromiumTargetDispositionOpensTab(CefLifeSpanHandler::WindowOpenDispos
     }
 }
 
+BOOL BlinkChromiumPopupFeaturesRequestSeparateWindow(const CefPopupFeatures& popupFeatures) {
+    return popupFeatures.isPopup ||
+        popupFeatures.xSet ||
+        popupFeatures.ySet ||
+        popupFeatures.widthSet ||
+        popupFeatures.heightSet;
+}
+
+BOOL BlinkChromiumLooksLikeAuthenticationPopupURL(NSString *urlString) {
+    if (urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    NSString *host = url.host.lowercaseString;
+    NSString *path = url.path.lowercaseString;
+    NSString *absoluteString = url.absoluteString.lowercaseString;
+    NSString *provider = nil;
+    NSString *idp = nil;
+
+    for (NSURLQueryItem *item in components.queryItems) {
+        NSString *name = item.name.lowercaseString;
+        NSString *value = item.value.lowercaseString;
+        if ([name isEqualToString:@"provider"]) {
+            provider = value;
+        } else if ([name isEqualToString:@"idp"]) {
+            idp = value;
+        }
+    }
+
+    if ([host isEqualToString:@"accounts.google.com"] ||
+        [host hasSuffix:@".accounts.google.com"]) {
+        return YES;
+    }
+
+    if (([host hasSuffix:@".google.com"] || [host isEqualToString:@"google.com"]) &&
+        ([path containsString:@"/o/oauth"] ||
+         [path containsString:@"/signin/oauth"] ||
+         [absoluteString containsString:@"oauth"])) {
+        return YES;
+    }
+
+    BOOL looksLikeAuthPath =
+        [path containsString:@"/auth"] ||
+        [path containsString:@"/oauth"] ||
+        [path containsString:@"/login"] ||
+        [path containsString:@"/signin"] ||
+        [path containsString:@"/authorize"] ||
+        [path containsString:@"/callback"];
+    BOOL referencesGoogle =
+        [provider isEqualToString:@"google"] ||
+        [idp isEqualToString:@"google"] ||
+        [absoluteString containsString:@"google"];
+
+    return looksLikeAuthPath && referencesGoogle;
+}
+
+BOOL BlinkChromiumLooksLikeDownloadURL(NSString *urlString) {
+    if (urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSString *absoluteString = url.absoluteString.lowercaseString;
+    NSString *path = url.path.lowercaseString;
+
+    if ([absoluteString containsString:@"download="] ||
+        [absoluteString containsString:@"attachment="] ||
+        [absoluteString containsString:@"/download"] ||
+        [absoluteString containsString:@"installer"] ||
+        [absoluteString containsString:@"setup"]) {
+        return YES;
+    }
+
+    static NSSet<NSString *> *downloadExtensions;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        downloadExtensions = [NSSet setWithArray:@[
+            @"zip", @"dmg", @"pkg", @"tar", @"gz", @"tgz", @"xz", @"bz2", @"7z",
+            @"rar", @"exe", @"msi", @"deb", @"rpm", @"iso", @"appimage", @"bin", @"mpkg"
+        ]];
+    });
+
+    NSString *extension = path.pathExtension.lowercaseString;
+    return extension.length > 0 && [downloadExtensions containsObject:extension];
+}
+
+BOOL BlinkChromiumLooksLikeDownloadLandingURL(NSString *urlString) {
+    if (BlinkChromiumLooksLikeDownloadURL(urlString)) {
+        return YES;
+    }
+
+    if (urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSString *absoluteString = url.absoluteString.lowercaseString;
+    NSString *path = url.path.lowercaseString;
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    NSString *source = nil;
+    NSString *configuration = nil;
+
+    for (NSURLQueryItem *item in components.queryItems) {
+        NSString *name = item.name.lowercaseString;
+        NSString *value = item.value.lowercaseString;
+        if ([name isEqualToString:@"src"] || [name isEqualToString:@"source"]) {
+            source = value;
+        } else if ([name isEqualToString:@"configuration"]) {
+            configuration = value;
+        }
+    }
+
+    if ([path containsString:@"/release"] &&
+        ((source != nil && [source containsString:@"download"]) ||
+         (configuration != nil && [configuration containsString:@"release"]) ||
+         [absoluteString containsString:@"download"])) {
+        return YES;
+    }
+
+    return NO;
+}
+
 NSString *BlinkChromiumWindowTitle(NSString *title, NSString *urlString) {
     NSString *trimmedTitle = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (trimmedTitle.length > 0) {
@@ -294,6 +526,7 @@ NSMutableSet<BlinkChromiumPopupWindowController *> *BlinkChromiumActivePopupCont
 }
 
 class BlinkChromiumClient final : public CefClient,
+                                  public CefDownloadHandler,
                                   public CefDisplayHandler,
                                   public CefLoadHandler,
                                   public CefLifeSpanHandler,
@@ -405,6 +638,10 @@ public:
         return this;
     }
 
+    CefRefPtr<CefDownloadHandler> GetDownloadHandler() override {
+        return this;
+    }
+
     void OnAddressChange(
         CefRefPtr<CefBrowser> browser,
         CefRefPtr<CefFrame> frame,
@@ -483,18 +720,45 @@ public:
             *no_javascript_access = false;
         }
 
+        BlinkChromiumPopupDebugLog(
+            @"OnBeforePopup target=%@ disposition=%d userGesture=%d",
+            targetURLString ?: @"<nil>",
+            (int)target_disposition,
+            user_gesture
+        );
+
         if (targetURLString == nil || [targetURLString isEqualToString:@"about:blank"]) {
+            if (BlinkChromiumPopupFeaturesRequestSeparateWindow(popupFeatures) ||
+                !BlinkChromiumTargetDispositionOpensTab(target_disposition)) {
+                if ([host_ clientConfigurePopupWithID:popup_id
+                                      targetURLString:targetURLString
+                                    targetDisposition:target_disposition
+                                        popupFeatures:popupFeatures
+                                           windowInfo:windowInfo
+                                               client:client
+                                             settings:settings]) {
+                    BlinkChromiumPopupDebugLog(@"Popup retained as hidden bootstrap %@", targetURLString ?: @"<nil>");
+                    return false;
+                }
+            }
+
+            BlinkChromiumPopupDebugLog(@"Blank bootstrap popup fell back to default handling");
             client = nullptr;
             return false;
         }
 
         if (BlinkChromiumShouldOpenPopupExternally(targetURLString)) {
+            BlinkChromiumPopupDebugLog(@"Popup matched external handoff %@", targetURLString);
             if ([host_ clientHandleExternalNavigationForURLString:targetURLString]) {
                 return true;
             }
         }
 
-        if (BlinkChromiumTargetDispositionOpensTab(target_disposition)) {
+        if (BlinkChromiumTargetDispositionOpensTab(target_disposition) &&
+            !BlinkChromiumPopupFeaturesRequestSeparateWindow(popupFeatures) &&
+            !BlinkChromiumLooksLikeAuthenticationPopupURL(targetURLString) &&
+            !BlinkChromiumLooksLikeDownloadLandingURL(targetURLString)) {
+            BlinkChromiumPopupDebugLog(@"Popup routed to Blink tab %@", targetURLString);
             [host_ clientDidRequestOpenNewTabWithURLString:targetURLString];
             return true;
         }
@@ -506,9 +770,11 @@ public:
                                    windowInfo:windowInfo
                                        client:client
                                      settings:settings]) {
+            BlinkChromiumPopupDebugLog(@"Popup routed to popup window %@", targetURLString);
             return false;
         }
 
+        BlinkChromiumPopupDebugLog(@"Popup fell back to Blink tab %@", targetURLString);
         [host_ clientDidRequestOpenNewTabWithURLString:targetURLString];
         return true;
     }
@@ -551,6 +817,51 @@ public:
         }
     }
 
+    bool OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+                          CefRefPtr<CefDownloadItem> download_item,
+                          const CefString& suggested_name,
+                          CefRefPtr<CefBeforeDownloadCallback> callback) override {
+        CEF_REQUIRE_UI_THREAD();
+        if (host_ == nil || download_item == nullptr || callback == nullptr) {
+            return false;
+        }
+
+        NSString *urlString = BlinkChromiumStringOrNil(download_item->GetURL());
+        NSString *suggestedFileName =
+            BlinkChromiumSafeDownloadFileName(BlinkChromiumStringOrNil(suggested_name) ?: @"", urlString ?: @"");
+        NSString *downloadPath = BlinkChromiumUniqueDownloadPath(suggestedFileName, urlString ?: @"");
+        callback->Continue(downloadPath.UTF8String, false);
+        return true;
+    }
+
+    void OnDownloadUpdated(CefRefPtr<CefBrowser> browser,
+                           CefRefPtr<CefDownloadItem> download_item,
+                           CefRefPtr<CefDownloadItemCallback> callback) override {
+        CEF_REQUIRE_UI_THREAD();
+        if (host_ == nil || download_item == nullptr || !download_item->IsValid()) {
+            return;
+        }
+
+        NSString *downloadIdentifier = [NSString stringWithFormat:@"%u", download_item->GetId()];
+        NSString *urlString = BlinkChromiumStringOrNil(download_item->GetURL());
+        NSString *suggestedFileName = BlinkChromiumSafeDownloadFileName(
+            BlinkChromiumStringOrNil(download_item->GetSuggestedFileName()) ?: @"",
+            urlString ?: @""
+        );
+        [host_ clientDidUpdateDownloadWithIdentifier:downloadIdentifier
+                                           urlString:urlString
+                                   suggestedFileName:suggestedFileName
+                                            fullPath:BlinkChromiumStringOrNil(download_item->GetFullPath())
+                                       receivedBytes:download_item->GetReceivedBytes()
+                                          totalBytes:download_item->GetTotalBytes()
+                                     percentComplete:download_item->GetPercentComplete()
+                                        currentSpeed:download_item->GetCurrentSpeed()
+                                        isInProgress:download_item->IsInProgress()
+                                          isComplete:download_item->IsComplete()
+                                          isCanceled:download_item->IsCanceled()
+                                       isInterrupted:download_item->IsInterrupted()];
+    }
+
 private:
     void PublishSnapshot() {
         if (host_ == nil) {
@@ -587,6 +898,7 @@ private:
 - (instancetype)initWithInitialURLString:(nullable NSString *)initialURLString
                            popupFeatures:(const CefPopupFeatures&)popupFeatures
                              onOpenNewTab:(BlinkChromiumOpenNewTabHandler)onOpenNewTab
+                         onDownloadUpdate:(BlinkChromiumDownloadUpdateHandler)onDownloadUpdate
                                 onCreated:(BlinkChromiumPopupLifecycleHandler)onCreated
                                  onClosed:(BlinkChromiumPopupLifecycleHandler)onClosed;
 - (void)configureWindowInfo:(CefWindowInfo&)windowInfo
@@ -602,6 +914,7 @@ private:
     BOOL _didCreateBrowser;
     BOOL _didHandOffExternalNavigation;
     BOOL _didFinishClosing;
+    BOOL _hasPresentedWindow;
     BOOL _isClosingBrowser;
     BOOL _isInLiveResize;
     NSSize _lastReportedHostSize;
@@ -611,6 +924,7 @@ private:
     BlinkChromiumBrowserStateSnapshot *_snapshot;
     NSMutableDictionary<NSNumber *, BlinkChromiumPopupWindowController *> *_pendingPopupControllers;
     BlinkChromiumOpenNewTabHandler _onOpenNewTab;
+    BlinkChromiumDownloadUpdateHandler _onDownloadUpdate;
     BlinkChromiumPopupLifecycleHandler _onCreated;
     BlinkChromiumPopupLifecycleHandler _onClosed;
     CefRefPtr<BlinkChromiumClient> _client;
@@ -619,6 +933,7 @@ private:
 - (instancetype)initWithInitialURLString:(NSString *)initialURLString
                            popupFeatures:(const CefPopupFeatures&)popupFeatures
                              onOpenNewTab:(BlinkChromiumOpenNewTabHandler)onOpenNewTab
+                         onDownloadUpdate:(BlinkChromiumDownloadUpdateHandler)onDownloadUpdate
                                 onCreated:(BlinkChromiumPopupLifecycleHandler)onCreated
                                  onClosed:(BlinkChromiumPopupLifecycleHandler)onClosed {
     self = [super init];
@@ -629,6 +944,7 @@ private:
     _initialURLString = [initialURLString copy];
     _pendingPopupControllers = [NSMutableDictionary dictionary];
     _onOpenNewTab = [onOpenNewTab copy];
+    _onDownloadUpdate = [onDownloadUpdate copy];
     _onCreated = [onCreated copy];
     _onClosed = [onClosed copy];
 
@@ -644,6 +960,7 @@ private:
                                             backing:NSBackingStoreBuffered
                                               defer:NO];
     _window.delegate = self;
+    _window.identifier = NSUserInterfaceItemIdentifier(@"BlinkChromiumPopupWindow");
     _window.title = BlinkChromiumWindowTitle(nil, _initialURLString);
     _window.contentView = _hostView;
 
@@ -651,6 +968,28 @@ private:
     [BlinkChromiumActivePopupControllers() addObject:self];
 
     return self;
+}
+
+- (BOOL)shouldPresentWindowForURLString:(NSString *)urlString {
+    NSString *candidateURLString = urlString ?: _snapshot.urlString ?: _initialURLString;
+    if (candidateURLString.length == 0 || [candidateURLString isEqualToString:@"about:blank"]) {
+        return NO;
+    }
+
+    if (BlinkChromiumLooksLikeDownloadLandingURL(candidateURLString)) {
+        return NO;
+    }
+
+    return YES;
+}
+
+- (void)presentWindowIfNeededForURLString:(NSString *)urlString {
+    if (_hasPresentedWindow || ![self shouldPresentWindowForURLString:urlString]) {
+        return;
+    }
+
+    _hasPresentedWindow = YES;
+    [_window makeKeyAndOrderFront:nil];
 }
 
 - (void)configureWindowInfo:(CefWindowInfo&)windowInfo
@@ -747,7 +1086,7 @@ private:
         _onCreated();
         _onCreated = nil;
     }
-    [_window makeKeyAndOrderFront:nil];
+    [self presentWindowIfNeededForURLString:_initialURLString];
     _client->FocusBrowser();
     [self flushPendingResizeIfNeeded];
 }
@@ -781,11 +1120,54 @@ private:
                                                                 canGoForward:canGoForward
                                                                    isLoading:isLoading];
     _window.title = BlinkChromiumWindowTitle(title, urlString ?: _initialURLString);
+    [self presentWindowIfNeededForURLString:urlString];
 }
 
 - (void)clientDidRequestOpenNewTabWithURLString:(NSString *)urlString {
+    BlinkChromiumPopupDebugLog(@"Popup requested Blink tab %@", urlString ?: @"<nil>");
     if (_onOpenNewTab != nil) {
         _onOpenNewTab(urlString);
+    }
+}
+
+- (void)clientDidUpdateDownloadWithIdentifier:(NSString *)downloadIdentifier
+                                    urlString:(NSString *)urlString
+                            suggestedFileName:(NSString *)suggestedFileName
+                                     fullPath:(NSString *)fullPath
+                                receivedBytes:(int64_t)receivedBytes
+                                   totalBytes:(int64_t)totalBytes
+                              percentComplete:(NSInteger)percentComplete
+                                 currentSpeed:(int64_t)currentSpeed
+                                 isInProgress:(BOOL)isInProgress
+                                   isComplete:(BOOL)isComplete
+                                 isCanceled:(BOOL)isCanceled
+                                isInterrupted:(BOOL)isInterrupted {
+    if (_onDownloadUpdate != nil) {
+        _onDownloadUpdate(downloadIdentifier,
+                          urlString,
+                          suggestedFileName,
+                          fullPath,
+                          receivedBytes,
+                          totalBytes,
+                          percentComplete,
+                          currentSpeed,
+                          isInProgress,
+                          isComplete,
+                          isCanceled,
+                          isInterrupted);
+    }
+
+    NSString *currentURLString = _snapshot.urlString ?: _initialURLString;
+    BOOL isBlankPopup = currentURLString.length == 0 || [currentURLString isEqualToString:@"about:blank"];
+    if (!isBlankPopup) {
+        return;
+    }
+
+    if (_client != nullptr && _client->HasBrowser()) {
+        _isClosingBrowser = YES;
+        _client->CloseBrowser();
+    } else {
+        [self abortPendingPopup];
     }
 }
 
@@ -794,6 +1176,7 @@ private:
         return NO;
     }
 
+    BlinkChromiumPopupDebugLog(@"Handing popup externally %@", urlString ?: @"<nil>");
     _didHandOffExternalNavigation = YES;
     BlinkChromiumOpenURLExternally(urlString);
 
@@ -819,6 +1202,7 @@ private:
         [[BlinkChromiumPopupWindowController alloc] initWithInitialURLString:targetURLString
                                                                popupFeatures:popupFeatures
                                                                  onOpenNewTab:_onOpenNewTab
+                                                            onDownloadUpdate:_onDownloadUpdate
                                                                     onCreated:^{
                                                                         [weakSelf clearPendingPopupWithID:popupID];
                                                                     }
@@ -903,6 +1287,42 @@ private:
     _canGoBack = canGoBack;
     _canGoForward = canGoForward;
     _isLoading = isLoading;
+    return self;
+}
+
+@end
+
+@implementation BlinkChromiumDownloadSnapshot
+
+- (instancetype)initWithDownloadIdentifier:(NSString *)downloadIdentifier
+                                 urlString:(NSString *)urlString
+                         suggestedFileName:(NSString *)suggestedFileName
+                                  fullPath:(NSString *)fullPath
+                             receivedBytes:(int64_t)receivedBytes
+                                totalBytes:(int64_t)totalBytes
+                           percentComplete:(NSInteger)percentComplete
+                              currentSpeed:(int64_t)currentSpeed
+                              isInProgress:(BOOL)isInProgress
+                                isComplete:(BOOL)isComplete
+                                isCanceled:(BOOL)isCanceled
+                             isInterrupted:(BOOL)isInterrupted {
+    self = [super init];
+    if (self == nil) {
+        return nil;
+    }
+
+    _downloadIdentifier = [downloadIdentifier copy];
+    _urlString = [urlString copy];
+    _suggestedFileName = [suggestedFileName copy];
+    _fullPath = [fullPath copy];
+    _receivedBytes = receivedBytes;
+    _totalBytes = totalBytes;
+    _percentComplete = percentComplete;
+    _currentSpeed = currentSpeed;
+    _isInProgress = isInProgress;
+    _isComplete = isComplete;
+    _isCanceled = isCanceled;
+    _isInterrupted = isInterrupted;
     return self;
 }
 
@@ -1116,10 +1536,15 @@ private:
 }
 
 - (void)clientDidReceiveInteraction {
-    if (_isInvalidated) {
-        return;
-    }
-    [self.delegate chromiumBrowserHostDidReceiveInteraction:self];
+    __weak BlinkChromiumBrowserHost *weakSelf = self;
+    BlinkChromiumDispatchToMainQueue(^{
+        BlinkChromiumBrowserHost *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+
+        [strongSelf.delegate chromiumBrowserHostDidReceiveInteraction:strongSelf];
+    });
 }
 
 - (void)clientDidUpdateURLString:(NSString *)urlString
@@ -1135,14 +1560,68 @@ private:
                                                                    canGoBack:canGoBack
                                                                 canGoForward:canGoForward
                                                                    isLoading:isLoading];
-    [self.delegate chromiumBrowserHost:self didUpdate:_snapshot];
+    BlinkChromiumBrowserStateSnapshot *snapshot = _snapshot;
+    __weak BlinkChromiumBrowserHost *weakSelf = self;
+    BlinkChromiumDispatchToMainQueue(^{
+        BlinkChromiumBrowserHost *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+
+        [strongSelf.delegate chromiumBrowserHost:strongSelf didUpdate:snapshot];
+    });
 }
 
 - (void)clientDidRequestOpenNewTabWithURLString:(NSString *)urlString {
+    NSString *resolvedURLString = [urlString copy];
+    __weak BlinkChromiumBrowserHost *weakSelf = self;
+    BlinkChromiumDispatchToMainQueue(^{
+        BlinkChromiumBrowserHost *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+
+        [strongSelf.delegate chromiumBrowserHost:strongSelf didRequestOpenNewTabWithURLString:resolvedURLString];
+    });
+}
+
+- (void)clientDidUpdateDownloadWithIdentifier:(NSString *)downloadIdentifier
+                                    urlString:(NSString *)urlString
+                            suggestedFileName:(NSString *)suggestedFileName
+                                     fullPath:(NSString *)fullPath
+                                receivedBytes:(int64_t)receivedBytes
+                                   totalBytes:(int64_t)totalBytes
+                              percentComplete:(NSInteger)percentComplete
+                                 currentSpeed:(int64_t)currentSpeed
+                                 isInProgress:(BOOL)isInProgress
+                                   isComplete:(BOOL)isComplete
+                                   isCanceled:(BOOL)isCanceled
+                                isInterrupted:(BOOL)isInterrupted {
     if (_isInvalidated) {
         return;
     }
-    [self.delegate chromiumBrowserHost:self didRequestOpenNewTabWithURLString:urlString];
+    BlinkChromiumDownloadSnapshot *snapshot =
+        [[BlinkChromiumDownloadSnapshot alloc] initWithDownloadIdentifier:downloadIdentifier
+                                                                urlString:urlString
+                                                        suggestedFileName:suggestedFileName
+                                                                 fullPath:fullPath
+                                                            receivedBytes:receivedBytes
+                                                               totalBytes:totalBytes
+                                                          percentComplete:percentComplete
+                                                             currentSpeed:currentSpeed
+                                                             isInProgress:isInProgress
+                                                               isComplete:isComplete
+                                                               isCanceled:isCanceled
+                                                            isInterrupted:isInterrupted];
+    __weak BlinkChromiumBrowserHost *weakSelf = self;
+    BlinkChromiumDispatchToMainQueue(^{
+        BlinkChromiumBrowserHost *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+
+        [strongSelf.delegate chromiumBrowserHost:strongSelf didUpdateDownload:snapshot];
+    });
 }
 
 - (BOOL)clientHandleExternalNavigationForURLString:(NSString *)urlString {
@@ -1163,6 +1642,31 @@ private:
                                                                  onOpenNewTab:^(NSString *urlString) {
                                                                      [weakSelf clientDidRequestOpenNewTabWithURLString:urlString];
                                                                  }
+                                                            onDownloadUpdate:^(NSString *downloadIdentifier,
+                                                                               NSString *urlString,
+                                                                               NSString *suggestedFileName,
+                                                                               NSString *fullPath,
+                                                                               int64_t receivedBytes,
+                                                                               int64_t totalBytes,
+                                                                               NSInteger percentComplete,
+                                                                               int64_t currentSpeed,
+                                                                               BOOL isInProgress,
+                                                                               BOOL isComplete,
+                                                                               BOOL isCanceled,
+                                                                               BOOL isInterrupted) {
+                                                                [weakSelf clientDidUpdateDownloadWithIdentifier:downloadIdentifier
+                                                                                                     urlString:urlString
+                                                                                             suggestedFileName:suggestedFileName
+                                                                                                      fullPath:fullPath
+                                                                                                 receivedBytes:receivedBytes
+                                                                                                    totalBytes:totalBytes
+                                                                                               percentComplete:percentComplete
+                                                                                                  currentSpeed:currentSpeed
+                                                                                                  isInProgress:isInProgress
+                                                                                                    isComplete:isComplete
+                                                                                                    isCanceled:isCanceled
+                                                                                                 isInterrupted:isInterrupted];
+                                                            }
                                                                     onCreated:^{
                                                                         [weakSelf clearPendingPopupWithID:popupID];
                                                                     }

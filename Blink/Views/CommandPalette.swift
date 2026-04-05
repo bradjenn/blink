@@ -180,7 +180,7 @@ struct CommandPalette: View {
                 keywords: ["browser", "web", "safari", "page"],
                 isEnabled: hasProject
             ) {
-                store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+                store.openBrowserTabForActiveProject()
             },
             PaletteCommand(
                 id: "toggle-browser-sidebar",
@@ -278,7 +278,7 @@ struct CommandPalette: View {
                 title: "Focus Browser Address Bar",
                 subtitle: "Move keyboard focus to the browser URL field",
                 category: "Browser",
-                shortcut: "Cmd-L",
+                shortcut: "Cmd-Option-L",
                 keywords: ["browser", "url", "address", "omnibar", "location"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {

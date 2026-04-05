@@ -65,6 +65,34 @@ final class AppStoreTests: XCTestCase {
         XCTAssertNil(store.activeTabId)
     }
 
+    func testOpenProjectSessionWithoutRestoreCreatesTerminalWhenProjectHasSavedBrowserSetup() {
+        let store = makeStore()
+        store.projectSetups["4"] = ProjectSetup(
+            projectId: "4",
+            updatedAt: .now,
+            columns: [
+                ProjectSetupColumn(id: "col-0", paneIds: ["pane-browser"])
+            ],
+            panes: [
+                ProjectSetupPane(
+                    id: "pane-browser",
+                    kind: .browser,
+                    label: "Browser 1",
+                    role: nil,
+                    command: nil,
+                    workingDirectory: nil,
+                    browserState: BrowserPaneState.singleTab(urlString: "https://example.com")
+                )
+            ]
+        )
+
+        store.openProjectSession("4", restoringSavedSetup: false)
+
+        let openedTab = try! XCTUnwrap(store.tabsById[store.activeTabId ?? ""])
+        XCTAssertEqual(openedTab.kind, .terminal)
+        XCTAssertEqual(openedTab.projectId, "4")
+    }
+
     func testClearActiveProject() {
         let store = makeStore()
         store.setActiveProject("1")

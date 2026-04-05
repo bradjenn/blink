@@ -3,6 +3,9 @@ import Foundation
 
 @MainActor
 final class ChromiumBrowserController: NSObject, BrowserHostController {
+    private static let downloadRecoveryDuration: TimeInterval = 4
+    private static let minimumRecoveryNavigationInterval: TimeInterval = 0.35
+
     let tabId: String
     let projectId: String
     let session: BrowserSessionModel
@@ -13,6 +16,46 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     var hostView: NSView { host.hostView }
 
     private var onStateChange: ((BrowserTabState) -> Void)?
+    private var onDownloadUpdate: ((BrowserDownloadItem) -> Void)?
+    private var lastStableURLString: String?
+    private var recoveredDownloadIdentifiers: Set<String> = []
+    private var activeDownloadRecoveryURLString: String?
+    private var activeDownloadRecoveryDeadline: Date?
+    private var lastDownloadRecoveryNavigationAt: Date?
+
+    private struct BrowserStatePayload: Sendable {
+        let urlString: String?
+        let title: String?
+        let canGoBack: Bool
+        let canGoForward: Bool
+        let isLoading: Bool
+    }
+
+    private struct DownloadPayload: Sendable {
+        let downloadIdentifier: String
+        let urlString: String?
+        let suggestedFileName: String
+        let fullPath: String?
+        let receivedBytes: Int64
+        let totalBytes: Int64
+        let percentComplete: Int
+        let currentSpeed: Int64
+        let isInProgress: Bool
+        let isComplete: Bool
+        let isCanceled: Bool
+        let isInterrupted: Bool
+    }
+
+    nonisolated private static func browserStatePayload(from snapshot: BlinkChromiumBrowserStateSnapshot?) -> BrowserStatePayload? {
+        guard let snapshot else { return nil }
+        return BrowserStatePayload(
+            urlString: snapshot.urlString,
+            title: snapshot.title,
+            canGoBack: snapshot.canGoBack,
+            canGoForward: snapshot.canGoForward,
+            isLoading: snapshot.isLoading
+        )
+    }
 
     private var state: BrowserTabState {
         get { session.state }
@@ -28,12 +71,14 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         tabId: String,
         projectId: String,
         initialState: BrowserTabState,
-        onStateChange: @escaping (BrowserTabState) -> Void
+        onStateChange: @escaping (BrowserTabState) -> Void,
+        onDownloadUpdate: @escaping (BrowserDownloadItem) -> Void
     ) {
         self.tabId = tabId
         self.projectId = projectId
         self.session = BrowserSessionModel(state: initialState)
         self.onStateChange = onStateChange
+        self.onDownloadUpdate = onDownloadUpdate
         self.host = BlinkChromiumBrowserHost(
             tabIdentifier: tabId,
             projectIdentifier: projectId,
@@ -69,7 +114,7 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
             return
         }
 
-        refreshState(from: host.snapshot)
+        refreshState(from: Self.browserStatePayload(from: host.snapshot))
     }
 
     func navigate(to rawValue: String) {
@@ -133,16 +178,19 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         host.invalidate()
     }
 
-    private func refreshState(from snapshot: BlinkChromiumBrowserStateSnapshot?) {
-        let snapshotURLString = normalizedURLString(snapshot?.urlString)
+    private func refreshState(from payload: BrowserStatePayload?) {
+        let snapshotURLString = normalizedURLString(payload?.urlString)
+        enforceDownloadRecoveryIfNeeded(for: snapshotURLString)
         let nextState = BrowserTabState(
             urlString: mergedURLString(snapshotURLString),
-            title: sanitizedTitle(snapshot?.title) ?? state.title,
-            canGoBack: snapshot?.canGoBack ?? state.canGoBack,
-            canGoForward: snapshot?.canGoForward ?? state.canGoForward,
-            isLoading: snapshot?.isLoading ?? state.isLoading,
+            title: sanitizedTitle(payload?.title) ?? state.title,
+            canGoBack: payload?.canGoBack ?? state.canGoBack,
+            canGoForward: payload?.canGoForward ?? state.canGoForward,
+            isLoading: payload?.isLoading ?? state.isLoading,
             preferredFocus: state.preferredFocus
         )
+
+        rememberStableURLIfNeeded(from: nextState)
 
         guard nextState != state else { return }
         state = nextState
@@ -168,6 +216,11 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         guard let snapshotURLString else { return state.urlString }
 
         if snapshotURLString == "about:blank",
+           let recoveryURLString = currentDownloadRecoveryURLString() {
+            return recoveryURLString
+        }
+
+        if snapshotURLString == "about:blank",
            state.isLoading,
            let currentURLString = state.urlString,
            currentURLString != "about:blank" {
@@ -186,14 +239,102 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
         }
     }
 
-    private func handleHostUpdate(_ snapshot: BlinkChromiumBrowserStateSnapshot) {
-        refreshState(from: snapshot)
+    private func handleHostUpdate(_ payload: BrowserStatePayload) {
+        refreshState(from: payload)
     }
 
     private func handleOpenNewTabRequest(urlString: String?) {
-        let target = (urlString?.isEmpty == false ? urlString : nil) ?? "about:blank"
+        guard let target = urlString,
+              !target.isEmpty,
+              target != "about:blank" else {
+            return
+        }
         guard let url = BrowserURLResolver.resolve(target) else { return }
         onOpenNewTabRequest?(url)
+    }
+
+    private func handleDownloadUpdate(_ payload: DownloadPayload) {
+        let download = BrowserDownloadItem(
+            id: "\(projectId):\(payload.downloadIdentifier)",
+            browserTabId: tabId,
+            projectId: projectId,
+            sourceURLString: payload.urlString,
+            suggestedFileName: payload.suggestedFileName,
+            destinationPath: payload.fullPath,
+            receivedBytes: payload.receivedBytes,
+            totalBytes: payload.totalBytes,
+            percentComplete: payload.percentComplete,
+            currentSpeed: payload.currentSpeed,
+            isInProgress: payload.isInProgress,
+            isComplete: payload.isComplete,
+            isCanceled: payload.isCanceled,
+            isInterrupted: payload.isInterrupted,
+            updatedAt: Date()
+        )
+        onDownloadUpdate?(download)
+        recoverFromBlankDownloadPageIfNeeded(for: payload)
+    }
+
+    private func rememberStableURLIfNeeded(from state: BrowserTabState) {
+        guard let urlString = normalizedURLString(state.urlString),
+              urlString != "about:blank",
+              state.title != nil else {
+            return
+        }
+
+        lastStableURLString = urlString
+    }
+
+    private func recoverFromBlankDownloadPageIfNeeded(for payload: DownloadPayload) {
+        guard recoveredDownloadIdentifiers.insert(payload.downloadIdentifier).inserted else { return }
+        guard payload.isInProgress || payload.isComplete else { return }
+        guard let fallbackURLString = lastStableURLString else { return }
+
+        activeDownloadRecoveryURLString = fallbackURLString
+        activeDownloadRecoveryDeadline = Date().addingTimeInterval(Self.downloadRecoveryDuration)
+
+        let currentURLString = normalizedURLString(host.snapshot?.urlString) ?? normalizedURLString(state.urlString)
+        guard currentURLString != fallbackURLString else {
+            return
+        }
+
+        navigateToDownloadRecoveryURL(fallbackURLString)
+    }
+
+    private func currentDownloadRecoveryURLString() -> String? {
+        guard let urlString = activeDownloadRecoveryURLString,
+              let deadline = activeDownloadRecoveryDeadline,
+              deadline > Date() else {
+            activeDownloadRecoveryURLString = nil
+            activeDownloadRecoveryDeadline = nil
+            return nil
+        }
+
+        return urlString
+    }
+
+    private func enforceDownloadRecoveryIfNeeded(for snapshotURLString: String?) {
+        guard snapshotURLString == "about:blank",
+              let recoveryURLString = currentDownloadRecoveryURLString() else {
+            return
+        }
+
+        let now = Date()
+        if let lastDownloadRecoveryNavigationAt,
+           now.timeIntervalSince(lastDownloadRecoveryNavigationAt) < Self.minimumRecoveryNavigationInterval {
+            return
+        }
+
+        navigateToDownloadRecoveryURL(recoveryURLString)
+    }
+
+    private func navigateToDownloadRecoveryURL(_ fallbackURLString: String) {
+        lastDownloadRecoveryNavigationAt = Date()
+        state.urlString = fallbackURLString
+        state.title = nil
+        state.isLoading = true
+        host.loadURLString(fallbackURLString)
+        publishState()
     }
 }
 
@@ -208,8 +349,9 @@ extension ChromiumBrowserController: BlinkChromiumBrowserHostDelegate {
         _ host: BlinkChromiumBrowserHost,
         didUpdate snapshot: BlinkChromiumBrowserStateSnapshot
     ) {
+        guard let payload = Self.browserStatePayload(from: snapshot) else { return }
         Task { @MainActor [weak self] in
-            self?.handleHostUpdate(snapshot)
+            self?.handleHostUpdate(payload)
         }
     }
 
@@ -219,6 +361,29 @@ extension ChromiumBrowserController: BlinkChromiumBrowserHostDelegate {
     ) {
         Task { @MainActor [weak self] in
             self?.handleOpenNewTabRequest(urlString: urlString)
+        }
+    }
+
+    nonisolated func chromiumBrowserHost(
+        _ host: BlinkChromiumBrowserHost,
+        didUpdateDownload snapshot: BlinkChromiumDownloadSnapshot
+    ) {
+        let payload = DownloadPayload(
+            downloadIdentifier: snapshot.downloadIdentifier,
+            urlString: snapshot.urlString,
+            suggestedFileName: snapshot.suggestedFileName,
+            fullPath: snapshot.fullPath,
+            receivedBytes: snapshot.receivedBytes,
+            totalBytes: snapshot.totalBytes,
+            percentComplete: snapshot.percentComplete,
+            currentSpeed: snapshot.currentSpeed,
+            isInProgress: snapshot.isInProgress,
+            isComplete: snapshot.isComplete,
+            isCanceled: snapshot.isCanceled,
+            isInterrupted: snapshot.isInterrupted
+        )
+        Task { @MainActor [weak self] in
+            self?.handleDownloadUpdate(payload)
         }
     }
 }

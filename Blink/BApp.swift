@@ -170,9 +170,7 @@ struct BApp: App {
                 browserManager: browserManager
             )
                 .background(
-                    WindowTitleBarConfigurator(
-                        onCloseRequest: { appDelegate.requestCloseActiveTab() }
-                    )
+                    WindowTitleBarConfigurator()
                 )
                 .environment(store)
                 .environment(themeManager)
@@ -367,7 +365,7 @@ struct BApp: App {
                 Divider()
 
                 Button("Open Browser Window") {
-                    store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+                    store.openBrowserTabForActiveProject()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)
@@ -375,7 +373,7 @@ struct BApp: App {
                 Button("Focus Browser Address Bar") {
                     store.focusBrowserAddressBar()
                 }
-                .keyboardShortcut("l", modifiers: .command)
+                .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(!store.hasActiveBrowserSelection)
 
                 Button("Focus Browser Content") {
@@ -421,7 +419,7 @@ struct BApp: App {
                 .disabled(store.activeProjectId == nil)
 
                 Button("New Browser Window") {
-                    store.openBrowserTabForActiveProject(url: nil, maximizeColumn: false)
+                    store.openBrowserTabForActiveProject()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)

@@ -30,7 +30,17 @@ final class BrowserURLResolverTests: XCTestCase {
         )
     }
 
-    func testRejectPlainSearchText() {
-        XCTAssertNil(BrowserURLResolver.resolve("blink browser docs"))
+    func testResolvePlainSearchTextToGoogleSearch() {
+        XCTAssertEqual(
+            BrowserURLResolver.resolve("blink browser docs")?.absoluteString,
+            "https://www.google.com/search?q=blink%20browser%20docs"
+        )
+    }
+
+    func testResolveSingleWordToGoogleSearch() {
+        XCTAssertEqual(
+            BrowserURLResolver.resolve("blink")?.absoluteString,
+            "https://www.google.com/search?q=blink"
+        )
     }
 }

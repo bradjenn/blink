@@ -2,29 +2,20 @@ import SwiftUI
 import AppKit
 
 /// Hides the traffic light buttons that .windowStyle(.hiddenTitleBar) leaves behind.
-/// Also intercepts window-close requests so Blink can close the active workspace
-/// window rather than the macOS app window itself.
 struct WindowTitleBarConfigurator: NSViewRepresentable {
-    let onCloseRequest: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCloseRequest: onCloseRequest)
-    }
-
     func makeNSView(context: Context) -> WindowObserverView {
         let view = WindowObserverView()
         view.configureHandler = { window in
             Self.apply(to: window)
-            context.coordinator.attach(to: window)
         }
         return view
     }
 
     func updateNSView(_ nsView: WindowObserverView, context: Context) {
-        context.coordinator.onCloseRequest = onCloseRequest
-        if let window = nsView.window {
+        if let window = nsView.window,
+           nsView.configuredWindow !== window {
+            nsView.configuredWindow = window
             Self.apply(to: window)
-            context.coordinator.attach(to: window)
         }
     }
 
@@ -41,32 +32,15 @@ struct WindowTitleBarConfigurator: NSViewRepresentable {
         window.isMovableByWindowBackground = false
     }
 
-    final class Coordinator: NSObject, NSWindowDelegate {
-        var onCloseRequest: () -> Void
-        weak var window: NSWindow?
-
-        init(onCloseRequest: @escaping () -> Void) {
-            self.onCloseRequest = onCloseRequest
-        }
-
-        func attach(to window: NSWindow) {
-            guard self.window !== window else { return }
-            self.window = window
-            window.delegate = self
-        }
-
-        func windowShouldClose(_ sender: NSWindow) -> Bool {
-            onCloseRequest()
-            return false
-        }
-    }
-
     final class WindowObserverView: NSView {
         var configureHandler: ((NSWindow) -> Void)?
+        weak var configuredWindow: NSWindow?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
+            guard configuredWindow !== window else { return }
+            configuredWindow = window
             configureHandler?(window)
         }
     }
