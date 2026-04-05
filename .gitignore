@@ -2,15 +2,19 @@
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 DerivedData/
+.deriveddata/
 build/
 *.swp
 .DS_Store
 Frameworks/
 Blink.dmg
 homebrew-tap/
+BTests/*.plist
+ThirdParty/CEF/
 
 # AI agent config
 .claude/
 .agents/
+CLAUDE.md
 skills-lock.json
 docs/superpowers/
