@@ -21,8 +21,8 @@ private let shortcutCategories: [ShortcutCategory] = [
     ]),
     ShortcutCategory(name: "Windows", shortcuts: [
         ShortcutEntry(action: "New Tab", keys: "⌘T"),
-        ShortcutEntry(action: "New Browser Window", keys: "⌥⌘B"),
-        ShortcutEntry(action: "Toggle Browser Sidebar", keys: "⌘S"),
+        ShortcutEntry(action: "New Project Browser", keys: "⌥⌘B"),
+        ShortcutEntry(action: "Toggle Project Browser Sidebar", keys: "⌘S"),
         ShortcutEntry(action: "Split Below", keys: "⇧⌘_"),
         ShortcutEntry(action: "Split Right", keys: "⇧⌘|"),
         ShortcutEntry(action: "Close Tab", keys: "⌘W"),
@@ -42,11 +42,11 @@ private let shortcutCategories: [ShortcutCategory] = [
         ShortcutEntry(action: "Open Git", keys: "⌘G"),
     ]),
     ShortcutCategory(name: "Browser", shortcuts: [
-        ShortcutEntry(action: "Focus Browser Address Bar", keys: "⌥⌘L"),
-        ShortcutEntry(action: "Browser Back", keys: "⌘["),
-        ShortcutEntry(action: "Browser Forward", keys: "⌘]"),
-        ShortcutEntry(action: "Browser Reload", keys: "⌘R"),
-        ShortcutEntry(action: "Toggle Browser Developer Tools", keys: "⌥⌘I"),
+        ShortcutEntry(action: "Focus Project Browser Address Bar", keys: "⌥⌘L"),
+        ShortcutEntry(action: "Project Browser Back", keys: "⌘["),
+        ShortcutEntry(action: "Project Browser Forward", keys: "⌘]"),
+        ShortcutEntry(action: "Project Browser Reload", keys: "⌘R"),
+        ShortcutEntry(action: "Toggle Project Browser Developer Tools", keys: "⌥⌘I"),
     ]),
     ShortcutCategory(name: "App", shortcuts: [
         ShortcutEntry(action: "Settings", keys: "⌘,"),

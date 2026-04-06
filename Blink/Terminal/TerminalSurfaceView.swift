@@ -265,6 +265,11 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         updateTrackingAreas()
     }
 
+    func updateConfig(_ config: ghostty_config_t) {
+        guard let surface else { return }
+        ghostty_surface_update_config(surface, config)
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")

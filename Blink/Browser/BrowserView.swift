@@ -191,11 +191,11 @@ struct BrowserView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    Text("No Browser Tabs")
+                    Text("No Project Browser Tabs")
                         .font(Fonts.primary(size: 16, weight: .bold))
                         .foregroundStyle(theme.text)
 
-                    Button("Open Browser Tab") {
+                    Button("Open Project Browser Tab") {
                         _ = store.openBrowserTabInPane(
                             tab.id,
                             url: BrowserDefaults.homePageURLString,
@@ -305,7 +305,7 @@ struct BrowserView: View {
             HStack(spacing: 8) {
                 sidebarActionButton(
                     systemName: paneState.isSidebarPinned ? "sidebar.left" : "sidebar.right",
-                    accessibilityLabel: paneState.isSidebarPinned ? "Unpin Browser Sidebar" : "Pin Browser Sidebar"
+                    accessibilityLabel: paneState.isSidebarPinned ? "Unpin Project Browser Sidebar" : "Pin Project Browser Sidebar"
                 ) {
                     dismissAddressBarFocus(for: browserTab.id)
                     store.toggleBrowserSidebarPinned(for: tab.id)
@@ -406,7 +406,7 @@ struct BrowserView: View {
                     }
                     .buttonStyle(.plain)
                     .pointerCursor()
-                    .help("New Browser Tab")
+                    .help("New Project Browser Tab")
 
                     Button {
                         dismissAddressBarFocus(for: browserTab.id)

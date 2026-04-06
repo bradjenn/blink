@@ -330,7 +330,11 @@ struct ThemePicker: View {
 
             ghosttyApp.updateConfig(
                 terminalTheme: termTheme,
-                backgroundOpacity: effectiveBackgroundOpacity
+                backgroundOpacity: effectiveBackgroundOpacity,
+                fontFamily: store.fontFamily,
+                fontSize: store.fontSize,
+                cursorStyle: store.cursorStyle,
+                cursorBlink: store.cursorBlink
             )
         }
     }
@@ -342,7 +346,11 @@ struct ThemePicker: View {
         guard let termTheme = themeManager.previewTheme(name: name) else { return }
         ghosttyApp.updateConfig(
             terminalTheme: termTheme,
-            backgroundOpacity: effectiveBackgroundOpacity
+            backgroundOpacity: effectiveBackgroundOpacity,
+            fontFamily: store.fontFamily,
+            fontSize: store.fontSize,
+            cursorStyle: store.cursorStyle,
+            cursorBlink: store.cursorBlink
         )
     }
 

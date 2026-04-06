@@ -144,7 +144,8 @@ struct AppearanceSettings: View {
                                         backgroundOpacity: effectiveOpacity,
                                         fontFamily: store.fontFamily,
                                         fontSize: store.fontSize,
-                                        cursorStyle: store.cursorStyle
+                                        cursorStyle: store.cursorStyle,
+                                        cursorBlink: store.cursorBlink
                                     )
                                 }
                             }
@@ -232,7 +233,8 @@ struct AppearanceSettings: View {
                 backgroundOpacity: effectiveOpacity,
                 fontFamily: store.fontFamily,
                 fontSize: store.fontSize,
-                cursorStyle: store.cursorStyle
+                cursorStyle: store.cursorStyle,
+                cursorBlink: store.cursorBlink
             )
         }
     }

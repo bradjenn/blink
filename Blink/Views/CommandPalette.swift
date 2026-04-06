@@ -173,22 +173,22 @@ struct CommandPalette: View {
             },
             PaletteCommand(
                 id: "new-browser",
-                title: "Open Browser Window",
-                subtitle: "Open a new browser pane in the active project",
+                title: "Open Project Browser",
+                subtitle: "Open a new isolated browser pane in the active project",
                 category: "Windows",
                 shortcut: "Cmd-Opt-B",
-                keywords: ["browser", "web", "safari", "page"],
+                keywords: ["browser", "project", "web", "page", "isolated"],
                 isEnabled: hasProject
             ) {
                 store.openBrowserTabForActiveProject()
             },
             PaletteCommand(
                 id: "toggle-browser-sidebar",
-                title: "Toggle Browser Sidebar",
-                subtitle: "Pin or unpin the active browser sidebar",
+                title: "Toggle Project Browser Sidebar",
+                subtitle: "Pin or unpin the active project browser sidebar",
                 category: "Windows",
                 shortcut: "Cmd-S",
-                keywords: ["browser", "sidebar", "zen", "tabs", "panel"],
+                keywords: ["browser", "project", "sidebar", "tabs", "panel"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.toggleActiveBrowserSidebarPinned()
@@ -275,66 +275,66 @@ struct CommandPalette: View {
             },
             PaletteCommand(
                 id: "browser-focus-address-bar",
-                title: "Focus Browser Address Bar",
-                subtitle: "Move keyboard focus to the browser URL field",
+                title: "Focus Project Browser Address Bar",
+                subtitle: "Move keyboard focus to the active project browser URL field",
                 category: "Browser",
                 shortcut: "Cmd-Option-L",
-                keywords: ["browser", "url", "address", "omnibar", "location"],
+                keywords: ["browser", "project", "url", "address", "omnibar", "location"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserAddressBar()
             },
             PaletteCommand(
                 id: "browser-focus-content",
-                title: "Focus Browser Content",
-                subtitle: "Return keyboard focus to the active browser page",
+                title: "Focus Project Browser Content",
+                subtitle: "Return keyboard focus to the active project browser page",
                 category: "Browser",
                 shortcut: nil,
-                keywords: ["browser", "page", "content", "web"],
+                keywords: ["browser", "project", "page", "content", "web"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserWebView()
             },
             PaletteCommand(
                 id: "browser-back",
-                title: "Browser Back",
-                subtitle: "Go back in the active browser tab",
+                title: "Project Browser Back",
+                subtitle: "Go back in the active project browser tab",
                 category: "Browser",
                 shortcut: "Cmd-[",
-                keywords: ["browser", "back", "history", "previous"],
+                keywords: ["browser", "project", "back", "history", "previous"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserBack()
             },
             PaletteCommand(
                 id: "browser-forward",
-                title: "Browser Forward",
-                subtitle: "Go forward in the active browser tab",
+                title: "Project Browser Forward",
+                subtitle: "Go forward in the active project browser tab",
                 category: "Browser",
                 shortcut: "Cmd-]",
-                keywords: ["browser", "forward", "history", "next"],
+                keywords: ["browser", "project", "forward", "history", "next"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserForward()
             },
             PaletteCommand(
                 id: "browser-reload",
-                title: "Browser Reload",
-                subtitle: "Reload the active browser page",
+                title: "Project Browser Reload",
+                subtitle: "Reload the active project browser page",
                 category: "Browser",
                 shortcut: "Cmd-R",
-                keywords: ["browser", "reload", "refresh", "page"],
+                keywords: ["browser", "project", "reload", "refresh", "page"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.reloadActiveBrowser()
             },
             PaletteCommand(
                 id: "browser-developer-tools",
-                title: "Toggle Browser Developer Tools",
-                subtitle: "Open or close DevTools for the active browser tab",
+                title: "Toggle Project Browser Developer Tools",
+                subtitle: "Open or close DevTools for the active project browser tab",
                 category: "Browser",
                 shortcut: "Cmd-Opt-I",
-                keywords: ["browser", "devtools", "inspect", "developer", "console"],
+                keywords: ["browser", "project", "devtools", "inspect", "developer", "console"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.toggleActiveBrowserDeveloperTools()
@@ -342,10 +342,10 @@ struct CommandPalette: View {
             PaletteCommand(
                 id: "browser-open-in-default",
                 title: "Open Page in Default Browser",
-                subtitle: "Open the active browser page in the system browser",
+                subtitle: "Open the active project browser page in the system browser",
                 category: "Browser",
                 shortcut: nil,
-                keywords: ["browser", "default", "open", "external", "safari"],
+                keywords: ["browser", "project", "default", "open", "external", "safari"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.openActiveBrowserInDefaultBrowser()

@@ -24,6 +24,7 @@ private enum StorageKeys {
     static let uiFontFamily = "blink.uiFontFamily"
     static let fontSize = "blink.fontSize"
     static let cursorStyle = "blink.cursorStyle"
+    static let cursorBlink = "blink.cursorBlink"
     static let shell = "blink.shell"
     static let focusCenteringMode = "blink.focusCenteringMode"
     static let spotifyEnabled = "blink.spotifyEnabled"
@@ -128,6 +129,9 @@ final class AppStore {
     var cursorStyle: CursorStyle {
         didSet { UserDefaults.standard.set(cursorStyle.rawValue, forKey: StorageKeys.cursorStyle) }
     }
+    var cursorBlink: Bool {
+        didSet { UserDefaults.standard.set(cursorBlink, forKey: StorageKeys.cursorBlink) }
+    }
     var shell: String {
         didSet { UserDefaults.standard.set(shell, forKey: StorageKeys.shell) }
     }
@@ -171,6 +175,8 @@ final class AppStore {
     @ObservationIgnored
     private let tmuxSocketName: String
     @ObservationIgnored
+    private let tmuxConfigPath: String?
+    @ObservationIgnored
     private var claudeHookReceiver: ClaudeHookReceiver?
     @ObservationIgnored
     private var claudeHookScriptDirectoryPath: String?
@@ -208,6 +214,9 @@ final class AppStore {
         let storedLastProjectId = defaults.string(forKey: StorageKeys.lastSelectedProjectId)
         self.tmuxIntegrationEnabled = Self.detectTmuxAvailability()
         self.tmuxSocketName = Self.tmuxSocketName()
+        self.tmuxConfigPath = Self.installBlinkTmuxConfig(
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
+        )?.path
 
         self.projects = loadedProjects
         self.projectSetups = Self.loadProjectSetups()
@@ -221,6 +230,7 @@ final class AppStore {
         self.fontSize = defaults.object(forKey: StorageKeys.fontSize) != nil
             ? defaults.double(forKey: StorageKeys.fontSize) : 19
         self.cursorStyle = CursorStyle(rawValue: defaults.string(forKey: StorageKeys.cursorStyle) ?? "") ?? .block
+        self.cursorBlink = defaults.object(forKey: StorageKeys.cursorBlink) as? Bool ?? true
         self.shell = defaults.string(forKey: StorageKeys.shell) ?? Self.defaultShell
         self.spotifyEnabled = defaults.object(forKey: StorageKeys.spotifyEnabled) as? Bool ?? false
         self.fileEditorLauncher = FileEditorLauncher(
@@ -2185,7 +2195,7 @@ final class AppStore {
     ) -> AppTab {
         let resolvedURLString = url.flatMap { BrowserURLResolver.resolve($0)?.absoluteString ?? $0 }
         let count = tabs.filter { $0.projectId == projectId && $0.isBrowser }.count + 1
-        let defaultLabel = "Browser \(count)"
+        let defaultLabel = "Project Browser \(count)"
         let resolvedState = browserState ?? BrowserPaneState.singleTab(
             urlString: resolvedURLString,
             preferredFocus: preferredFocus
@@ -2280,7 +2290,7 @@ final class AppStore {
         let baseSession = tmuxBaseSessionName(for: project.id)
         let clientSession = tmuxClientSessionName(projectId: project.id, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
-        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = tmuxCommandPrefix()
         let baseTarget = shellQuote(baseSession)
         let clientTarget = shellQuote(clientSession)
         let windowTarget = shellQuote(windowName)
@@ -2293,7 +2303,7 @@ final class AppStore {
         let ensureClientSession = "\(tmuxPrefix) has-session -t \(clientTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -t \(baseTarget) -s \(clientTarget)"
         let configureClient = "\(tmuxPrefix) set-option -t \(clientTarget) status off >/dev/null 2>&1; \(tmuxPrefix) set-option -t \(clientTarget) allow-rename off >/dev/null 2>&1"
         let selectWindow = "\(tmuxPrefix) select-window -t \(sessionWindowTarget) >/dev/null 2>&1"
-        let attachClient = "exec env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) attach-session -t \(clientTarget)"
+        let attachClient = "exec \(tmuxPrefix) attach-session -t \(clientTarget)"
 
         return [ensureBaseSession, ensureWindow, ensureClientSession, configureClient, selectWindow, attachClient]
             .joined(separator: "; ")
@@ -2304,22 +2314,24 @@ final class AppStore {
         let baseSession = tmuxBaseSessionName(for: projectId)
         let clientSession = tmuxClientSessionName(projectId: projectId, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
+        let tmuxPrefix = tmuxCommandPrefix()
 
         runDetachedShellCommand("""
-        env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(clientSession)) >/dev/null 2>&1 || true
-        env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-window -t \(shellQuote("\(baseSession):\(windowName)")) >/dev/null 2>&1 || true
+        \(tmuxPrefix) kill-session -t \(shellQuote(clientSession)) >/dev/null 2>&1 || true
+        \(tmuxPrefix) kill-window -t \(shellQuote("\(baseSession):\(windowName)")) >/dev/null 2>&1 || true
         """)
     }
 
     private func destroyTmuxProjectSession(projectId: String, paneIds: [String]) {
         guard tmuxIntegrationEnabled else { return }
         let baseSession = tmuxBaseSessionName(for: projectId)
+        let tmuxPrefix = tmuxCommandPrefix()
         let clientKills = paneIds.map {
-            "env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
+            "\(tmuxPrefix) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
         }
 
         runDetachedShellCommand((clientKills + [
-            "env -u TMUX tmux -L \(shellQuote(tmuxSocketName)) kill-session -t \(shellQuote(baseSession)) >/dev/null 2>&1 || true",
+            "\(tmuxPrefix) kill-session -t \(shellQuote(baseSession)) >/dev/null 2>&1 || true",
         ]).joined(separator: "\n"))
     }
 
@@ -2462,7 +2474,7 @@ final class AppStore {
 
     private func tmuxEnsureWindowCommand(tab: AppTab, project: Project, workingDirectory: String) -> String {
         guard let paneId = tab.projectSetupPaneId else { return "true" }
-        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = tmuxCommandPrefix()
         let baseSession = tmuxBaseSessionName(for: project.id)
         let windowName = tmuxWindowName(for: paneId)
         let baseTarget = shellQuote(baseSession)
@@ -2481,6 +2493,28 @@ final class AppStore {
         return bundleId.replacingOccurrences(of: ".", with: "-")
     }
 
+    private static func installBlinkTmuxConfig(bundleIdentifier: String) -> URL? {
+        let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directoryURL = baseURL
+            .appendingPathComponent(bundleIdentifier, isDirectory: true)
+            .appendingPathComponent("tmux", isDirectory: true)
+        let configURL = directoryURL.appendingPathComponent("blink.tmux.conf")
+
+        do {
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let contents = blinkTmuxConfigContents
+            let existingContents = try? String(contentsOf: configURL, encoding: .utf8)
+            if existingContents != contents {
+                try contents.write(to: configURL, atomically: true, encoding: .utf8)
+            }
+            return configURL
+        } catch {
+            print("[AppStore] Failed to install Blink tmux config: \(error)")
+            return nil
+        }
+    }
+
     private static func detectTmuxAvailability() -> Bool {
         let candidates = [
             "/opt/homebrew/bin/tmux",
@@ -2490,6 +2524,36 @@ final class AppStore {
 
         return candidates.contains { FileManager.default.isExecutableFile(atPath: $0) }
     }
+
+    private func tmuxCommandPrefix() -> String {
+        Self.tmuxCommandPrefix(socketName: tmuxSocketName, configPath: tmuxConfigPath)
+    }
+
+    nonisolated private static func tmuxCommandPrefix(socketName: String, configPath: String?) -> String {
+        var prefix = "env -u TMUX tmux -L \(shellQuote(socketName))"
+        if let configPath, !configPath.isEmpty {
+            prefix += " -f \(shellQuote(configPath))"
+        }
+        return prefix
+    }
+
+    private static let blinkTmuxConfigContents = """
+    # Blink uses tmux only for persistence and reattachment.
+    # Keep this config intentionally minimal and separate from personal tmux setup.
+    setw -g mode-keys vi
+    set -g history-limit 10000
+    set -g default-terminal "tmux-256color"
+    set -g focus-events on
+    set -s escape-time 0
+    set -s extended-keys always
+    set -as terminal-features 'xterm*:extkeys'
+    set -as terminal-features ",*:RGB"
+    set -ag terminal-overrides ",xterm-256color:RGB"
+    set -g mouse on
+    set -g status off
+    set -g allow-rename off
+    set -g set-titles off
+    """
 
     private func shellQuote(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
@@ -2606,7 +2670,7 @@ final class AppStore {
     }
 
     private func tmuxPaneCurrentCommand(projectId: String, paneId: String) -> String? {
-        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = tmuxCommandPrefix()
         let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
         return runSynchronousShellCommand(
             "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
@@ -2636,7 +2700,8 @@ final class AppStore {
         let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
             projectId: projectId,
             paneId: paneId,
-            socketName: Self.tmuxSocketName()
+            socketName: Self.tmuxSocketName(),
+            configPath: tmuxConfigPath
         )
 
         guard !Task.isCancelled,
@@ -2661,7 +2726,8 @@ final class AppStore {
             let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
                 projectId: projectId,
                 paneId: paneId,
-                socketName: Self.tmuxSocketName()
+                socketName: Self.tmuxSocketName(),
+                configPath: self.tmuxConfigPath
             )
 
             await MainActor.run {
@@ -2791,10 +2857,11 @@ final class AppStore {
     nonisolated private static func fetchTmuxPaneCurrentCommand(
         projectId: String,
         paneId: String,
-        socketName: String
+        socketName: String,
+        configPath: String?
     ) async -> String? {
         await Task.detached(priority: .utility) {
-            let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(socketName))"
+            let tmuxPrefix = tmuxCommandPrefix(socketName: socketName, configPath: configPath)
             let target = shellQuote("blink-\(projectId):pane-\(paneId)")
             return runSynchronousShellCommand(
                 "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
@@ -2851,7 +2918,7 @@ final class AppStore {
     }
 
     private func tmuxSendKeysCommand(projectId: String, paneId: String, text: String) -> String {
-        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = tmuxCommandPrefix()
         let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
         let literalText = shellQuote(text)
 
@@ -2869,7 +2936,7 @@ final class AppStore {
         text: String
     ) -> String {
         guard let paneId = tab.projectSetupPaneId else { return "true" }
-        let tmuxPrefix = "env -u TMUX tmux -L \(shellQuote(tmuxSocketName))"
+        let tmuxPrefix = tmuxCommandPrefix()
         let target = shellQuote(tmuxWindowTarget(projectId: project.id, paneId: paneId))
         let literalText = shellQuote(text)
 

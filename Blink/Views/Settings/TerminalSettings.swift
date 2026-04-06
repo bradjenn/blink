@@ -20,6 +20,7 @@ struct TerminalSettings: View {
                 fontFamilySection
                 fontSizeSection
                 cursorStyleSection
+                cursorBlinkSection
                 shellSection
                 spotifyCommandSection
 
@@ -84,7 +85,7 @@ struct TerminalSettings: View {
             Text("Cursor style")
                 .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
                 .foregroundStyle(theme.text)
-            Text("Shape of the terminal cursor")
+            Text("Default shape of the terminal cursor.")
                 .font(Fonts.primary(size: 12, family: store.uiFontFamily))
                 .foregroundStyle(theme.textMuted)
 
@@ -94,6 +95,27 @@ struct TerminalSettings: View {
                 label: { $0.displayName },
                 onChange: {
                     store.cursorStyle = $0
+                    updateTerminalConfig()
+                }
+            )
+        }
+    }
+
+    private var cursorBlinkSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cursor blink")
+                .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
+                .foregroundStyle(theme.text)
+            Text("Blink the terminal cursor. This applies to existing terminal tabs too.")
+                .font(Fonts.primary(size: 12, family: store.uiFontFamily))
+                .foregroundStyle(theme.textMuted)
+
+            StyledSegmentPicker(
+                options: [false, true],
+                selection: store.cursorBlink,
+                label: { $0 ? "On" : "Off" },
+                onChange: {
+                    store.cursorBlink = $0
                     updateTerminalConfig()
                 }
             )
@@ -168,7 +190,8 @@ struct TerminalSettings: View {
                 backgroundOpacity: effectiveOpacity,
                 fontFamily: store.fontFamily,
                 fontSize: store.fontSize,
-                cursorStyle: store.cursorStyle
+                cursorStyle: store.cursorStyle,
+                cursorBlink: store.cursorBlink
             )
         }
     }

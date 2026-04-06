@@ -89,7 +89,8 @@ struct TerminalTheme {
         backgroundOpacity: Double = 0,
         fontFamily: String = "MesloLGS Nerd Font Mono",
         fontSize: Double = 19,
-        cursorStyle: CursorStyle = .block
+        cursorStyle: CursorStyle = .block,
+        cursorBlink: Bool = true
     ) -> String {
         var lines = [String]()
         for (i, color) in palette.enumerated() {
@@ -105,7 +106,9 @@ struct TerminalTheme {
         lines.append("background-opacity = 0")
         lines.append("font-family = \(fontFamily)")
         lines.append("font-size = \(Int(fontSize))")
-        lines.append("cursor-shape = \(cursorStyle.rawValue)")
+        lines.append("cursor-style = \(cursorStyle.rawValue)")
+        lines.append("cursor-style-blink = \(cursorBlink)")
+        lines.append("shell-integration-features = no-cursor")
         lines.append("window-padding-x = 16")
         lines.append("window-padding-y = 10")
         lines.append("audible-bell = false")

@@ -1,4 +1,19 @@
-# Chromium Browser Spike
+# Chromium Project Browser Spike
+
+## Release Framing
+
+For the next Blink release, the browser should be presented as an isolated project browser:
+
+- a project-scoped browser pane inside the workspace
+- optimized for local development, docs, auth flows, and project links
+- not a full personal browser replacement
+
+Acceptable limitations for this release:
+
+- no sync/import story
+- no claim of full browser parity with Safari/Chrome
+- rough edges in niche popup or window-management flows are acceptable if the main project workflow is solid
+- "Open in default browser" remains the escape hatch for unsupported cases
 
 ## Goal
 
@@ -27,7 +42,7 @@ This branch does two things in parallel:
 1. Keep the current browser actions flowing through `AppStore`.
 2. Treat `BrowserManager` as the engine boundary.
 3. Add a `BrowserEngine` type now so state/actions are not implicitly WebKit-only.
-4. Keep WebKit as the active runtime until Chromium packaging is complete.
+4. Chromium is now the active runtime in app builds; keep WebKit as the fallback and test harness path until Chromium coverage catches up.
 
 ## CEF Integration Checklist
 
@@ -50,6 +65,12 @@ This branch does two things in parallel:
 - Add helper subprocess handling required by Chromium/CEF.
 - Verify codesigning and notarization for the main app and helper binaries.
 - Validate local development and release packaging separately.
+
+## Release Readiness Gaps
+
+- Chromium smoke coverage is still more important than the current unit test suite, because tests mostly exercise the fallback path.
+- Product copy and release notes need to say "isolated project browser" consistently.
+- Release builds need a final packaging sanity check for the CEF helper/runtime bundle layout.
 
 ## Non-Goals For This Spike
 

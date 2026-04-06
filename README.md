@@ -5,7 +5,7 @@
 <h1 align="center">Blink</h1>
 
 <p align="center">
-  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, and fast project switching
+  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, fast project switching, and an isolated project browser
 </p>
 
 <p align="center">
@@ -51,6 +51,13 @@
 - **Sidebar with git branch tracking** — see the active branch for each project at a glance
 - **Shell-first tooling** — run `nvim`, `lazygit`, `yazi`, `spotify`, or any other CLI in project-scoped tabs without extra wrappers
 
+### Project Browser
+
+- **Isolated project browser panes** — open web pages inside the current project workspace without turning Blink into a full personal browser
+- **Project-scoped Chromium profiles** — cookies and storage stay scoped to the active project browser context
+- **Browser panes live in the same layout model** — browser, chat, and terminal panes share the same columns, focus model, and tab workflow
+- **Built for dev flows first** — localhost previews, docs, auth redirects, downloads, and DevTools are in scope; sync/import/general browsing are not
+
 ### Appearance
 
 - **Theme presets** — switch themes on the fly with a picker overlay
@@ -79,6 +86,8 @@ Requires macOS Sonoma+ and Apple Silicon (M1 or later).
 
 Persistent shell/editor reattachment and in-app Neovim reuse work best with `tmux`, and Blink Neovim integration assumes `nvim` is installed.
 
+The browser in Blink is an isolated project browser, not a full general-purpose browser replacement.
+
 ## Keybindings
 
 All shortcuts use `Cmd` (`⌘`) as the modifier.
@@ -98,6 +107,8 @@ All shortcuts use `Cmd` (`⌘`) as the modifier.
 | `⇧⌘E` | Expel pane |
 | `⌘O` | Overview |
 | `⌘B` | Toggle sidebar |
+| `⌥⌘B` | Open project browser |
+| `⌥⌘L` | Focus project browser address bar |
 | `⌘G` | Open lazygit |
 | `⌘P` | Project switcher |
 | `⇧⌘T` | Theme picker |

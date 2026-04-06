@@ -265,7 +265,7 @@ struct BApp: App {
             }
 
             CommandGroup(replacing: .saveItem) {
-                Button("Toggle Browser Sidebar") {
+                Button("Toggle Project Browser Sidebar") {
                     store.toggleActiveBrowserSidebarPinned()
                 }
                 .keyboardShortcut("s", modifiers: .command)
@@ -364,42 +364,42 @@ struct BApp: App {
 
                 Divider()
 
-                Button("Open Browser Window") {
+                Button("Open Project Browser") {
                     store.openBrowserTabForActiveProject()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])
                 .disabled(store.activeProjectId == nil)
 
-                Button("Focus Browser Address Bar") {
+                Button("Focus Project Browser Address Bar") {
                     store.focusBrowserAddressBar()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Focus Browser Content") {
+                Button("Focus Project Browser Content") {
                     store.focusBrowserWebView()
                 }
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Browser Back") {
+                Button("Project Browser Back") {
                     store.navigateActiveBrowserBack()
                 }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Browser Forward") {
+                Button("Project Browser Forward") {
                     store.navigateActiveBrowserForward()
                 }
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Browser Reload") {
+                Button("Project Browser Reload") {
                     store.reloadActiveBrowser()
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Toggle Browser Developer Tools") {
+                Button("Toggle Project Browser Developer Tools") {
                     store.toggleActiveBrowserDeveloperTools()
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
@@ -418,7 +418,7 @@ struct BApp: App {
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(store.activeProjectId == nil)
 
-                Button("New Browser Window") {
+                Button("New Project Browser") {
                     store.openBrowserTabForActiveProject()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])

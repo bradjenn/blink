@@ -86,6 +86,7 @@ final class GhosttyApp {
         let fontSize = defaults.object(forKey: "blink.fontSize") != nil
             ? defaults.double(forKey: "blink.fontSize") : 19.0
         let cursorStyle = CursorStyle(rawValue: defaults.string(forKey: "blink.cursorStyle") ?? "") ?? .block
+        let cursorBlink = defaults.object(forKey: "blink.cursorBlink") as? Bool ?? true
 
         let configString: String
         if let defaultTheme = TerminalTheme.load(name: themeName) {
@@ -93,7 +94,8 @@ final class GhosttyApp {
                 backgroundOpacity: opacity,
                 fontFamily: fontFamily,
                 fontSize: fontSize,
-                cursorStyle: cursorStyle
+                cursorStyle: cursorStyle,
+                cursorBlink: cursorBlink
             )
         } else {
             configString = "background-opacity = \(opacity)\n"
@@ -246,7 +248,8 @@ final class GhosttyApp {
         backgroundOpacity: Double,
         fontFamily: String = "MesloLGS Nerd Font Mono",
         fontSize: Double = 19,
-        cursorStyle: CursorStyle = .block
+        cursorStyle: CursorStyle = .block,
+        cursorBlink: Bool = true
     ) {
         guard let app else { return }
 
@@ -254,7 +257,8 @@ final class GhosttyApp {
             backgroundOpacity: backgroundOpacity,
             fontFamily: fontFamily,
             fontSize: fontSize,
-            cursorStyle: cursorStyle
+            cursorStyle: cursorStyle,
+            cursorBlink: cursorBlink
         )
         guard activeConfigKey != configString else { return }
 
@@ -263,6 +267,7 @@ final class GhosttyApp {
         }
 
         ghostty_app_update_config(app, newCfg)
+        surfaceManager?.surfaces.values.forEach { $0.updateConfig(newCfg) }
 
         // We own the config lifecycle — free old, keep new
         if let oldConfig = config {
