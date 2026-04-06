@@ -34,6 +34,16 @@ jobs:
           tar -xzf ghosttykit.tar.gz -C Frameworks/
           rm ghosttykit.tar.gz
 
+      - name: Fetch CEF
+        run: |
+          CEF_ARCHIVE="cef_binary_144.0.6+g5f7e671+chromium-144.0.7559.59_macosarm64.tar.bz2"
+          CEF_URL="https://cef-builds.spotifycdn.com/cef_binary_144.0.6%2Bg5f7e671%2Bchromium-144.0.7559.59_macosarm64.tar.bz2"
+
+          mkdir -p ThirdParty/CEF
+          curl -L -o "$CEF_ARCHIVE" "$CEF_URL"
+          tar -xjf "$CEF_ARCHIVE" -C ThirdParty/CEF/
+          rm "$CEF_ARCHIVE"
+
       - name: Generate Xcode project
         run: xcodegen generate
 
