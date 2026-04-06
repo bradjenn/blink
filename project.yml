@@ -61,6 +61,12 @@ targets:
           set -euo pipefail
           SRC="${CEF_DIST_DIR}/${CONFIGURATION}/Chromium Embedded Framework.framework"
           DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/Chromium Embedded Framework.framework"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+
+          sign_bundle() {
+            /usr/bin/codesign --force --deep --sign "${SIGN_IDENTITY}" --timestamp=none --generate-entitlement-der "$1"
+          }
+
           rm -rf "${DST}"
           ditto "${SRC}" "${DST}"
           if [ ! -d "${DST}/Versions" ]; then
@@ -73,6 +79,7 @@ targets:
             ln -sfn "Versions/Current/Resources" "${DST}/Resources"
             ln -sfn "Versions/Current/Libraries" "${DST}/Libraries"
           fi
+          sign_bundle "${DST}"
       - name: Stage CEF Helper
         script: |
           set -euo pipefail
@@ -80,6 +87,12 @@ targets:
           FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks"
           DST="${FRAMEWORKS_DIR}/${CEF_HELPER_NAME}.app"
           BASE_HELPER_BUNDLE_ID="${PRODUCT_BUNDLE_IDENTIFIER}.helper"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+
+          sign_bundle() {
+            /usr/bin/codesign --force --deep --sign "${SIGN_IDENTITY}" --timestamp=none --generate-entitlement-der "$1"
+          }
+
           rm -rf "${DST}"
           mkdir -p "${FRAMEWORKS_DIR}"
           ditto "${SRC}" "${DST}"
@@ -100,8 +113,10 @@ targets:
             /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${variant_name}" "${plist}"
             /usr/libexec/PlistBuddy -c "Set :CFBundleName ${variant_name}" "${plist}"
             /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BASE_HELPER_BUNDLE_ID}${bundle_suffix}" "${plist}"
+            sign_bundle "${variant_app}"
           }
 
+          sign_bundle "${DST}"
           create_helper_variant "Alerts" ".alerts"
           create_helper_variant "GPU" ".gpu"
           create_helper_variant "Plugin" ".plugin"
@@ -159,6 +174,12 @@ targets:
           set -euo pipefail
           SRC="${CEF_DIST_DIR}/${CONFIGURATION}/Chromium Embedded Framework.framework"
           DST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks/Chromium Embedded Framework.framework"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+
+          sign_bundle() {
+            /usr/bin/codesign --force --deep --sign "${SIGN_IDENTITY}" --timestamp=none --generate-entitlement-der "$1"
+          }
+
           rm -rf "${DST}"
           ditto "${SRC}" "${DST}"
           if [ ! -d "${DST}/Versions" ]; then
@@ -171,6 +192,7 @@ targets:
             ln -sfn "Versions/Current/Resources" "${DST}/Resources"
             ln -sfn "Versions/Current/Libraries" "${DST}/Libraries"
           fi
+          sign_bundle "${DST}"
       - name: Stage CEF Helper
         script: |
           set -euo pipefail
@@ -178,6 +200,12 @@ targets:
           FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Frameworks"
           DST="${FRAMEWORKS_DIR}/${CEF_HELPER_NAME}.app"
           BASE_HELPER_BUNDLE_ID="${PRODUCT_BUNDLE_IDENTIFIER}.helper"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+
+          sign_bundle() {
+            /usr/bin/codesign --force --deep --sign "${SIGN_IDENTITY}" --timestamp=none --generate-entitlement-der "$1"
+          }
+
           rm -rf "${DST}"
           mkdir -p "${FRAMEWORKS_DIR}"
           ditto "${SRC}" "${DST}"
@@ -198,8 +226,10 @@ targets:
             /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${variant_name}" "${plist}"
             /usr/libexec/PlistBuddy -c "Set :CFBundleName ${variant_name}" "${plist}"
             /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BASE_HELPER_BUNDLE_ID}${bundle_suffix}" "${plist}"
+            sign_bundle "${variant_app}"
           }
 
+          sign_bundle "${DST}"
           create_helper_variant "Alerts" ".alerts"
           create_helper_variant "GPU" ".gpu"
           create_helper_variant "Plugin" ".plugin"

@@ -17,6 +17,7 @@ final class GitStatusMonitor {
     private var timer: Timer?
     private var currentPath: String?
     private var refreshTask: Task<Void, Never>?
+    private var refreshPending = false
 
     func startMonitoring(path: String) {
         guard path != currentPath else { return }
@@ -33,6 +34,7 @@ final class GitStatusMonitor {
     func stopMonitoring() {
         refreshTask?.cancel()
         refreshTask = nil
+        refreshPending = false
         timer?.invalidate()
         timer = nil
         currentPath = nil
@@ -41,12 +43,27 @@ final class GitStatusMonitor {
 
     private func refresh() {
         guard let path = currentPath else { return }
-        refreshTask?.cancel()
-        refreshTask = Task.detached(priority: .utility) { [weak self] in
+        guard refreshTask == nil else {
+            refreshPending = true
+            return
+        }
+
+        refreshTask = Task.detached(priority: .utility) { [path] in
             let newStatus = fetchGitStatus(at: path)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self?.status = newStatus
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if !Task.isCancelled, self.currentPath == path {
+                    self.status = newStatus
+                }
+
+                self.refreshTask = nil
+
+                if self.refreshPending, self.currentPath == path {
+                    self.refreshPending = false
+                    self.refresh()
+                } else {
+                    self.refreshPending = false
+                }
             }
         }
     }
