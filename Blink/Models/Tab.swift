@@ -70,11 +70,11 @@ struct AppTab: Identifiable, Equatable, Hashable {
     let kind: AppSurfaceKind
     var label: String
     var defaultLabel: String
-    let projectId: String
+    let workspaceId: String
     var command: String? = nil
     var role: String? = nil
     var workingDirectory: String? = nil
-    var projectSetupPaneId: String? = nil
+    var workspaceSetupPaneId: String? = nil
     var browserState: BrowserPaneState? = nil
 
     init(
@@ -82,22 +82,22 @@ struct AppTab: Identifiable, Equatable, Hashable {
         kind: AppSurfaceKind,
         label: String,
         defaultLabel: String,
-        projectId: String,
+        workspaceId: String,
         command: String? = nil,
         role: String? = nil,
         workingDirectory: String? = nil,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         browserState: BrowserPaneState? = nil
     ) {
         self.id = id
         self.kind = kind
         self.label = label
         self.defaultLabel = defaultLabel
-        self.projectId = projectId
+        self.workspaceId = workspaceId
         self.command = command
         self.role = role
         self.workingDirectory = workingDirectory
-        self.projectSetupPaneId = projectSetupPaneId
+        self.workspaceSetupPaneId = workspaceSetupPaneId
         self.browserState = browserState
     }
 
@@ -106,11 +106,11 @@ struct AppTab: Identifiable, Equatable, Hashable {
         type: String,
         label: String,
         defaultLabel: String,
-        projectId: String,
+        workspaceId: String,
         command: String? = nil,
         role: String? = nil,
         workingDirectory: String? = nil,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         browserState: BrowserPaneState? = nil
     ) {
         self.init(
@@ -118,11 +118,11 @@ struct AppTab: Identifiable, Equatable, Hashable {
             kind: AppSurfaceKind(typeValue: type),
             label: label,
             defaultLabel: defaultLabel,
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: command,
             role: role,
             workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId,
+            workspaceSetupPaneId: workspaceSetupPaneId,
             browserState: browserState
         )
     }

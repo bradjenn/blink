@@ -14,10 +14,10 @@ struct ClaudeTabActivity: Equatable {
 
 struct ClaudeHookEvent {
     let event: String
-    let projectId: String
+    let workspaceId: String
     let tabId: String
     let paneId: String?
-    let projectPath: String?
+    let workspacePath: String?
     let cwd: String?
     let pid: Int?
     let rawInput: String
@@ -128,19 +128,22 @@ final class ClaudeHookReceiver {
             fields[key] = value
         }
 
+        let workspaceId = fields["workspace_id"] ?? fields["project_id"]
+        let workspacePath = decodeBase64(fields["workspace_path_b64"] ?? fields["project_path_b64"])
+
         guard fields["kind"] == "claude-hook",
               let event = fields["event"], !event.isEmpty,
-              let projectId = fields["project_id"], !projectId.isEmpty,
+              let workspaceId, !workspaceId.isEmpty,
               let tabId = fields["tab_id"], !tabId.isEmpty else {
             return nil
         }
 
         return ClaudeHookEvent(
             event: event,
-            projectId: projectId,
+            workspaceId: workspaceId,
             tabId: tabId,
             paneId: fields["pane_id"],
-            projectPath: decodeBase64(fields["project_path_b64"]),
+            workspacePath: workspacePath,
             cwd: decodeBase64(fields["cwd_b64"]),
             pid: fields["pid"].flatMap(Int.init),
             rawInput: decodeBase64(fields["input_b64"]) ?? ""
@@ -226,9 +229,9 @@ send_event() {
     local event_dir="${BLINK_HOOK_EVENT_DIR:-}"
     local tab_id="${BLINK_TAB_ID:-}"
     local pane_id="${BLINK_PANE_ID:-}"
-    local project_id="${BLINK_PROJECT_ID:-}"
+    local workspace_id="${BLINK_PROJECT_ID:-}"
 
-    [[ -n "$event_dir" && -d "$event_dir" && -n "$tab_id" && -n "$project_id" ]] || return 0
+    [[ -n "$event_dir" && -d "$event_dir" && -n "$tab_id" && -n "$workspace_id" ]] || return 0
 
     local raw_input=""
     if [[ ! -t 0 ]]; then
@@ -241,11 +244,11 @@ send_event() {
     {
         printf 'kind=claude-hook\n'
         printf 'event=%s\n' "$event"
-        printf 'project_id=%s\n' "$project_id"
+        printf 'workspace_id=%s\n' "$workspace_id"
         printf 'tab_id=%s\n' "$tab_id"
         printf 'pane_id=%s\n' "$pane_id"
         printf 'pid=%s\n' "${BLINK_CLAUDE_PID:-}"
-        printf 'project_path_b64=%s\n' "$(encode_b64 "${BLINK_PROJECT_PATH:-}")"
+        printf 'workspace_path_b64=%s\n' "$(encode_b64 "${BLINK_PROJECT_PATH:-}")"
         printf 'cwd_b64=%s\n' "$(encode_b64 "${PWD:-}")"
         printf 'input_b64=%s\n' "$(encode_b64 "$raw_input")"
     } > "$tmp_file"
@@ -266,7 +269,7 @@ esac
 
     private static let claudeWrapperScript = #"""
 #!/usr/bin/env bash
-# Blink claude wrapper - injects project status and notifications.
+# Blink claude wrapper - injects workspace status and notifications.
 set -euo pipefail
 
 find_real_claude() {
@@ -411,14 +414,14 @@ enum ClaudeHookSummary {
         let transcript = parsedInput.transcriptPath.flatMap(readTranscriptSummary(path:))
 
         if let lastAssistantMessage = transcript?.lastAssistantMessage {
-            let subtitle = projectSubtitle(prefix: "Completed", cwd: cwd)
+            let subtitle = workspaceSubtitle(prefix: "Completed", cwd: cwd)
             return (subtitle, lastAssistantMessage)
         }
 
         guard let cwd else { return nil }
-        let subtitle = projectSubtitle(prefix: "Completed", cwd: cwd)
-        let projectName = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath).lastPathComponent
-        let body = projectName.isEmpty ? "Claude session completed" : "Claude session completed in \(projectName)"
+        let subtitle = workspaceSubtitle(prefix: "Completed", cwd: cwd)
+        let workspaceName = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath).lastPathComponent
+        let body = workspaceName.isEmpty ? "Claude session completed" : "Claude session completed in \(workspaceName)"
         return (subtitle, body)
     }
 
@@ -527,11 +530,11 @@ enum ClaudeHookSummary {
         return nil
     }
 
-    private static func projectSubtitle(prefix: String, cwd: String?) -> String {
+    private static func workspaceSubtitle(prefix: String, cwd: String?) -> String {
         guard let cwd, !cwd.isEmpty else { return prefix }
         let expanded = NSString(string: cwd).expandingTildeInPath
-        let projectName = URL(fileURLWithPath: expanded).lastPathComponent
-        return projectName.isEmpty ? prefix : "\(prefix) in \(projectName)"
+        let workspaceName = URL(fileURLWithPath: expanded).lastPathComponent
+        return workspaceName.isEmpty ? prefix : "\(prefix) in \(workspaceName)"
     }
 
     private static func extractSessionId(from object: [String: Any]) -> String? {
@@ -558,7 +561,7 @@ enum ClaudeHookSummary {
     }
 
     private static func extractCWD(from object: [String: Any]) -> String? {
-        let cwdKeys = ["cwd", "working_directory", "workingDirectory", "project_dir", "projectDir"]
+        let cwdKeys = ["cwd", "working_directory", "workingDirectory", "workspace_dir", "workspaceDir"]
         if let cwd = firstString(in: object, keys: cwdKeys) {
             return cwd
         }

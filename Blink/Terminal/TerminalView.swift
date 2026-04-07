@@ -76,8 +76,8 @@ struct TerminalView: NSViewRepresentable {
     let paneId: String
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
-    let projectId: String
-    let projectName: String
+    let workspaceId: String
+    let workspaceName: String
     let workingDirectory: String
     let isFocused: Bool
     var command: String? = nil
@@ -105,8 +105,8 @@ struct TerminalView: NSViewRepresentable {
             surfaceView = surfaceManager.createSurface(
                 tabId: tabId,
                 paneId: paneId,
-                projectId: projectId,
-                projectName: projectName,
+                workspaceId: workspaceId,
+                workspaceName: workspaceName,
                 hookScriptDirectoryPath: store.claudeHookScriptPath,
                 hookShellIntegrationDirectoryPath: store.claudeHookShellIntegrationPath,
                 hookEventDirectoryPath: store.claudeHookEventDirectoryPath,

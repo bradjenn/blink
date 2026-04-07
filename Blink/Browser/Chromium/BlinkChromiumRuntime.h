@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)startIfNeeded:(NSError * _Nullable * _Nullable)error;
 - (BOOL)startIfNeeded;
 - (void)shutdown;
-- (nullable BlinkChromiumRequestContext *)requestContextForProjectIdentifier:(NSString *)projectIdentifier;
+- (nullable BlinkChromiumRequestContext *)requestContextForWorkspaceIdentifier:(NSString *)workspaceIdentifier;
 
 @end
 

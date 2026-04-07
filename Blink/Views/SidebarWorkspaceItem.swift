@@ -1,11 +1,12 @@
 import SwiftUI
 
-struct SidebarProjectItem: View {
+struct SidebarWorkspaceItem: View {
     @Environment(\.theme) private var theme
 
-    let project: Project
+    let workspace: Workspace
     let isActive: Bool
     let isSelected: Bool
+    let isPathMissing: Bool
     let isExpanded: Bool
     let terminalCount: Int
     let hasUnread: Bool
@@ -14,15 +15,19 @@ struct SidebarProjectItem: View {
     let tabs: [AppTab]
     let selectedTabId: String?
     let activeTabId: String?
+    let canRemove: Bool
     let onSelect: (Bool) -> Void
     let onToggleExpansion: () -> Void
     let onSelectTab: (String, Bool) -> Void
+    let onRename: () -> Void
+    let onReveal: () -> Void
+    let onRelink: () -> Void
     let onRemove: () -> Void
 
     @State private var isHovered = false
     @State private var showContextMenu = false
 
-    private var projectClaudeActivitySummary: (tabLabel: String, activity: ClaudeTabActivity)? {
+    private var workspaceClaudeActivitySummary: (tabLabel: String, activity: ClaudeTabActivity)? {
         let candidates = tabs.compactMap { tab -> (String, ClaudeTabActivity)? in
             guard let activity = claudeTabActivities[tab.id] else { return nil }
             return (tab.label, activity)
@@ -50,18 +55,18 @@ struct SidebarProjectItem: View {
             HStack(spacing: Layout.sidebarItemGap) {
                 Button(action: { onSelect(true) }) {
                     HStack(spacing: Layout.sidebarItemGap) {
-                        ProjectFavicon(projectName: project.name, projectPath: project.path, size: 24)
+                        WorkspaceFavicon(workspaceName: workspace.name, workspacePath: workspace.path, size: 24)
                             .scaleEffect(isHovered ? 1.1 : 1.0)
                             .animation(.easeInOut(duration: 0.15), value: isHovered)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(project.name)
+                            Text(workspace.name)
                                 .font(Fonts.primary(size: 15, weight: .medium))
                                 .foregroundStyle(isSelected ? theme.text : (isActive ? theme.text : theme.textMuted))
                                 .lineLimit(1)
 
                             if !isExpanded,
-                               let summary = projectClaudeActivitySummary {
+                               let summary = workspaceClaudeActivitySummary {
                                 ClaudeActivityLabel(
                                     activity: summary.activity,
                                     tabLabel: summary.tabLabel
@@ -75,6 +80,12 @@ struct SidebarProjectItem: View {
                 .buttonStyle(.plain)
 
                 HStack(spacing: 8) {
+                    if isPathMissing {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(theme.yellow)
+                    }
+
                     if hasUnread {
                         PulseDot(color: theme.accent, glowColor: theme.accentGlow)
                     }
@@ -107,15 +118,34 @@ struct SidebarProjectItem: View {
                     .padding(.leading, Layout.sidebarItemBorderWidth + 6)
             )
             .contentShape(Rectangle())
-            .background(
-                SecondaryClickTrigger {
-                    showContextMenu = true
+            .background {
+                if canRemove {
+                    SecondaryClickTrigger {
+                        showContextMenu = true
+                    }
                 }
-            )
+            }
             .backgroundPopover(isPresented: $showContextMenu) {
-                SidebarProjectContextMenu {
-                    showContextMenu = false
-                    onRemove()
+                if canRemove {
+                    SidebarWorkspaceContextMenu(
+                        canReveal: !isPathMissing,
+                        onRename: {
+                            showContextMenu = false
+                            onRename()
+                        },
+                        onReveal: {
+                            showContextMenu = false
+                            onReveal()
+                        },
+                        onRelink: {
+                            showContextMenu = false
+                            onRelink()
+                        },
+                        onRemove: {
+                            showContextMenu = false
+                            onRemove()
+                        }
+                    )
                 }
             }
 
@@ -128,7 +158,7 @@ struct SidebarProjectItem: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(tabs) { tab in
-                            SidebarProjectWindowItem(
+                            SidebarWorkspaceWindowItem(
                                 tab: tab,
                                 isActive: activeTabId == tab.id,
                                 isSelected: selectedTabId == tab.id,
@@ -156,40 +186,108 @@ struct SidebarProjectItem: View {
     }
 }
 
-private struct SidebarProjectContextMenu: View {
+private struct SidebarWorkspaceContextMenu: View {
     @Environment(\.theme) private var theme
 
+    let canReveal: Bool
+    let onRename: () -> Void
+    let onReveal: () -> Void
+    let onRelink: () -> Void
     let onRemove: () -> Void
 
+    @State private var isRenameHovered = false
+    @State private var isRevealHovered = false
+    @State private var isRelinkHovered = false
     @State private var isRemoveHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onRemove) {
-                HStack(spacing: 8) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textDim)
-                        .frame(width: 16)
-                    Text("Remove Project")
-                        .font(Fonts.primary(size: 13))
-                        .foregroundStyle(isRemoveHovered ? theme.danger : theme.textMuted)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(isRemoveHovered ? theme.danger.opacity(0.10) : Color.clear)
+            contextRow(
+                title: "Rename Workspace",
+                systemImage: "pencil",
+                isHovered: isRenameHovered,
+                action: onRename
+            )
+            .onHover { isRenameHovered = $0 }
+
+            contextRow(
+                title: "Reveal in Finder",
+                systemImage: "folder",
+                isHovered: isRevealHovered,
+                isEnabled: canReveal,
+                action: onReveal
+            )
+            .onHover { isRevealHovered = $0 }
+
+            contextRow(
+                title: "Relink Folder",
+                systemImage: "arrow.trianglehead.branch",
+                isHovered: isRelinkHovered,
+                action: onRelink
+            )
+            .onHover { isRelinkHovered = $0 }
+
+            contextRow(
+                title: "Remove Workspace",
+                systemImage: "trash",
+                isHovered: isRemoveHovered,
+                isDestructive: true,
+                action: onRemove
+            )
             .onHover { isRemoveHovered = $0 }
-            .pointerCursor()
         }
-        .frame(width: 180)
+        .frame(width: 196)
         .background(theme.bg)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
         .padding(.top, 4)
+    }
+
+    private func contextRow(
+        title: String,
+        systemImage: String,
+        isHovered: Bool,
+        isEnabled: Bool = true,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(rowForeground(isHovered: isHovered, isEnabled: isEnabled, isDestructive: isDestructive))
+                    .frame(width: 16)
+
+                Text(title)
+                    .font(Fonts.primary(size: 13))
+                    .foregroundStyle(rowForeground(isHovered: isHovered, isEnabled: isEnabled, isDestructive: isDestructive))
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .background(rowBackground(isHovered: isHovered, isEnabled: isEnabled, isDestructive: isDestructive))
+        .pointerCursor()
+    }
+
+    private func rowForeground(isHovered: Bool, isEnabled: Bool, isDestructive: Bool) -> some ShapeStyle {
+        guard isEnabled else { return AnyShapeStyle(theme.textDim.opacity(0.5)) }
+        if isDestructive && isHovered {
+            return AnyShapeStyle(theme.danger)
+        }
+        return isHovered ? AnyShapeStyle(theme.text) : AnyShapeStyle(theme.textMuted)
+    }
+
+    private func rowBackground(isHovered: Bool, isEnabled: Bool, isDestructive: Bool) -> some ShapeStyle {
+        guard isEnabled, isHovered else { return AnyShapeStyle(Color.clear) }
+        if isDestructive {
+            return AnyShapeStyle(theme.danger.opacity(0.10))
+        }
+        return AnyShapeStyle(theme.accent.opacity(0.08))
     }
 }
 
@@ -261,7 +359,7 @@ private struct SecondaryClickTrigger: NSViewRepresentable {
     }
 }
 
-private struct SidebarProjectWindowItem: View {
+private struct SidebarWorkspaceWindowItem: View {
     @Environment(\.theme) private var theme
 
     let tab: AppTab
@@ -310,14 +408,12 @@ private struct SidebarProjectWindowItem: View {
             Image(systemName: "safari")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(isActive ? theme.accent : theme.textDim)
+        } else if let detectedAIKind {
+            aiIcon(for: detectedAIKind)
         } else if tab.command == nil {
-            if let detectedAIKind {
-                aiIcon(for: detectedAIKind)
-            } else {
-                Image(systemName: "terminal")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(isActive ? theme.accent : theme.textDim)
-            }
+            Image(systemName: "terminal")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isActive ? theme.accent : theme.textDim)
         } else {
             Image(systemName: "play.rectangle")
                 .font(.system(size: 10, weight: .medium))

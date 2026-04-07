@@ -9,13 +9,13 @@ struct FooterBar: View {
     let onToggleSidebar: () -> Void
     let onShowSettings: () -> Void
 
-    private var activeProject: Project? {
-        store.projects.first { $0.id == store.activeProjectId }
+    private var activeWorkspace: Workspace? {
+        store.workspaces.first { $0.id == store.activeWorkspaceId }
     }
 
-    private var activeProjectTabs: [AppTab] {
-        guard let id = store.activeProjectId else { return [] }
-        return store.projectTabs(for: id)
+    private var activeWorkspaceTabs: [AppTab] {
+        guard let id = store.activeWorkspaceId else { return [] }
+        return store.workspaceTabs(for: id)
     }
 
     private var isSettingsActive: Bool {
@@ -40,8 +40,11 @@ struct FooterBar: View {
             }
 
             HStack(spacing: 20) {
-                if let project = activeProject {
-                    FooterProjectLabel(name: project.path)
+                if let workspace = activeWorkspace {
+                    FooterWorkspaceLabel(
+                        name: workspace.isScratchSpace ? workspace.name : workspace.path,
+                        isMissing: store.isWorkspacePathMissing(workspace.id)
+                    )
                 }
 
                 if !gitMonitor.status.branch.isEmpty {
@@ -62,14 +65,14 @@ struct FooterBar: View {
             SpotifyNowPlaying()
                 .padding(.trailing, 30)
 
-            if let projectId = store.activeProjectId {
-                let cols = store.projectColumns(for: projectId)
+            if let workspaceId = store.activeWorkspaceId {
+                let cols = store.workspaceColumns(for: workspaceId)
                 if !cols.isEmpty {
                     WindowDots(columns: cols, activeTabId: store.activeTabId)
-                } else if !activeProjectTabs.isEmpty {
+                } else if !activeWorkspaceTabs.isEmpty {
                     // Fallback before columns are initialized
                     WindowDots(
-                        columns: activeProjectTabs.map { Column(id: $0.id, tabIds: [$0.id]) },
+                        columns: activeWorkspaceTabs.map { Column(id: $0.id, tabIds: [$0.id]) },
                         activeTabId: store.activeTabId
                     )
                 }
@@ -78,9 +81,11 @@ struct FooterBar: View {
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .font(Fonts.primary(size: 12))
-        .onChange(of: store.activeProjectId, initial: true) {
-            if let project = activeProject {
-                gitMonitor.startMonitoring(path: project.path)
+        .onChange(of: store.activeWorkspaceId, initial: true) {
+            if let workspace = activeWorkspace,
+               !workspace.isScratchSpace,
+               !store.isWorkspacePathMissing(workspace.id) {
+                gitMonitor.startMonitoring(path: workspace.path)
             } else {
                 gitMonitor.stopMonitoring()
             }
@@ -88,7 +93,7 @@ struct FooterBar: View {
     }
 
     private func openLazygit() {
-        store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
+        store.openOrFocusCommandTabForActiveWorkspace(command: "lazygit", label: "lazygit")
     }
 }
 
@@ -140,20 +145,29 @@ private struct FooterIconButton: View {
     }
 }
 
-private struct FooterProjectLabel: View {
+private struct FooterWorkspaceLabel: View {
     @Environment(\.theme) private var theme
 
     let name: String
+    let isMissing: Bool
 
     private var displayPath: String {
         (name as NSString).abbreviatingWithTildeInPath
     }
 
     var body: some View {
-        Text(displayPath)
-            .font(Fonts.primary(size: 12))
-            .foregroundStyle(theme.textMuted)
-            .lineLimit(1)
+        HStack(spacing: 6) {
+            if isMissing {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.yellow)
+            }
+
+            Text(isMissing ? "Missing folder" : displayPath)
+                .font(Fonts.primary(size: 12))
+                .foregroundStyle(isMissing ? theme.yellow : theme.textMuted)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -310,6 +324,6 @@ private struct SpotifyNowPlaying: View {
 
     private func openSpotifyTUI() {
         let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+        store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Spotify", maximizeColumn: true)
     }
 }

@@ -70,16 +70,89 @@ struct TerminalSubmittedLineBuffer {
         return shouldSubmit
     }
 
-    mutating func handleKeyCode(_ keyCode: UInt16) {
+    mutating func handleKeyCode(
+        _ keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags = [],
+        charactersIgnoringModifiers: String? = nil
+    ) {
+        let normalizedModifiers = modifiers.intersection([.control, .option])
+        let normalizedCharacter = charactersIgnoringModifiers?
+            .lowercased()
+            .unicodeScalars
+            .first
+
+        if normalizedModifiers.contains(.control), let normalizedCharacter {
+            switch normalizedCharacter {
+            case "a":
+                moveHome()
+                return
+            case "b":
+                moveLeft()
+                return
+            case "d":
+                deleteForward()
+                return
+            case "e":
+                moveEnd()
+                return
+            case "f":
+                moveRight()
+                return
+            case "k":
+                deleteToEndOfLine()
+                return
+            case "u":
+                deleteToBeginningOfLine()
+                return
+            case "w":
+                deleteWordBackward()
+                return
+            default:
+                break
+            }
+        }
+
+        if normalizedModifiers.contains(.option), let normalizedCharacter {
+            switch normalizedCharacter {
+            case "b":
+                moveWordLeft()
+                return
+            case "d":
+                deleteWordForward()
+                return
+            case "f":
+                moveWordRight()
+                return
+            default:
+                break
+            }
+        }
+
         switch keyCode {
         case 51:
-            deleteBackward()
+            if normalizedModifiers.contains(.option) {
+                deleteWordBackward()
+            } else {
+                deleteBackward()
+            }
         case 117:
-            deleteForward()
+            if normalizedModifiers.contains(.option) {
+                deleteWordForward()
+            } else {
+                deleteForward()
+            }
         case 123:
-            moveLeft()
+            if normalizedModifiers.contains(.option) {
+                moveWordLeft()
+            } else {
+                moveLeft()
+            }
         case 124:
-            moveRight()
+            if normalizedModifiers.contains(.option) {
+                moveWordRight()
+            } else {
+                moveRight()
+            }
         case 115:
             moveHome()
         case 119:
@@ -133,6 +206,50 @@ struct TerminalSubmittedLineBuffer {
     private mutating func moveEnd() {
         cursor = characters.count
     }
+
+    private mutating func moveWordLeft() {
+        while cursor > 0, characters[cursor - 1].isWhitespace {
+            cursor -= 1
+        }
+        while cursor > 0, !characters[cursor - 1].isWhitespace {
+            cursor -= 1
+        }
+    }
+
+    private mutating func moveWordRight() {
+        while cursor < characters.count, characters[cursor].isWhitespace {
+            cursor += 1
+        }
+        while cursor < characters.count, !characters[cursor].isWhitespace {
+            cursor += 1
+        }
+    }
+
+    private mutating func deleteWordBackward() {
+        let end = cursor
+        moveWordLeft()
+        guard cursor < end else { return }
+        characters.removeSubrange(cursor..<end)
+    }
+
+    private mutating func deleteWordForward() {
+        let start = cursor
+        moveWordRight()
+        guard start < cursor else { return }
+        characters.removeSubrange(start..<cursor)
+        cursor = start
+    }
+
+    private mutating func deleteToBeginningOfLine() {
+        guard cursor > 0 else { return }
+        characters.removeSubrange(0..<cursor)
+        cursor = 0
+    }
+
+    private mutating func deleteToEndOfLine() {
+        guard cursor < characters.count else { return }
+        characters.removeSubrange(cursor..<characters.count)
+    }
 }
 
 private final class GhosttyTerminalSurfaceCommandSink: TerminalSurfaceCommandSink {
@@ -165,10 +282,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     let tabId: String
     /// Stable pane ID used across restored sessions.
     private let paneId: String
-    /// The project ID this surface belongs to.
-    private let projectId: String
-    /// The project name this surface belongs to.
-    private let projectName: String
+    /// The workspace ID this surface belongs to.
+    private let workspaceId: String
+    /// The workspace name this surface belongs to.
+    private let workspaceName: String
     /// Optional directory that contains Blink-installed CLI wrappers.
     private let hookScriptDirectoryPath: String?
     /// Optional ZDOTDIR wrapper directory for shell integration.
@@ -233,8 +350,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         app: GhosttyApp,
         tabId: String,
         paneId: String,
-        projectId: String,
-        projectName: String,
+        workspaceId: String,
+        workspaceName: String,
         hookScriptDirectoryPath: String? = nil,
         hookShellIntegrationDirectoryPath: String? = nil,
         hookEventDirectoryPath: String? = nil,
@@ -244,8 +361,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         self.ghosttyApp = app
         self.tabId = tabId
         self.paneId = paneId
-        self.projectId = projectId
-        self.projectName = projectName
+        self.workspaceId = workspaceId
+        self.workspaceName = workspaceName
         self.hookScriptDirectoryPath = hookScriptDirectoryPath
         self.hookShellIntegrationDirectoryPath = hookShellIntegrationDirectoryPath
         self.hookEventDirectoryPath = hookEventDirectoryPath
@@ -341,8 +458,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             ghostty_env_var_s(key: strdup("PATH"), value: strdup(shellPATH())),
             ghostty_env_var_s(key: strdup("BLINK_TAB_ID"), value: strdup(tabId)),
             ghostty_env_var_s(key: strdup("BLINK_PANE_ID"), value: strdup(paneId)),
-            ghostty_env_var_s(key: strdup("BLINK_PROJECT_ID"), value: strdup(projectId)),
-            ghostty_env_var_s(key: strdup("BLINK_PROJECT_NAME"), value: strdup(projectName)),
+            ghostty_env_var_s(key: strdup("BLINK_PROJECT_ID"), value: strdup(workspaceId)),
+            ghostty_env_var_s(key: strdup("BLINK_PROJECT_NAME"), value: strdup(workspaceName)),
             ghostty_env_var_s(key: strdup("BLINK_PROJECT_PATH"), value: strdup(workingDirectory)),
         ]
         if let hookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
@@ -787,7 +904,11 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         if event.keyCode == 36 || event.keyCode == 76 {
             submitBufferedLineIfNeeded()
         } else {
-            submittedLineBuffer.handleKeyCode(event.keyCode)
+            submittedLineBuffer.handleKeyCode(
+                event.keyCode,
+                modifiers: event.modifierFlags,
+                charactersIgnoringModifiers: event.charactersIgnoringModifiers
+            )
         }
 
     }
@@ -1108,6 +1229,15 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         text.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
         }
+    }
+
+    /// Reset shell command tracking after a TUI exits back to the prompt.
+    func clearSubmittedLineTracking() {
+        submittedLineBuffer.clear()
+    }
+
+    var hasTrackedSubmittedLine: Bool {
+        !submittedLineBuffer.currentLine.isEmpty
     }
 
     // MARK: - Focus

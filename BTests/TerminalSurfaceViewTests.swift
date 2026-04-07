@@ -26,6 +26,26 @@ final class TerminalSurfaceViewTests: XCTestCase {
         XCTAssertEqual(buffer.submit(), "hello")
     }
 
+    func testSubmittedLineBufferSupportsOptionDeleteWordCorrection() {
+        var buffer = TerminalSubmittedLineBuffer()
+
+        _ = buffer.insert("Plan Blink relase")
+        buffer.handleKeyCode(51, modifiers: [.option], charactersIgnoringModifiers: "\u{7f}")
+        _ = buffer.insert("release")
+
+        XCTAssertEqual(buffer.submit(), "Plan Blink release")
+    }
+
+    func testSubmittedLineBufferSupportsControlWWordCorrection() {
+        var buffer = TerminalSubmittedLineBuffer()
+
+        _ = buffer.insert("Plan Blink relase")
+        buffer.handleKeyCode(13, modifiers: [.control], charactersIgnoringModifiers: "w")
+        _ = buffer.insert("release")
+
+        XCTAssertEqual(buffer.submit(), "Plan Blink release")
+    }
+
     func testSetFrameSizeResizesSurfaceWithoutForcingRefresh() {
         let view = makeSurfaceView()
         let sink = RecordingSurfaceCommandSink()
@@ -64,8 +84,8 @@ final class TerminalSurfaceViewTests: XCTestCase {
             app: GhosttyApp(),
             tabId: "test-tab",
             paneId: "pane-test",
-            projectId: "test-project",
-            projectName: "Test Project",
+            workspaceId: "test-workspace",
+            workspaceName: "Test Workspace",
             workingDirectory: "/tmp"
         )
         view.frame = NSRect(x: 0, y: 0, width: 100, height: 100)

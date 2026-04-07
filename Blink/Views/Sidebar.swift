@@ -1,20 +1,20 @@
 import SwiftUI
 
 private enum SidebarTreeSelection: Hashable {
-    case project(String)
-    case tab(projectId: String, tabId: String)
+    case workspace(String)
+    case tab(workspaceId: String, tabId: String)
 
-    var projectId: String {
+    var workspaceId: String {
         switch self {
-        case .project(let projectId):
-            return projectId
-        case .tab(let projectId, _):
-            return projectId
+        case .workspace(let workspaceId):
+            return workspaceId
+        case .tab(let workspaceId, _):
+            return workspaceId
         }
     }
 }
 
-/// Project list — the middle section of the sidebar column.
+/// Workspace list — the middle section of the sidebar column.
 /// Header/footer are handled by Shell's top bar and footer rows.
 struct SidebarView: View {
     @Environment(AppStore.self) private var store
@@ -26,7 +26,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             SidebarHeader(
-                onPickProjectFolder: { store.pickProjectFolder() },
+                onPickWorkspaceFolder: { store.presentWorkspaceOnboarding() },
                 onToggleNewWindowMenu: { store.showNewTabMenu.toggle() },
                 onNewTabAction: handleNewWindowAction
             )
@@ -39,26 +39,26 @@ struct SidebarView: View {
                         .frame(height: 1)
                 }
 
-            AllProjectsSidebarView(
+            AllWorkspacesSidebarView(
                 selectedRow: selectedRow,
-                onSelectProject: { projectId, shouldActivate in
+                onSelectWorkspace: { workspaceId, shouldActivate in
                     if shouldActivate {
-                        activate(.project(projectId))
+                        activate(.workspace(workspaceId))
                     } else {
-                        select(.project(projectId))
+                        select(.workspace(workspaceId))
                     }
                 },
-                onToggleProjectExpansion: { projectId in
-                    selectedRow = .project(projectId)
+                onToggleWorkspaceExpansion: { workspaceId in
+                    selectedRow = .workspace(workspaceId)
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        store.toggleProjectExpansion(projectId)
+                        store.toggleWorkspaceExpansion(workspaceId)
                     }
                 },
-                onSelectTab: { projectId, tabId, shouldActivate in
+                onSelectTab: { workspaceId, tabId, shouldActivate in
                     if shouldActivate {
-                        activate(.tab(projectId: projectId, tabId: tabId))
+                        activate(.tab(workspaceId: workspaceId, tabId: tabId))
                     } else {
-                        select(.tab(projectId: projectId, tabId: tabId))
+                        select(.tab(workspaceId: workspaceId, tabId: tabId))
                     }
                 }
             )
@@ -78,21 +78,23 @@ struct SidebarView: View {
 
     private func handleNewWindowAction(_ action: NewTabAction) {
         store.showNewTabMenu = false
-        guard let projectId = store.activeProjectId else { return }
+        guard let workspaceId = store.activeWorkspaceId else { return }
 
         switch action {
         case .terminal:
-            store.openTab(projectId: projectId)
+            store.openTab(workspaceId: workspaceId)
+        case .aiSession:
+            store.presentAISessionPicker()
         case .browser:
-            store.openBrowserTabForActiveProject()
+            store.openBrowserTabForActiveWorkspace()
         case .lazygit:
-            store.openOrFocusCommandTab(projectId: projectId, command: "lazygit", label: "lazygit")
+            store.openOrFocusCommandTab(workspaceId: workspaceId, command: "lazygit", label: "lazygit")
         case .yazi:
             let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
-            store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Yazi")
+            store.openOrFocusCommandTab(workspaceId: workspaceId, command: command, label: "Yazi")
         case .neovim:
             let command = NvimLauncher.command()
-            store.openOrFocusCommandTab(projectId: projectId, command: command, label: "Neovim")
+            store.openOrFocusCommandTab(workspaceId: workspaceId, command: command, label: "Neovim")
         }
     }
 
@@ -157,31 +159,31 @@ struct SidebarView: View {
     }
 
     private var visibleRows: [SidebarTreeSelection] {
-        store.projects.flatMap { project in
-            let children = store.isProjectExpanded(project.id)
-                ? liveTabs(for: project.id).map { SidebarTreeSelection.tab(projectId: project.id, tabId: $0.id) }
+        store.workspaces.flatMap { workspace in
+            let children = store.isWorkspaceExpanded(workspace.id)
+                ? liveTabs(for: workspace.id).map { SidebarTreeSelection.tab(workspaceId: workspace.id, tabId: $0.id) }
                 : []
-            return [SidebarTreeSelection.project(project.id)] + children
+            return [SidebarTreeSelection.workspace(workspace.id)] + children
         }
     }
 
     private var selectionSyncToken: String {
-        let projectIds = store.projects.map(\.id).joined(separator: ",")
+        let workspaceIds = store.workspaces.map(\.id).joined(separator: ",")
         let tabIds = store.tabs.map(\.id).joined(separator: ",")
-        let expandedIds = store.expandedProjectIds.sorted().joined(separator: ",")
+        let expandedIds = store.expandedWorkspaceIds.sorted().joined(separator: ",")
         return [
-            store.activeProjectId ?? "",
+            store.activeWorkspaceId ?? "",
             store.activeTabId ?? "",
-            projectIds,
+            workspaceIds,
             tabIds,
             expandedIds,
             store.sidebarFocused ? "1" : "0"
         ].joined(separator: "|")
     }
 
-    private func liveTabs(for projectId: String) -> [AppTab] {
-        let ordered = store.orderedTabs(for: projectId)
-        return ordered.isEmpty ? store.projectTabs(for: projectId) : ordered
+    private func liveTabs(for workspaceId: String) -> [AppTab] {
+        let ordered = store.orderedTabs(for: workspaceId)
+        return ordered.isEmpty ? store.workspaceTabs(for: workspaceId) : ordered
     }
 
     private func scheduleSelectionSync() {
@@ -196,17 +198,17 @@ struct SidebarView: View {
             return
         }
 
-        if let projectId = store.activeProjectId {
+        if let workspaceId = store.activeWorkspaceId {
             let activeTabSelection = store.activeTabId.map {
-                SidebarTreeSelection.tab(projectId: projectId, tabId: $0)
+                SidebarTreeSelection.tab(workspaceId: workspaceId, tabId: $0)
             }
             if let activeTabSelection, visibleRows.contains(activeTabSelection) {
                 selectedRow = activeTabSelection
                 return
             }
-            let projectSelection = SidebarTreeSelection.project(projectId)
-            if visibleRows.contains(projectSelection) {
-                selectedRow = projectSelection
+            let workspaceSelection = SidebarTreeSelection.workspace(workspaceId)
+            if visibleRows.contains(workspaceSelection) {
+                selectedRow = workspaceSelection
                 return
             }
         } else if hasValidSelection {
@@ -219,10 +221,10 @@ struct SidebarView: View {
     private func select(_ row: SidebarTreeSelection) {
         selectedRow = row
         switch row {
-        case .project(let projectId):
-            store.setActiveProject(projectId)
-        case .tab(let projectId, let tabId):
-            store.setActiveProject(projectId)
+        case .workspace(let workspaceId):
+            store.setActiveWorkspace(workspaceId)
+        case .tab(let workspaceId, let tabId):
+            store.setActiveWorkspace(workspaceId)
             store.setActiveTab(tabId)
         }
     }
@@ -230,10 +232,10 @@ struct SidebarView: View {
     private func activate(_ row: SidebarTreeSelection) {
         selectedRow = row
         switch row {
-        case .project(let projectId):
-            store.openProjectSession(projectId, restoringSavedSetup: false)
-        case .tab(let projectId, let tabId):
-            store.openProjectSession(projectId)
+        case .workspace(let workspaceId):
+            store.openWorkspaceSession(workspaceId, restoringSavedSetup: false)
+        case .tab(let workspaceId, let tabId):
+            store.openWorkspaceSession(workspaceId)
             store.setActiveTab(tabId)
         }
     }
@@ -256,12 +258,12 @@ struct SidebarView: View {
         guard let selectedRow else { return }
 
         switch selectedRow {
-        case .tab(let projectId, _):
-            select(.project(projectId))
-        case .project(let projectId):
-            if store.isProjectExpanded(projectId) {
+        case .tab(let workspaceId, _):
+            select(.workspace(workspaceId))
+        case .workspace(let workspaceId):
+            if store.isWorkspaceExpanded(workspaceId) {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    store.collapseProject(projectId)
+                    store.collapseWorkspace(workspaceId)
                 }
             }
         }
@@ -271,18 +273,18 @@ struct SidebarView: View {
         guard let selectedRow else { return }
 
         switch selectedRow {
-        case .project(let projectId):
-            let tabs = liveTabs(for: projectId)
+        case .workspace(let workspaceId):
+            let tabs = liveTabs(for: workspaceId)
             guard !tabs.isEmpty else {
-                activate(.project(projectId))
+                activate(.workspace(workspaceId))
                 return
             }
-            if !store.isProjectExpanded(projectId) {
+            if !store.isWorkspaceExpanded(workspaceId) {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    store.expandProject(projectId)
+                    store.expandWorkspace(workspaceId)
                 }
             } else if let firstTab = tabs.first {
-                select(.tab(projectId: projectId, tabId: firstTab.id))
+                select(.tab(workspaceId: workspaceId, tabId: firstTab.id))
             }
         case .tab:
             activateSelectedRow()
@@ -298,7 +300,7 @@ struct SidebarView: View {
 private struct SidebarHeader: View {
     @Environment(AppStore.self) private var store
 
-    let onPickProjectFolder: () -> Void
+    let onPickWorkspaceFolder: () -> Void
     let onToggleNewWindowMenu: () -> Void
     let onNewTabAction: (NewTabAction) -> Void
 
@@ -320,12 +322,12 @@ private struct SidebarHeader: View {
                 ) {
                     NewTabMenu(onAction: onNewTabAction)
                 }
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
                 SidebarHeaderIconButton(
                     systemImage: "plus",
-                    accessibilityLabel: "Add Project",
-                    action: onPickProjectFolder
+                    accessibilityLabel: "New Workspace",
+                    action: onPickWorkspaceFolder
                 )
             }
         }
@@ -365,22 +367,22 @@ private struct SidebarHeaderIconButton: View {
     }
 }
 
-private struct AllProjectsSidebarView: View {
+private struct AllWorkspacesSidebarView: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
     let selectedRow: SidebarTreeSelection?
-    let onSelectProject: (String, Bool) -> Void
-    let onToggleProjectExpansion: (String) -> Void
+    let onSelectWorkspace: (String, Bool) -> Void
+    let onToggleWorkspaceExpansion: (String) -> Void
     let onSelectTab: (String, String, Bool) -> Void
 
     var body: some View {
-        if store.projects.isEmpty {
+        if store.workspaces.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "folder")
                     .font(.system(size: 48, weight: .thin))
                     .foregroundStyle(theme.textDim.opacity(0.5))
-                Text("No projects yet")
+                Text("No workspaces yet")
                     .font(Fonts.primary(size: 16))
                     .foregroundStyle(theme.textMuted)
                 Text("Tap the icon above to add one")
@@ -392,18 +394,19 @@ private struct AllProjectsSidebarView: View {
         } else {
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    ForEach(store.projects) { project in
+                    ForEach(store.workspaces) { workspace in
                         let liveTabs = {
-                            let ordered = store.orderedTabs(for: project.id)
-                            return ordered.isEmpty ? store.projectTabs(for: project.id) : ordered
+                            let ordered = store.orderedTabs(for: workspace.id)
+                            return ordered.isEmpty ? store.workspaceTabs(for: workspace.id) : ordered
                         }()
-                        SidebarProjectItem(
-                            project: project,
-                            isActive: store.activeProjectId == project.id,
-                            isSelected: selectedRow == .project(project.id),
-                            isExpanded: store.isProjectExpanded(project.id),
-                            terminalCount: store.terminalCount(for: project.id),
-                            hasUnread: store.hasUnread(projectId: project.id),
+                        SidebarWorkspaceItem(
+                            workspace: workspace,
+                            isActive: store.activeWorkspaceId == workspace.id,
+                            isSelected: selectedRow == .workspace(workspace.id),
+                            isPathMissing: store.isWorkspacePathMissing(workspace.id),
+                            isExpanded: store.isWorkspaceExpanded(workspace.id),
+                            terminalCount: store.terminalCount(for: workspace.id),
+                            hasUnread: store.hasUnread(workspaceId: workspace.id),
                             claudeTabActivities: Dictionary(
                                 uniqueKeysWithValues: liveTabs.compactMap { tab in
                                     store.claudeActivity(for: tab.id).map { (tab.id, $0) }
@@ -416,22 +419,26 @@ private struct AllProjectsSidebarView: View {
                             ),
                             tabs: liveTabs,
                             selectedTabId: {
-                                if case .tab(let projectId, let tabId) = selectedRow, projectId == project.id {
+                                if case .tab(let workspaceId, let tabId) = selectedRow, workspaceId == workspace.id {
                                     return tabId
                                 }
                                 return nil
                             }(),
-                            activeTabId: store.activeProjectId == project.id ? store.activeTabId : nil,
+                            activeTabId: store.activeWorkspaceId == workspace.id ? store.activeTabId : nil,
+                            canRemove: !workspace.isScratchSpace,
                             onSelect: { activate in
-                                onSelectProject(project.id, activate)
+                                onSelectWorkspace(workspace.id, activate)
                             },
                             onToggleExpansion: {
-                                onToggleProjectExpansion(project.id)
+                                onToggleWorkspaceExpansion(workspace.id)
                             },
                             onSelectTab: { tabId, activate in
-                                onSelectTab(project.id, tabId, activate)
+                                onSelectTab(workspace.id, tabId, activate)
                             },
-                            onRemove: { store.removeProject(project.id) }
+                            onRename: { store.promptRenameWorkspace(workspace.id) },
+                            onReveal: { store.revealWorkspaceInFinder(workspace.id) },
+                            onRelink: { store.promptRelinkWorkspace(workspace.id) },
+                            onRemove: { store.removeWorkspace(workspace.id) }
                         )
                     }
                 }
@@ -537,6 +544,6 @@ private struct SidebarNowPlaying: View {
 
     private func openSpotifyTUI() {
         let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-        store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+        store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Spotify", maximizeColumn: true)
     }
 }

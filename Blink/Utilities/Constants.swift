@@ -37,11 +37,6 @@ enum Layout {
     // Column panes
     static let columnPaneDividerHeight: CGFloat = 1
 
-    // Chat
-    static let chatContentMaxWidth: CGFloat = 820
-    static let chatHistoryRailWidth: CGFloat = 280
-    static let chatHistoryCollapseThreshold: CGFloat = 760
-
     // Status line
     static let statusLineHeight: CGFloat = 30
 

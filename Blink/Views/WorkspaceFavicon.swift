@@ -1,21 +1,21 @@
 import SwiftUI
 import AppKit
 
-/// Project icon — rounded square with favicon or initial fallback.
-struct ProjectFavicon: View {
+/// Workspace icon — rounded square with favicon or initial fallback.
+struct WorkspaceFavicon: View {
     @Environment(\.theme) private var theme
-    let projectName: String
-    let projectPath: String
+    let workspaceName: String
+    let workspacePath: String
     let size: CGFloat
 
-    init(projectName: String = "", projectPath: String = "", size: CGFloat = 24) {
-        self.projectName = projectName
-        self.projectPath = projectPath
+    init(workspaceName: String = "", workspacePath: String = "", size: CGFloat = 24) {
+        self.workspaceName = workspaceName
+        self.workspacePath = workspacePath
         self.size = size
     }
 
     private var initial: String {
-        String(projectName.prefix(1)).uppercased()
+        String(workspaceName.prefix(1)).uppercased()
     }
 
     private var cornerRadius: CGFloat {
@@ -27,7 +27,7 @@ struct ProjectFavicon: View {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(theme.border)
 
-            if let image = Self.loadFavicon(projectPath: projectPath, size: size) {
+            if let image = Self.loadFavicon(workspacePath: workspacePath, size: size) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -46,7 +46,7 @@ struct ProjectFavicon: View {
         .frame(width: size, height: size)
     }
 
-    /// Common favicon locations in web projects.
+    /// Common favicon locations in web workspaces.
     private static let faviconPaths = [
         "public/favicon.ico",
         "public/favicon.png",
@@ -69,24 +69,24 @@ struct ProjectFavicon: View {
     /// Cached favicon lookups to avoid repeated file system checks.
     @MainActor private static var cache: [String: NSImage?] = [:]
 
-    /// Try to load a favicon from common project locations.
-    private static func loadFavicon(projectPath: String, size: CGFloat) -> NSImage? {
-        if let cached = cache[projectPath] {
+    /// Try to load a favicon from common workspace locations.
+    private static func loadFavicon(workspacePath: String, size: CGFloat) -> NSImage? {
+        if let cached = cache[workspacePath] {
             return cached
         }
 
         for relativePath in faviconPaths {
-            let fullPath = (projectPath as NSString).appendingPathComponent(relativePath)
+            let fullPath = (workspacePath as NSString).appendingPathComponent(relativePath)
             if FileManager.default.fileExists(atPath: fullPath),
                let image = NSImage(contentsOfFile: fullPath) {
                 // Resize for efficiency
                 let resized = image
-                cache[projectPath] = resized
+                cache[workspacePath] = resized
                 return resized
             }
         }
 
-        cache[projectPath] = nil
+        cache[workspacePath] = nil
         return nil
     }
 }

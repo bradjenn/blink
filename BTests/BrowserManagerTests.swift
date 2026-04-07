@@ -21,13 +21,13 @@ final class BrowserManagerTests: XCTestCase {
         let manager = BrowserManager(userDefaults: testDefaults)
         let firstController = manager.controller(
             for: "browser-tab",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             initialState: .blank
         ) { _ in }
 
         let secondController = manager.controller(
             for: "browser-tab",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             initialState: BrowserTabState(urlString: "https://example.com")
         ) { _ in }
 
@@ -35,12 +35,12 @@ final class BrowserManagerTests: XCTestCase {
         XCTAssertNil(secondController.session.state.urlString)
     }
 
-    func testRecentDownloadsAreScopedByProjectAndSortedNewestFirst() {
+    func testRecentDownloadsAreScopedByWorkspaceAndSortedNewestFirst() {
         let manager = BrowserManager(userDefaults: testDefaults)
         let older = BrowserDownloadItem(
-            id: "project-1:1",
+            id: "workspace-1:1",
             browserTabId: "tab-1",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             sourceURLString: "https://example.com/one.zip",
             suggestedFileName: "one.zip",
             destinationPath: "/Users/bradley/Downloads/one.zip",
@@ -55,9 +55,9 @@ final class BrowserManagerTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 1)
         )
         let newer = BrowserDownloadItem(
-            id: "project-1:2",
+            id: "workspace-1:2",
             browserTabId: "tab-2",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             sourceURLString: "https://example.com/two.zip",
             suggestedFileName: "two.zip",
             destinationPath: "/Users/bradley/Downloads/two.zip",
@@ -71,10 +71,10 @@ final class BrowserManagerTests: XCTestCase {
             isInterrupted: false,
             updatedAt: Date(timeIntervalSince1970: 2)
         )
-        let otherProject = BrowserDownloadItem(
-            id: "project-2:1",
+        let otherWorkspace = BrowserDownloadItem(
+            id: "workspace-2:1",
             browserTabId: "tab-3",
-            projectId: "project-2",
+            workspaceId: "workspace-2",
             sourceURLString: "https://example.com/three.zip",
             suggestedFileName: "three.zip",
             destinationPath: "/Users/bradley/Downloads/three.zip",
@@ -89,16 +89,16 @@ final class BrowserManagerTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 3)
         )
 
-        manager.downloads = [older, newer, otherProject]
+        manager.downloads = [older, newer, otherWorkspace]
 
-        XCTAssertEqual(manager.recentDownloads(for: "project-1").map(\.id), [newer.id, older.id])
+        XCTAssertEqual(manager.recentDownloads(for: "workspace-1").map(\.id), [newer.id, older.id])
     }
 
     func testDownloadsPersistAcrossManagerRelaunch() {
         let persisted = BrowserDownloadItem(
-            id: "project-1:1",
+            id: "workspace-1:1",
             browserTabId: "tab-1",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             sourceURLString: "https://example.com/archive.zip",
             suggestedFileName: "archive.zip",
             destinationPath: "/Users/bradley/Downloads/archive.zip",
@@ -120,11 +120,40 @@ final class BrowserManagerTests: XCTestCase {
         XCTAssertEqual(secondManager.downloads, [persisted])
     }
 
-    func testClearDownloadsOnlyRemovesActiveProjectHistory() {
-        let projectOne = BrowserDownloadItem(
-            id: "project-1:1",
+    func testDownloadsLoadLegacyProjectIdField() throws {
+        let legacyDownloadData = try JSONSerialization.data(
+            withJSONObject: [[
+                "id": "project-1:1",
+                "browserTabId": "tab-1",
+                "projectId": "project-1",
+                "sourceURLString": "https://example.com/archive.zip",
+                "suggestedFileName": "archive.zip",
+                "destinationPath": "/Users/bradley/Downloads/archive.zip",
+                "receivedBytes": 20,
+                "totalBytes": 20,
+                "percentComplete": 100,
+                "currentSpeed": 0,
+                "isInProgress": false,
+                "isComplete": true,
+                "isCanceled": false,
+                "isInterrupted": false,
+                "updatedAt": 20,
+            ]],
+            options: [.sortedKeys]
+        )
+        testDefaults.set(legacyDownloadData, forKey: "blink.browserDownloads")
+
+        let manager = BrowserManager(userDefaults: testDefaults)
+
+        XCTAssertEqual(manager.downloads.count, 1)
+        XCTAssertEqual(manager.downloads.first?.workspaceId, "project-1")
+    }
+
+    func testClearDownloadsOnlyRemovesActiveWorkspaceHistory() {
+        let workspaceOne = BrowserDownloadItem(
+            id: "workspace-1:1",
             browserTabId: "tab-1",
-            projectId: "project-1",
+            workspaceId: "workspace-1",
             sourceURLString: "https://example.com/one.zip",
             suggestedFileName: "one.zip",
             destinationPath: "/Users/bradley/Downloads/one.zip",
@@ -138,10 +167,10 @@ final class BrowserManagerTests: XCTestCase {
             isInterrupted: false,
             updatedAt: Date(timeIntervalSince1970: 1)
         )
-        let projectTwo = BrowserDownloadItem(
-            id: "project-2:1",
+        let workspaceTwo = BrowserDownloadItem(
+            id: "workspace-2:1",
             browserTabId: "tab-2",
-            projectId: "project-2",
+            workspaceId: "workspace-2",
             sourceURLString: "https://example.com/two.zip",
             suggestedFileName: "two.zip",
             destinationPath: "/Users/bradley/Downloads/two.zip",
@@ -157,13 +186,13 @@ final class BrowserManagerTests: XCTestCase {
         )
 
         let manager = BrowserManager(userDefaults: testDefaults)
-        manager.downloads = [projectOne, projectTwo]
+        manager.downloads = [workspaceOne, workspaceTwo]
 
-        manager.clearDownloads(for: "project-1")
+        manager.clearDownloads(for: "workspace-1")
 
-        XCTAssertEqual(manager.downloads, [projectTwo])
+        XCTAssertEqual(manager.downloads, [workspaceTwo])
         let reloadedManager = BrowserManager(userDefaults: testDefaults)
-        XCTAssertEqual(reloadedManager.downloads, [projectTwo])
+        XCTAssertEqual(reloadedManager.downloads, [workspaceTwo])
     }
 
     func testHistoryEntriesPersistAcrossManagerRelaunch() {
@@ -216,7 +245,7 @@ final class BrowserManagerTests: XCTestCase {
         let manager = BrowserManager(userDefaults: testDefaults)
         manager.recordHistoryEntry(
             from: BrowserTabState(
-                urlString: "https://dashboard.example.com/projects",
+                urlString: "https://dashboard.example.com/workspaces",
                 title: "Dashboard",
                 isLoading: false,
                 preferredFocus: .webView
@@ -235,7 +264,7 @@ final class BrowserManagerTests: XCTestCase {
             manager.addressBarSuggestions(for: "dashboard").map(\.urlString),
             [
                 "http://localhost:3000/dashboard",
-                "https://dashboard.example.com/projects"
+                "https://dashboard.example.com/workspaces"
             ]
         )
     }

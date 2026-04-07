@@ -11,6 +11,7 @@ struct CommandPalette: View {
     @State private var searchText = ""
     @State private var selectedIndex = 0
     @State private var keyMonitor: Any?
+    @State private var hoveredCommandId: String?
     @FocusState private var searchFocused: Bool
 
     private func requestSearchFocus() {
@@ -98,19 +99,41 @@ struct CommandPalette: View {
     }
 
     private var commands: [PaletteCommand] {
-        let hasProject = store.activeProjectId != nil
+        let hasWorkspace = store.activeWorkspaceId != nil
 
         return [
             PaletteCommand(
-                id: "switch-project",
-                title: "Switch Project",
-                subtitle: "Open the project switcher",
+                id: "open-scratch",
+                title: "Open Scratch Space",
+                subtitle: "Open a workspace for shells, AI sessions, and browser tabs",
+                category: "Workspace",
+                shortcut: nil,
+                keywords: ["scratch", "blank", "shell", "ai", "browser", "workspace"],
+                isEnabled: true
+            ) {
+                store.openScratchSpace()
+            },
+            PaletteCommand(
+                id: "add-workspace",
+                title: "New Workspace",
+                subtitle: "Create or import a workspace with a starter setup",
+                category: "Workspace",
+                shortcut: nil,
+                keywords: ["new", "add", "create", "open", "folder", "workspace"],
+                isEnabled: true
+            ) {
+                store.presentWorkspaceOnboarding()
+            },
+            PaletteCommand(
+                id: "switch-workspace",
+                title: "Switch Workspace",
+                subtitle: "Open the workspace switcher",
                 category: "Workspace",
                 shortcut: "Cmd-P",
-                keywords: ["project", "workspace", "switch", "open"],
-                isEnabled: !store.projects.isEmpty
+                keywords: ["workspace", "workspace", "switch", "open"],
+                isEnabled: !store.workspaces.isEmpty
             ) {
-                store.presentProjectSwitcher(focusSearch: true)
+                store.presentWorkspaceSwitcher(focusSearch: true)
             },
             PaletteCommand(
                 id: "switch-theme",
@@ -141,7 +164,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: nil,
                 keywords: ["sidebar", "panel", "focus", "terminal"],
-                isEnabled: store.activeProjectId != nil || store.sidebarVisible
+                isEnabled: store.activeWorkspaceId != nil || store.sidebarVisible
             ) {
                 if store.sidebarFocused {
                     store.focusTerminal()
@@ -156,7 +179,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-O",
                 keywords: ["overview", "grid", "layout"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.toggleOverview()
             },
@@ -167,28 +190,28 @@ struct CommandPalette: View {
                 category: "Windows",
                 shortcut: "Cmd-T",
                 keywords: ["new", "window", "tab", "terminal", "browser"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.openNewTabForActiveSurface()
             },
             PaletteCommand(
                 id: "new-browser",
-                title: "Open Project Browser",
-                subtitle: "Open a new isolated browser pane in the active project",
+                title: "Open Workspace Browser",
+                subtitle: "Open a new isolated browser pane in the active workspace",
                 category: "Windows",
                 shortcut: "Cmd-Opt-B",
-                keywords: ["browser", "project", "web", "page", "isolated"],
-                isEnabled: hasProject
+                keywords: ["browser", "workspace", "web", "page", "isolated"],
+                isEnabled: hasWorkspace
             ) {
-                store.openBrowserTabForActiveProject()
+                store.openBrowserTabForActiveWorkspace()
             },
             PaletteCommand(
                 id: "toggle-browser-sidebar",
-                title: "Toggle Project Browser Sidebar",
-                subtitle: "Pin or unpin the active project browser sidebar",
+                title: "Toggle Workspace Browser Sidebar",
+                subtitle: "Pin or unpin the active workspace browser sidebar",
                 category: "Windows",
                 shortcut: "Cmd-S",
-                keywords: ["browser", "project", "sidebar", "tabs", "panel"],
+                keywords: ["browser", "workspace", "sidebar", "tabs", "panel"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.toggleActiveBrowserSidebarPinned()
@@ -200,7 +223,7 @@ struct CommandPalette: View {
                 category: "Windows",
                 shortcut: "Cmd-Shift-_",
                 keywords: ["split", "below", "under", "pane", "terminal"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.splitActivePaneWithNewTab()
             },
@@ -211,7 +234,7 @@ struct CommandPalette: View {
                 category: "Windows",
                 shortcut: "Cmd-Shift-|",
                 keywords: ["split", "right", "column", "pane", "terminal"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.splitActiveColumnWithNewTab()
             },
@@ -227,39 +250,50 @@ struct CommandPalette: View {
                 store.closeActiveTab()
             },
             PaletteCommand(
+                id: "open-ai-session",
+                title: "Open AI Session",
+                subtitle: "Choose Claude Code, Codex, or OpenCode for the active workspace",
+                category: "Tools",
+                shortcut: "Cmd-Shift-A",
+                keywords: ["ai", "claude", "codex", "opencode", "session", "agent", "cli"],
+                isEnabled: true
+            ) {
+                store.presentAISessionPicker()
+            },
+            PaletteCommand(
                 id: "open-git",
                 title: "Open Git",
-                subtitle: "Open lazygit for the active project",
+                subtitle: "Open lazygit for the active workspace",
                 category: "Tools",
                 shortcut: "Cmd-G",
                 keywords: ["git", "lazygit", "source control"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
-                store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
+                store.openOrFocusCommandTabForActiveWorkspace(command: "lazygit", label: "lazygit")
             },
             PaletteCommand(
                 id: "open-files",
                 title: "Open Files",
-                subtitle: "Open Yazi for the active project",
+                subtitle: "Open Yazi for the active workspace",
                 category: "Tools",
                 shortcut: "Cmd-Shift-F",
                 keywords: ["files", "yazi", "browser", "finder"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
-                store.openOrFocusCommandTabForActiveProject(command: command, label: "Yazi")
+                store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Yazi")
             },
             PaletteCommand(
                 id: "open-neovim",
                 title: "Open Neovim",
-                subtitle: "Open Neovim for the active project",
+                subtitle: "Open Neovim for the active workspace",
                 category: "Tools",
                 shortcut: "Cmd-Shift-N",
                 keywords: ["neovim", "nvim", "vim", "editor"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 let command = NvimLauncher.command()
-                store.openOrFocusCommandTabForActiveProject(command: command, label: "Neovim")
+                store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Neovim")
             },
             PaletteCommand(
                 id: "open-spotify",
@@ -268,73 +302,73 @@ struct CommandPalette: View {
                 category: "Tools",
                 shortcut: "Cmd-Shift-S",
                 keywords: ["spotify", "spotatui", "music", "player"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-                store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+                store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Spotify", maximizeColumn: true)
             },
             PaletteCommand(
                 id: "browser-focus-address-bar",
-                title: "Focus Project Browser Address Bar",
-                subtitle: "Move keyboard focus to the active project browser URL field",
+                title: "Focus Workspace Browser Address Bar",
+                subtitle: "Move keyboard focus to the active workspace browser URL field",
                 category: "Browser",
                 shortcut: "Cmd-Option-L",
-                keywords: ["browser", "project", "url", "address", "omnibar", "location"],
+                keywords: ["browser", "workspace", "url", "address", "omnibar", "location"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserAddressBar()
             },
             PaletteCommand(
                 id: "browser-focus-content",
-                title: "Focus Project Browser Content",
-                subtitle: "Return keyboard focus to the active project browser page",
+                title: "Focus Workspace Browser Content",
+                subtitle: "Return keyboard focus to the active workspace browser page",
                 category: "Browser",
                 shortcut: nil,
-                keywords: ["browser", "project", "page", "content", "web"],
+                keywords: ["browser", "workspace", "page", "content", "web"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.focusBrowserWebView()
             },
             PaletteCommand(
                 id: "browser-back",
-                title: "Project Browser Back",
-                subtitle: "Go back in the active project browser tab",
+                title: "Workspace Browser Back",
+                subtitle: "Go back in the active workspace browser tab",
                 category: "Browser",
                 shortcut: "Cmd-[",
-                keywords: ["browser", "project", "back", "history", "previous"],
+                keywords: ["browser", "workspace", "back", "history", "previous"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserBack()
             },
             PaletteCommand(
                 id: "browser-forward",
-                title: "Project Browser Forward",
-                subtitle: "Go forward in the active project browser tab",
+                title: "Workspace Browser Forward",
+                subtitle: "Go forward in the active workspace browser tab",
                 category: "Browser",
                 shortcut: "Cmd-]",
-                keywords: ["browser", "project", "forward", "history", "next"],
+                keywords: ["browser", "workspace", "forward", "history", "next"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.navigateActiveBrowserForward()
             },
             PaletteCommand(
                 id: "browser-reload",
-                title: "Project Browser Reload",
-                subtitle: "Reload the active project browser page",
+                title: "Workspace Browser Reload",
+                subtitle: "Reload the active workspace browser page",
                 category: "Browser",
                 shortcut: "Cmd-R",
-                keywords: ["browser", "project", "reload", "refresh", "page"],
+                keywords: ["browser", "workspace", "reload", "refresh", "page"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.reloadActiveBrowser()
             },
             PaletteCommand(
                 id: "browser-developer-tools",
-                title: "Toggle Project Browser Developer Tools",
-                subtitle: "Open or close DevTools for the active project browser tab",
+                title: "Toggle Workspace Browser Developer Tools",
+                subtitle: "Open or close DevTools for the active workspace browser tab",
                 category: "Browser",
                 shortcut: "Cmd-Opt-I",
-                keywords: ["browser", "project", "devtools", "inspect", "developer", "console"],
+                keywords: ["browser", "workspace", "devtools", "inspect", "developer", "console"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.toggleActiveBrowserDeveloperTools()
@@ -342,10 +376,10 @@ struct CommandPalette: View {
             PaletteCommand(
                 id: "browser-open-in-default",
                 title: "Open Page in Default Browser",
-                subtitle: "Open the active project browser page in the system browser",
+                subtitle: "Open the active workspace browser page in the system browser",
                 category: "Browser",
                 shortcut: nil,
-                keywords: ["browser", "project", "default", "open", "external", "safari"],
+                keywords: ["browser", "workspace", "default", "open", "external", "safari"],
                 isEnabled: store.hasActiveBrowserSelection
             ) {
                 store.openActiveBrowserInDefaultBrowser()
@@ -357,7 +391,7 @@ struct CommandPalette: View {
                 category: "Navigation",
                 shortcut: "Cmd-H / Cmd-←",
                 keywords: ["focus", "left", "window", "pane"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.focusLeft()
             },
@@ -368,7 +402,7 @@ struct CommandPalette: View {
                 category: "Navigation",
                 shortcut: "Cmd-L / Cmd-→",
                 keywords: ["focus", "right", "window", "pane"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.focusRight()
             },
@@ -379,7 +413,7 @@ struct CommandPalette: View {
                 category: "Navigation",
                 shortcut: "Cmd-J",
                 keywords: ["focus", "down", "window", "pane"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.focusDown()
             },
@@ -390,7 +424,7 @@ struct CommandPalette: View {
                 category: "Navigation",
                 shortcut: "Cmd-K",
                 keywords: ["focus", "up", "window", "pane"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.focusUp()
             },
@@ -401,7 +435,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-Shift-H",
                 keywords: ["move", "left", "window", "column"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.moveColumnLeft()
             },
@@ -412,7 +446,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-Shift-L",
                 keywords: ["move", "right", "window", "column"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.moveColumnRight()
             },
@@ -423,7 +457,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-Shift-J",
                 keywords: ["absorb", "left", "merge", "window"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.absorbFromLeft()
             },
@@ -434,7 +468,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-Shift-K",
                 keywords: ["absorb", "right", "merge", "window"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.absorbFromRight()
             },
@@ -445,7 +479,7 @@ struct CommandPalette: View {
                 category: "Layout",
                 shortcut: "Cmd-Shift-E",
                 keywords: ["expel", "split", "column", "window"],
-                isEnabled: hasProject
+                isEnabled: hasWorkspace
             ) {
                 store.expelActiveTab()
             },
@@ -628,14 +662,34 @@ struct CommandPalette: View {
                         .foregroundStyle(theme.textMuted)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
             .contentShape(Rectangle())
+            .background(
+                rowBackground(isSelected: isSelected, isHovered: hoveredCommandId == command.id)
+            )
             .opacity(command.isEnabled ? 1 : 0.55)
         }
         .buttonStyle(.plain)
         .disabled(!command.isEnabled)
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            hoveredCommandId = isHovered ? command.id : nil
+        }
+        .pointerCursor()
+    }
+
+    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(theme.accent.opacity(0.12))
+        }
+
+        if isHovered {
+            return AnyShapeStyle(theme.accent.opacity(0.08))
+        }
+
+        return AnyShapeStyle(Color.clear)
     }
 
     private func run(_ command: PaletteCommand) {

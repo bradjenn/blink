@@ -7,7 +7,7 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     private static let minimumRecoveryNavigationInterval: TimeInterval = 0.35
 
     let tabId: String
-    let projectId: String
+    let workspaceId: String
     let session: BrowserSessionModel
     let host: BlinkChromiumBrowserHost
 
@@ -69,19 +69,19 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
 
     init(
         tabId: String,
-        projectId: String,
+        workspaceId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void,
         onDownloadUpdate: @escaping (BrowserDownloadItem) -> Void
     ) {
         self.tabId = tabId
-        self.projectId = projectId
+        self.workspaceId = workspaceId
         self.session = BrowserSessionModel(state: initialState)
         self.onStateChange = onStateChange
         self.onDownloadUpdate = onDownloadUpdate
         self.host = BlinkChromiumBrowserHost(
             tabIdentifier: tabId,
-            projectIdentifier: projectId,
+            workspaceIdentifier: workspaceId,
             initialURLString: initialState.urlString
         )
 
@@ -255,9 +255,9 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
 
     private func handleDownloadUpdate(_ payload: DownloadPayload) {
         let download = BrowserDownloadItem(
-            id: "\(projectId):\(payload.downloadIdentifier)",
+            id: "\(workspaceId):\(payload.downloadIdentifier)",
             browserTabId: tabId,
-            projectId: projectId,
+            workspaceId: workspaceId,
             sourceURLString: payload.urlString,
             suggestedFileName: payload.suggestedFileName,
             destinationPath: payload.fullPath,

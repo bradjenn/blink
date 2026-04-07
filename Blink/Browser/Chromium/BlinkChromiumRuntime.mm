@@ -104,17 +104,17 @@ NSString *BlinkChromiumSupportRootPath(void) {
     return [rootURL URLByAppendingPathComponent:@"Chromium" isDirectory:YES].path;
 }
 
-NSString *BlinkChromiumSanitizedProjectIdentifier(NSString *projectIdentifier) {
-    if (projectIdentifier.length == 0) {
-        return @"project";
+NSString *BlinkChromiumSanitizedWorkspaceIdentifier(NSString *workspaceIdentifier) {
+    if (workspaceIdentifier.length == 0) {
+        return @"workspace";
     }
 
     NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
         @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._"];
-    NSMutableString *result = [NSMutableString stringWithCapacity:projectIdentifier.length];
+    NSMutableString *result = [NSMutableString stringWithCapacity:workspaceIdentifier.length];
 
-    for (NSUInteger index = 0; index < projectIdentifier.length; index += 1) {
-        unichar character = [projectIdentifier characterAtIndex:index];
+    for (NSUInteger index = 0; index < workspaceIdentifier.length; index += 1) {
+        unichar character = [workspaceIdentifier characterAtIndex:index];
         if ([allowed characterIsMember:character]) {
             [result appendFormat:@"%C", character];
         } else {
@@ -122,16 +122,16 @@ NSString *BlinkChromiumSanitizedProjectIdentifier(NSString *projectIdentifier) {
         }
     }
 
-    return result.length > 0 ? result : @"project";
+    return result.length > 0 ? result : @"workspace";
 }
 
-NSString *BlinkChromiumProjectCachePath(NSString *projectIdentifier) {
-    NSString *sanitized = BlinkChromiumSanitizedProjectIdentifier(projectIdentifier);
+NSString *BlinkChromiumWorkspaceCachePath(NSString *workspaceIdentifier) {
+    NSString *sanitized = BlinkChromiumSanitizedWorkspaceIdentifier(workspaceIdentifier);
     return [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:sanitized];
 }
 
-NSString *BlinkChromiumLegacyProjectCachePath(NSString *projectIdentifier) {
-    NSString *sanitized = BlinkChromiumSanitizedProjectIdentifier(projectIdentifier);
+NSString *BlinkChromiumLegacyWorkspaceCachePath(NSString *workspaceIdentifier) {
+    NSString *sanitized = BlinkChromiumSanitizedWorkspaceIdentifier(workspaceIdentifier);
     NSString *profilesRoot = [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:@"profiles"];
     return [profilesRoot stringByAppendingPathComponent:sanitized];
 }
@@ -143,9 +143,9 @@ BOOL BlinkChromiumEnsureDirectory(NSString *path, NSError **error) {
                                                          error:error];
 }
 
-void BlinkChromiumMigrateLegacyProjectCachePathIfNeeded(NSString *projectIdentifier) {
-    NSString *cachePath = BlinkChromiumProjectCachePath(projectIdentifier);
-    NSString *legacyPath = BlinkChromiumLegacyProjectCachePath(projectIdentifier);
+void BlinkChromiumMigrateLegacyWorkspaceCachePathIfNeeded(NSString *workspaceIdentifier) {
+    NSString *cachePath = BlinkChromiumWorkspaceCachePath(workspaceIdentifier);
+    NSString *legacyPath = BlinkChromiumLegacyWorkspaceCachePath(workspaceIdentifier);
     NSFileManager *fileManager = NSFileManager.defaultManager;
     BOOL cacheExists = [fileManager fileExistsAtPath:cachePath];
     BOOL legacyExists = [fileManager fileExistsAtPath:legacyPath];
@@ -161,9 +161,9 @@ void BlinkChromiumMigrateLegacyProjectCachePathIfNeeded(NSString *projectIdentif
     }
 
     if ([fileManager moveItemAtPath:legacyPath toPath:cachePath error:&error]) {
-        NSLog(@"[ChromiumProfile] migrated project cache %@ -> %@", legacyPath, cachePath);
+        NSLog(@"[ChromiumProfile] migrated workspace cache %@ -> %@", legacyPath, cachePath);
     } else {
-        NSLog(@"[ChromiumProfile] failed to migrate project cache %@ -> %@: %@",
+        NSLog(@"[ChromiumProfile] failed to migrate workspace cache %@ -> %@: %@",
               legacyPath,
               cachePath,
               error);
@@ -277,7 +277,7 @@ private:
 @end
 
 @interface BlinkChromiumRequestContext ()
-- (instancetype)initWithProjectIdentifier:(NSString *)projectIdentifier;
+- (instancetype)initWithWorkspaceIdentifier:(NSString *)workspaceIdentifier;
 - (CefRefPtr<CefRequestContext>)requestContext;
 - (void)requestContextDidInitialize;
 @end
@@ -312,21 +312,21 @@ private:
 @private
     CefRefPtr<CefRequestContext> _requestContext;
     NSMutableArray<dispatch_block_t> *_readyCallbacks;
-    NSString *_projectIdentifier;
+    NSString *_workspaceIdentifier;
     BOOL _ready;
 }
 
-- (instancetype)initWithProjectIdentifier:(NSString *)projectIdentifier {
+- (instancetype)initWithWorkspaceIdentifier:(NSString *)workspaceIdentifier {
     self = [super init];
     if (self == nil) {
         return nil;
     }
 
-    BlinkChromiumMigrateLegacyProjectCachePathIfNeeded(projectIdentifier);
-    NSString *cachePath = BlinkChromiumProjectCachePath(projectIdentifier);
+    BlinkChromiumMigrateLegacyWorkspaceCachePathIfNeeded(workspaceIdentifier);
+    NSString *cachePath = BlinkChromiumWorkspaceCachePath(workspaceIdentifier);
     BlinkChromiumEnsureDirectory(cachePath, nil);
     _readyCallbacks = [NSMutableArray array];
-    _projectIdentifier = [projectIdentifier copy];
+    _workspaceIdentifier = [workspaceIdentifier copy];
 
     CefRequestContextSettings settings;
     CefString(&settings.cache_path) = cachePath.UTF8String;
@@ -527,19 +527,19 @@ private:
     _started = NO;
 }
 
-- (nullable BlinkChromiumRequestContext *)requestContextForProjectIdentifier:(NSString *)projectIdentifier {
+- (nullable BlinkChromiumRequestContext *)requestContextForWorkspaceIdentifier:(NSString *)workspaceIdentifier {
     if (![self startIfNeeded:nil]) {
         return nil;
     }
 
-    BlinkChromiumRequestContext *existing = _requestContexts[projectIdentifier];
+    BlinkChromiumRequestContext *existing = _requestContexts[workspaceIdentifier];
     if (existing != nil) {
         return existing;
     }
 
     BlinkChromiumRequestContext *context =
-        [[BlinkChromiumRequestContext alloc] initWithProjectIdentifier:projectIdentifier];
-    _requestContexts[projectIdentifier] = context;
+        [[BlinkChromiumRequestContext alloc] initWithWorkspaceIdentifier:workspaceIdentifier];
+    _requestContexts[workspaceIdentifier] = context;
     return context;
 }
 

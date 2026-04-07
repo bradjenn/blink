@@ -316,13 +316,13 @@ final class GhosttyApp {
         let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedURL.isEmpty,
               let store,
-              let projectId = store.tabsById[tabId]?.projectId else {
+              let workspaceId = store.tabsById[tabId]?.workspaceId else {
             return
         }
 
-        if let editorTarget = resolvedEditorTarget(from: trimmedURL, projectId: projectId, store: store) {
+        if let editorTarget = resolvedEditorTarget(from: trimmedURL, workspaceId: workspaceId, store: store) {
             store.openFileInEditor(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 path: editorTarget.path,
                 line: editorTarget.line
             )
@@ -335,7 +335,7 @@ final class GhosttyApp {
 
     private func resolvedEditorTarget(
         from rawURL: String,
-        projectId: String,
+        workspaceId: String,
         store: AppStore
     ) -> (path: String, line: Int?)? {
         if let url = URL(string: rawURL) {
@@ -352,7 +352,7 @@ final class GhosttyApp {
                     .first(where: { $0.name == "line" })?
                     .value
                     .flatMap(Int.init)
-                return (resolvedProjectPath(path, projectId: projectId, store: store), line)
+                return (resolvedWorkspacePath(path, workspaceId: workspaceId, store: store), line)
             }
 
             if url.scheme != nil {
@@ -366,20 +366,20 @@ final class GhosttyApp {
             .replacingOccurrences(of: #":\d+(?::\d+)?$"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !basePath.isEmpty else { return nil }
-        return (resolvedProjectPath(basePath, projectId: projectId, store: store), line)
+        return (resolvedWorkspacePath(basePath, workspaceId: workspaceId, store: store), line)
     }
 
-    private func resolvedProjectPath(_ rawPath: String, projectId: String, store: AppStore) -> String {
+    private func resolvedWorkspacePath(_ rawPath: String, workspaceId: String, store: AppStore) -> String {
         let trimmedPath = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedPath.hasPrefix("/") {
             return trimmedPath
         }
 
-        guard let project = store.projects.first(where: { $0.id == projectId }) else {
+        guard let workspace = store.workspaces.first(where: { $0.id == workspaceId }) else {
             return trimmedPath
         }
 
-        return URL(fileURLWithPath: project.path)
+        return URL(fileURLWithPath: workspace.path)
             .appendingPathComponent(trimmedPath)
             .path
     }

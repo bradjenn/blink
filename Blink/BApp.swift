@@ -185,19 +185,25 @@ struct BApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.closeActiveTab = {
-                        guard store.activeProjectId != nil,
-                              !store.showProjectSwitcher,
+                        guard store.activeWorkspaceId != nil,
+                              !store.showWorkspaceSwitcher,
+                              !store.showWorkspaceOnboarding,
                               !store.showThemePicker,
+                              !store.showAISessionPicker,
                               !store.showCommandPalette,
-                              store.activeView == .projects else { return }
+                              store.workspacePrompt == nil,
+                              store.activeView == .workspaces else { return }
                         store.closeActiveTab()
                     }
                     appDelegate.canCloseActiveTab = {
-                        store.activeProjectId != nil &&
-                        !store.showProjectSwitcher &&
+                        store.activeWorkspaceId != nil &&
+                        !store.showAISessionPicker &&
+                        !store.showWorkspaceOnboarding &&
+                        !store.showWorkspaceSwitcher &&
                         !store.showThemePicker &&
                         !store.showCommandPalette &&
-                        store.activeView == .projects
+                        store.workspacePrompt == nil &&
+                        store.activeView == .workspaces
                     }
 
                     updateChecker.checkIfNeeded()
@@ -251,11 +257,19 @@ struct BApp: App {
 
                 Divider()
 
-                Button("Switch Project...") {
-                    store.presentProjectSwitcher()
+                Button("Open Scratch Space") {
+                    store.openScratchSpace()
+                }
+
+                Button("New Workspace...") {
+                    store.presentWorkspaceOnboarding()
+                }
+
+                Button("Switch Workspace...") {
+                    store.presentWorkspaceSwitcher()
                 }
                 .keyboardShortcut("p", modifiers: .command)
-                .disabled(store.projects.isEmpty)
+                .disabled(store.workspaces.isEmpty)
 
                 Button("Switch Theme...") {
                     store.presentThemePicker()
@@ -265,7 +279,7 @@ struct BApp: App {
             }
 
             CommandGroup(replacing: .saveItem) {
-                Button("Toggle Project Browser Sidebar") {
+                Button("Toggle Workspace Browser Sidebar") {
                     store.toggleActiveBrowserSidebarPinned()
                 }
                 .keyboardShortcut("s", modifiers: .command)
@@ -339,67 +353,72 @@ struct BApp: App {
 
                 Divider()
 
+                Button("Open AI Session...") {
+                    store.presentAISessionPicker()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+
                 Button("Open Git") {
-                    store.openOrFocusCommandTabForActiveProject(command: "lazygit", label: "lazygit")
+                    store.openOrFocusCommandTabForActiveWorkspace(command: "lazygit", label: "lazygit")
                 }
                 .keyboardShortcut("g", modifiers: .command)
 
                 Button("Open Files") {
                     let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
-                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Yazi")
+                    store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Yazi")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Button("Open Neovim") {
                     let command = NvimLauncher.command()
-                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Neovim")
+                    store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Neovim")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
 
                 Button("Open Spotify") {
                     let command = themeManager.activeTerminalTheme?.spotatuiLaunchCommand() ?? "spotatui"
-                    store.openOrFocusCommandTabForActiveProject(command: command, label: "Spotify", maximizeColumn: true)
+                    store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Spotify", maximizeColumn: true)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
 
                 Divider()
 
-                Button("Open Project Browser") {
-                    store.openBrowserTabForActiveProject()
+                Button("Open Workspace Browser") {
+                    store.openBrowserTabForActiveWorkspace()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
-                Button("Focus Project Browser Address Bar") {
+                Button("Focus Workspace Browser Address Bar") {
                     store.focusBrowserAddressBar()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Focus Project Browser Content") {
+                Button("Focus Workspace Browser Content") {
                     store.focusBrowserWebView()
                 }
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Project Browser Back") {
+                Button("Workspace Browser Back") {
                     store.navigateActiveBrowserBack()
                 }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Project Browser Forward") {
+                Button("Workspace Browser Forward") {
                     store.navigateActiveBrowserForward()
                 }
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Project Browser Reload") {
+                Button("Workspace Browser Reload") {
                     store.reloadActiveBrowser()
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!store.hasActiveBrowserSelection)
 
-                Button("Toggle Project Browser Developer Tools") {
+                Button("Toggle Workspace Browser Developer Tools") {
                     store.toggleActiveBrowserDeveloperTools()
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
@@ -412,36 +431,42 @@ struct BApp: App {
             }
 
             CommandGroup(replacing: .newItem) {
+                Button("Open Scratch Space") {
+                    store.openScratchSpace()
+                }
+
+                Divider()
+
                 Button("New Tab") {
                     store.openNewTabForActiveSurface()
                 }
                 .keyboardShortcut("t", modifiers: .command)
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
-                Button("New Project Browser") {
-                    store.openBrowserTabForActiveProject()
+                Button("New Workspace Browser") {
+                    store.openBrowserTabForActiveWorkspace()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
                 Button("Split Below") {
                     store.splitActivePaneWithNewTab()
                 }
                 .keyboardShortcut("-", modifiers: [.command, .shift])
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
                 Button("Split Right") {
                     store.splitActiveColumnWithNewTab()
                 }
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
-                .disabled(store.activeProjectId == nil)
+                .disabled(store.activeWorkspaceId == nil)
 
                 Divider()
 
                 ForEach(1...9, id: \.self) { number in
                     Button("Window \(number)") {
-                        if let projectId = store.activeProjectId {
-                            let ordered = store.orderedTabs(for: projectId)
+                        if let workspaceId = store.activeWorkspaceId {
+                            let ordered = store.orderedTabs(for: workspaceId)
                             if number <= ordered.count {
                                 store.setActiveTab(ordered[number - 1].id)
                             }

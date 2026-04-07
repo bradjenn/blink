@@ -13,6 +13,7 @@ struct ThemePicker: View {
     @State private var committedThemeName = ""
     @State private var didCommitSelection = false
     @State private var terminalPreviewTask: Task<Void, Never>?
+    @State private var hoveredThemeName: String?
     @FocusState private var searchFocused: Bool
 
     /// Perceived brightness of a hex color (0 = black, 1 = white).
@@ -269,12 +270,33 @@ struct ThemePicker: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+            .background(
+                rowBackground(isSelected: isSelected, isHovered: hoveredThemeName == name)
+            )
         }
         .buttonStyle(.plain)
         .id(name)
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            hoveredThemeName = isHovered ? name : nil
+        }
+        .pointerCursor()
+    }
+
+    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(theme.accent.opacity(0.12))
+        }
+
+        if isHovered {
+            return AnyShapeStyle(theme.accent.opacity(0.08))
+        }
+
+        return AnyShapeStyle(Color.clear)
     }
 
     private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {

@@ -38,7 +38,7 @@ struct TabBarLogoArea: View {
     }
 }
 
-/// Workspace toolbar — shows project and focused window context.
+/// Workspace toolbar — shows workspace and focused window context.
 struct TabBarTabsArea: View {
     var body: some View {
         Rectangle()
@@ -48,7 +48,7 @@ struct TabBarTabsArea: View {
 }
 
 enum NewTabAction {
-    case terminal, browser, lazygit, yazi, neovim
+    case terminal, aiSession, browser, lazygit, yazi, neovim
 }
 
 struct NewTabMenu: View {
@@ -60,6 +60,8 @@ struct NewTabMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             menuRow("Terminal", icon: "terminal") { onAction(.terminal) }
+            Divider().overlay(theme.border)
+            menuRow("AI Session", icon: "sparkles.rectangle.stack") { onAction(.aiSession) }
             Divider().overlay(theme.border)
             menuRow("Browser", icon: "safari") { onAction(.browser) }
             Divider().overlay(theme.border)

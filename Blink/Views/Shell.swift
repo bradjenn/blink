@@ -41,7 +41,7 @@ struct Shell: View {
             VStack(spacing: 0) {
                 workspaceArea
 
-                if activeProject != nil {
+                if activeWorkspace != nil {
                     theme.border.frame(height: 1)
                     footer
                 }
@@ -65,15 +65,22 @@ struct Shell: View {
                 .allowsHitTesting(isSettingsActive)
                 .zIndex(1)
 
-            if store.showProjectSwitcher {
-                StartScreenProjectPicker(
-                    onDismiss: { store.dismissProjectSwitcher() },
-                    onSelect: { projectId in
-                        store.openProjectSession(projectId)
+            if store.showWorkspaceSwitcher {
+                StartScreenWorkspacePicker(
+                    onDismiss: { store.dismissWorkspaceSwitcher() },
+                    onSelect: { workspaceId in
+                        store.openWorkspaceSession(workspaceId)
                     }
                 )
                 .transition(.opacity)
                 .zIndex(1)
+            }
+
+            if store.showWorkspaceOnboarding {
+                WorkspaceOnboarding(
+                    onDismiss: { store.dismissWorkspaceOnboarding() }
+                )
+                .zIndex(2)
             }
 
             if store.showThemePicker {
@@ -81,14 +88,29 @@ struct Shell: View {
                     ghosttyApp: ghosttyApp,
                     onDismiss: { store.showThemePicker = false }
                 )
-                .zIndex(2)
+                .zIndex(3)
+            }
+
+            if store.showAISessionPicker {
+                AISessionPicker(
+                    onDismiss: { store.dismissAISessionPicker() }
+                )
+                .zIndex(4)
             }
 
             if store.showCommandPalette {
                 CommandPalette(
                     onDismiss: { store.dismissCommandPalette() }
                 )
-                .zIndex(3)
+                .zIndex(5)
+            }
+
+            if let prompt = store.workspacePrompt {
+                WorkspacePromptModal(
+                    prompt: prompt,
+                    onDismiss: { store.dismissWorkspacePrompt() }
+                )
+                .zIndex(6)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,11 +128,14 @@ struct Shell: View {
             }
             shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [store] event in
                 let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                guard store.activeProjectId != nil,
-                      !store.showProjectSwitcher,
+                guard store.activeWorkspaceId != nil,
+                      !store.showWorkspaceSwitcher,
+                      !store.showWorkspaceOnboarding,
                       !store.showThemePicker,
+                      !store.showAISessionPicker,
                       !store.showCommandPalette,
-                      store.activeView == .projects else { return event }
+                      store.workspacePrompt == nil,
+                      store.activeView == .workspaces else { return event }
 
                 switch modifiers {
                 case [.command]:
@@ -175,19 +200,19 @@ struct Shell: View {
 
     private var workspaceArea: some View {
         ZStack {
-            if store.activeProjectId != nil {
+            if store.activeWorkspaceId != nil {
                 Rectangle()
                     .fill(chromeBackground)
             }
 
-            if store.activeProjectId == nil {
+            if store.activeWorkspaceId == nil {
                 Rectangle()
                     .fill(chromeBackground)
                     .overlay {
                         StartScreen()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-            } else if let project = activeProject {
+            } else if let workspace = activeWorkspace {
                 HStack(alignment: .top, spacing: Layout.workspaceColumnSpacing) {
                     if store.sidebarVisible {
                         WorkspaceSidebarPanel()
@@ -196,7 +221,7 @@ struct Shell: View {
                     }
 
                     WorkspaceColumnsView(
-                        project: project,
+                        workspace: workspace,
                         ghosttyApp: ghosttyApp,
                         surfaceManager: surfaceManager,
                         browserManager: browserManager
@@ -212,7 +237,7 @@ struct Shell: View {
                     Text("No workspace available")
                         .font(Fonts.primary(size: 16))
                         .foregroundStyle(theme.textDim)
-                    Text("Select a project to open a workspace")
+                    Text("Select a workspace to open a workspace")
                         .font(Fonts.primary(size: 13))
                         .foregroundStyle(theme.textDim)
                 }
@@ -248,9 +273,9 @@ struct Shell: View {
         }
     }
 
-    private var activeProject: Project? {
-        guard let activeProjectId = store.activeProjectId else { return nil }
-        return store.projects.first(where: { $0.id == activeProjectId })
+    private var activeWorkspace: Workspace? {
+        guard let activeWorkspaceId = store.activeWorkspaceId else { return nil }
+        return store.workspaces.first(where: { $0.id == activeWorkspaceId })
     }
 
     private func showSettings() {
@@ -291,7 +316,7 @@ private struct WorkspaceColumnsView: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
-    let project: Project
+    let workspace: Workspace
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
     let browserManager: BrowserManager
@@ -308,14 +333,14 @@ private struct WorkspaceColumnsView: View {
     @State private var cachedLayoutKey: String = ""
 
     private var tabs: [AppTab] {
-        store.projectTabs(for: project.id)
+        store.workspaceTabs(for: workspace.id)
     }
 
     private var columns: [Column] {
-        store.projectColumns(for: project.id)
+        store.workspaceColumns(for: workspace.id)
     }
 
-    private var activeColumnIdInCurrentProject: String? {
+    private var activeColumnIdInCurrentWorkspace: String? {
         guard let activeTabId = store.activeTabId else { return nil }
         return columns.first(where: { $0.tabIds.contains(activeTabId) })?.id
     }
@@ -358,15 +383,8 @@ private struct WorkspaceColumnsView: View {
     var body: some View {
         GeometryReader { geometry in
             if columns.isEmpty {
-                VStack(spacing: 12) {
-                    Text("No windows in this workspace")
-                        .font(Fonts.primary(size: 16))
-                        .foregroundStyle(theme.text)
-                    Text("Use the sidebar controls to open a terminal, browser, or tool window")
-                        .font(Fonts.primary(size: 13))
-                        .foregroundStyle(theme.textDim)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                WorkspaceLandingPage(workspace: workspace)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 columnStrip(viewportWidth: geometry.size.width, viewportHeight: geometry.size.height)
                     .onChange(of: columns.map(\.id), initial: true) { _, _ in
@@ -403,14 +421,14 @@ private struct WorkspaceColumnsView: View {
                         // Reinstall so the closure captures the current viewport width
                         installResizeMonitor(viewportWidth: newWidth)
                     }
-                    .onChange(of: project.id, initial: false) { _, _ in
+                    .onChange(of: workspace.id, initial: false) { _, _ in
                         cachedLayoutKey = ""
                         currentViewportWidth = geometry.size.width
                         installResizeMonitor(viewportWidth: geometry.size.width)
                     }
                     .onChange(of: columns.count) {
                         if store.isOverviewMode {
-                            let cols = store.projectColumns(for: project.id)
+                            let cols = store.workspaceColumns(for: workspace.id)
                             if cols.isEmpty {
                                 store.exitOverview(selecting: nil)
                             } else if let highlightId = store.overviewHighlightedColumnId,
@@ -420,13 +438,23 @@ private struct WorkspaceColumnsView: View {
                             }
                         }
                     }
-                    .onChange(of: store.showProjectSwitcher) {
-                        if store.showProjectSwitcher && store.isOverviewMode {
+                    .onChange(of: store.showWorkspaceSwitcher) {
+                        if store.showWorkspaceSwitcher && store.isOverviewMode {
                             store.exitOverview(selecting: nil)
                         }
                     }
                     .onChange(of: store.showThemePicker) {
                         if store.showThemePicker && store.isOverviewMode {
+                            store.exitOverview(selecting: nil)
+                        }
+                    }
+                    .onChange(of: store.showWorkspaceOnboarding) {
+                        if store.showWorkspaceOnboarding && store.isOverviewMode {
+                            store.exitOverview(selecting: nil)
+                        }
+                    }
+                    .onChange(of: store.showAISessionPicker) {
+                        if store.showAISessionPicker && store.isOverviewMode {
                             store.exitOverview(selecting: nil)
                         }
                     }
@@ -446,6 +474,13 @@ private struct WorkspaceColumnsView: View {
                     }
             }
         }
+        .overlay(alignment: .top) {
+            if !columns.isEmpty && store.isWorkspacePathMissing(workspace.id) {
+                MissingWorkspaceBanner(workspace: workspace)
+                    .padding(.top, 16)
+                    .padding(.horizontal, 16)
+            }
+        }
     }
 
     @ViewBuilder
@@ -460,7 +495,7 @@ private struct WorkspaceColumnsView: View {
                     if let frame = layout.frames[col.id] {
                         WorkspaceColumnView(
                             column: col,
-                            project: project,
+                            workspace: workspace,
                             activeTabId: store.activeTabId,
                             ghosttyApp: ghosttyApp,
                             surfaceManager: surfaceManager,
@@ -687,7 +722,7 @@ private struct WorkspaceColumnsView: View {
             guard event.modifierFlags.contains(.command),
                   !event.modifierFlags.contains(.shift),
                   !store.isOverviewMode,
-                  let projectId = store.activeProjectId,
+                  let workspaceId = store.activeWorkspaceId,
                   let colId = store.activeColumn?.id,
                   let chars = event.charactersIgnoringModifiers else { return event }
 
@@ -696,7 +731,7 @@ private struct WorkspaceColumnsView: View {
                 DispatchQueue.main.async { [self] in
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        let _ = layoutState.increasePreset(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        let _ = layoutState.increasePreset(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -705,7 +740,7 @@ private struct WorkspaceColumnsView: View {
                 DispatchQueue.main.async { [self] in
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        let _ = layoutState.decreasePreset(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        let _ = layoutState.decreasePreset(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -714,7 +749,7 @@ private struct WorkspaceColumnsView: View {
                 DispatchQueue.main.async { [self] in
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        let _ = layoutState.toggleMaximize(for: colId, projectId: projectId, viewportWidth: viewportWidth)
+                        let _ = layoutState.toggleMaximize(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -748,16 +783,16 @@ private struct WorkspaceColumnsView: View {
     private func syncColumns(viewportWidth: CGFloat) {
         let columnIds = columns.map(\.id)
         layoutState.sync(
-            projectId: project.id,
+            workspaceId: workspace.id,
             columnIds: columnIds,
             defaultFraction: defaultColumnFraction(for: columnIds)
         )
     }
 
     private func restoreViewport(viewportWidth: CGFloat) {
-        if layoutState.isInitialized(projectId: project.id) || store.hasWorkspaceViewportOffset(for: project.id) {
+        if layoutState.isInitialized(workspaceId: workspace.id) || store.hasWorkspaceViewportOffset(for: workspace.id) {
             clampViewportOffset(viewportWidth: viewportWidth, animated: false)
-            layoutState.markInitialized(projectId: project.id)
+            layoutState.markInitialized(workspaceId: workspace.id)
         } else {
             alignActiveTab(viewportWidth: viewportWidth, animated: false)
         }
@@ -771,8 +806,8 @@ private struct WorkspaceColumnsView: View {
             return
         }
 
-        if layoutState.isInitialized(projectId: project.id) {
-            if activeColumnIdInCurrentProject != nil {
+        if layoutState.isInitialized(workspaceId: workspace.id) {
+            if activeColumnIdInCurrentWorkspace != nil {
                 alignActiveTab(viewportWidth: viewportWidth, animated: false)
             } else {
                 clampViewportOffset(viewportWidth: viewportWidth, animated: false)
@@ -785,14 +820,14 @@ private struct WorkspaceColumnsView: View {
     /// After resize: ensure the active column is visible and fill blank space
     /// by scrolling left to show more content when possible.
     private func ensureActiveColumnVisible(viewportWidth: CGFloat) {
-        guard let colId = activeColumnIdInCurrentProject else { return }
+        guard let colId = activeColumnIdInCurrentWorkspace else { return }
         let layout = stripLayout(viewportWidth: viewportWidth)
-        var offset = store.workspaceViewportOffset(for: project.id)
+        var offset = store.workspaceViewportOffset(for: workspace.id)
 
         // If everything fits, show it all
         let fitsInViewport = layout.contentWidth <= viewportWidth + Layout.workspaceColumnSpacing
         if fitsInViewport {
-            store.setWorkspaceViewportOffset(0, for: project.id)
+            store.setWorkspaceViewportOffset(0, for: workspace.id)
             return
         }
 
@@ -817,32 +852,32 @@ private struct WorkspaceColumnsView: View {
             offset = colLeft
         }
 
-        store.setWorkspaceViewportOffset(max(0, offset), for: project.id)
+        store.setWorkspaceViewportOffset(max(0, offset), for: workspace.id)
     }
 
     private func alignActiveTab(viewportWidth: CGFloat, animated: Bool) {
         let targetOffset = focusedViewportOffset(viewportWidth: viewportWidth)
         if animated {
             withAnimation(workspaceAnimation) {
-                store.setWorkspaceViewportOffset(targetOffset, for: project.id)
+                store.setWorkspaceViewportOffset(targetOffset, for: workspace.id)
             }
         } else {
-            store.setWorkspaceViewportOffset(targetOffset, for: project.id)
+            store.setWorkspaceViewportOffset(targetOffset, for: workspace.id)
         }
 
-        layoutState.markInitialized(projectId: project.id)
+        layoutState.markInitialized(workspaceId: workspace.id)
     }
 
     private func applyPendingColumnMaximize(viewportWidth: CGFloat) {
         guard viewportWidth > 0,
               let activeTabId = store.activeTabId,
               tabs.contains(where: { $0.id == activeTabId }),
-              let colId = activeColumnIdInCurrentProject,
+              let colId = activeColumnIdInCurrentWorkspace,
               store.consumePendingColumnMaximize(for: activeTabId) else { return }
 
         cachedLayoutKey = ""
         withAnimation(workspaceAnimation) {
-            let _ = layoutState.maximize(for: colId, projectId: project.id, viewportWidth: viewportWidth)
+            let _ = layoutState.maximize(for: colId, workspaceId: workspace.id, viewportWidth: viewportWidth)
             ensureActiveColumnVisible(viewportWidth: viewportWidth)
         }
     }
@@ -850,7 +885,7 @@ private struct WorkspaceColumnsView: View {
     private func clampViewportOffset(viewportWidth: CGFloat, animated: Bool) {
         let layout = stripLayout(viewportWidth: viewportWidth)
         let clampedOffset = clampedViewportOffset(
-            store.workspaceViewportOffset(for: project.id),
+            store.workspaceViewportOffset(for: workspace.id),
             contentWidth: layout.contentWidth,
             viewportWidth: viewportWidth
         )
@@ -859,19 +894,19 @@ private struct WorkspaceColumnsView: View {
 
         if animated {
             withAnimation(workspaceAnimation) {
-                store.setWorkspaceViewportOffset(clampedOffset, for: project.id)
+                store.setWorkspaceViewportOffset(clampedOffset, for: workspace.id)
             }
         } else {
-            store.setWorkspaceViewportOffset(clampedOffset, for: project.id)
+            store.setWorkspaceViewportOffset(clampedOffset, for: workspace.id)
         }
     }
 
     private func stripLayout(viewportWidth: CGFloat) -> WorkspaceStripLayout {
         // Build a cache key from geometry inputs (NOT viewport offset — that's derived)
         let fractions = columns.map { col in
-            String(format: "%.4f", layoutState.width(for: col.id, projectId: project.id, viewportWidth: viewportWidth))
+            String(format: "%.4f", layoutState.width(for: col.id, workspaceId: workspace.id, viewportWidth: viewportWidth))
         }.joined(separator: ",")
-        let offset = store.workspaceViewportOffset(for: project.id)
+        let offset = store.workspaceViewportOffset(for: workspace.id)
         let key = "\(viewportWidth)|\(columns.map(\.id).joined(separator: ","))|\(fractions)|\(offset)"
         if key == cachedLayoutKey, let cached = cachedLayout {
             return cached
@@ -903,20 +938,20 @@ private struct WorkspaceColumnsView: View {
     private func columnWidth(for columnId: String, viewportWidth: CGFloat) -> CGFloat {
         let width = layoutState.width(
             for: columnId,
-            projectId: project.id,
+            workspaceId: workspace.id,
             viewportWidth: viewportWidth
         )
         return min(max(width, Layout.workspaceColumnMinWidth), Layout.workspaceColumnMaxWidth)
     }
 
     private func focusedViewportOffset(viewportWidth: CGFloat) -> CGFloat {
-        guard let colId = activeColumnIdInCurrentProject else { return 0 }
+        guard let colId = activeColumnIdInCurrentWorkspace else { return 0 }
         let layout = stripLayout(viewportWidth: viewportWidth)
 
         guard layout.contentWidth > viewportWidth else { return 0 }
         guard let frame = layout.frames[colId] else { return 0 }
 
-        let currentOffset = store.workspaceViewportOffset(for: project.id)
+        let currentOffset = store.workspaceViewportOffset(for: workspace.id)
         let colLeft = frame.minX
         let colRight = frame.minX + frame.width
         let colCenter = frame.minX + frame.width / 2
@@ -980,7 +1015,7 @@ private struct WorkspaceColumnsView: View {
     }
 
     private func repairActiveTabSelectionIfNeeded() {
-        guard store.activeProjectId == project.id else { return }
+        guard store.activeWorkspaceId == workspace.id else { return }
 
         if let activeTabId = store.activeTabId,
            columns.contains(where: { $0.tabIds.contains(activeTabId) }) {
@@ -1018,6 +1053,229 @@ private struct WorkspaceColumnsView: View {
     }
 }
 
+private struct WorkspaceLandingPage: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let workspace: Workspace
+
+    private var isPathMissing: Bool {
+        store.isWorkspacePathMissing(workspace.id)
+    }
+
+    private var subtitle: String {
+        if workspace.isScratchSpace {
+            return "Start a shell, AI session, or browser workspace."
+        }
+        if isPathMissing {
+            return "This workspace folder could not be found. Relink it or remove the workspace."
+        }
+        return "Open your first window to start working in \(workspace.displayPath)."
+    }
+
+    private var primaryActions: [WorkspaceLandingAction] {
+        [
+            WorkspaceLandingAction(
+                id: "terminal",
+                title: "New Terminal",
+                subtitle: "Open a shell in this workspace",
+                systemImage: "terminal",
+                action: { _ = store.openTab(workspaceId: workspace.id) }
+            ),
+            WorkspaceLandingAction(
+                id: "ai-session",
+                title: "AI Session",
+                subtitle: "Open Claude Code, Codex, or OpenCode",
+                systemImage: "sparkles.rectangle.stack",
+                action: {
+                    if store.activeWorkspaceId != workspace.id {
+                        store.openWorkspaceSession(workspace.id)
+                    }
+                    store.presentAISessionPicker()
+                }
+            ),
+            WorkspaceLandingAction(
+                id: "browser",
+                title: workspace.isScratchSpace ? "Browser" : "Workspace Browser",
+                subtitle: "Open an isolated browser pane",
+                systemImage: "globe",
+                action: { _ = store.openBrowserTab(workspaceId: workspace.id, preferredFocus: .addressBar) }
+            ),
+        ]
+    }
+
+    private var secondaryActions: [WorkspaceLandingAction] {
+        [
+            WorkspaceLandingAction(
+                id: "git",
+                title: "Git",
+                subtitle: "Open lazygit in this workspace",
+                systemImage: "point.3.connected.trianglepath.dotted",
+                action: {
+                    _ = store.openOrFocusCommandTab(
+                        workspaceId: workspace.id,
+                        command: "lazygit",
+                        label: "lazygit"
+                    )
+                }
+            ),
+            WorkspaceLandingAction(
+                id: "neovim",
+                title: "Neovim",
+                subtitle: "Open the editor in a pane",
+                systemImage: "square.and.pencil",
+                action: {
+                    _ = store.openOrFocusCommandTab(
+                        workspaceId: workspace.id,
+                        command: NvimLauncher.command(),
+                        label: "Neovim"
+                    )
+                }
+            ),
+            WorkspaceLandingAction(
+                id: "files",
+                title: "Files",
+                subtitle: "Browse the working directory",
+                systemImage: "folder",
+                action: {
+                    _ = store.openOrFocusCommandTab(
+                        workspaceId: workspace.id,
+                        command: YaziLauncher.command(theme: nil),
+                        label: "Yazi"
+                    )
+                }
+            ),
+        ]
+    }
+
+    private var allActions: [WorkspaceLandingAction] {
+        if isPathMissing {
+            return missingWorkspaceActions
+        }
+        return primaryActions + secondaryActions
+    }
+
+    private var missingWorkspaceActions: [WorkspaceLandingAction] {
+        [
+            WorkspaceLandingAction(
+                id: "relink",
+                title: "Relink Folder",
+                subtitle: "Choose the new folder location for this workspace",
+                systemImage: "arrow.trianglehead.branch",
+                action: { store.promptRelinkWorkspace(workspace.id) }
+            ),
+            WorkspaceLandingAction(
+                id: "scratch",
+                title: "Open Scratch Space",
+                subtitle: "Keep working in a generic shell and browser workspace",
+                systemImage: "terminal",
+                action: { store.openScratchSpace() }
+            ),
+            WorkspaceLandingAction(
+                id: "remove",
+                title: "Remove Workspace",
+                subtitle: "Delete this missing workspace entry from Blink",
+                systemImage: "trash",
+                action: { store.removeWorkspace(workspace.id) }
+            ),
+        ]
+    }
+
+    var body: some View {
+        VStack(spacing: 28) {
+            VStack(spacing: 10) {
+                HStack(spacing: 14) {
+                    WorkspaceFavicon(workspaceName: workspace.name, workspacePath: workspace.path, size: 56)
+
+                    Text(workspace.name)
+                        .font(Fonts.primary(size: 24, weight: .bold))
+                        .foregroundStyle(theme.text)
+                }
+
+                Text(subtitle)
+                    .font(Fonts.primary(size: 13))
+                    .foregroundStyle(isPathMissing ? theme.yellow : theme.textDim)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 460)
+            }
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 180), spacing: 12),
+                    GridItem(.flexible(minimum: 180), spacing: 12),
+                    GridItem(.flexible(minimum: 180), spacing: 12),
+                ],
+                spacing: 12
+            ) {
+                ForEach(allActions) { action in
+                    WorkspaceLandingActionCard(action: action)
+                }
+            }
+            .frame(maxWidth: 636)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+}
+
+private struct WorkspaceLandingAction: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let action: () -> Void
+}
+
+private struct WorkspaceLandingActionCard: View {
+    @Environment(\.theme) private var theme
+
+    let action: WorkspaceLandingAction
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action.action) {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: action.systemImage)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.accent)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(action.title)
+                        .font(Fonts.primary(size: 14, weight: .medium))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1)
+
+                    Text(action.subtitle)
+                        .font(Fonts.primary(size: 11))
+                        .foregroundStyle(theme.textDim)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 118, maxHeight: 118, alignment: .topLeading)
+            .padding(16)
+            .background(cardBackground)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isHovered ? theme.accent.opacity(0.28) : theme.border, lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var cardBackground: some ShapeStyle {
+        if isHovered {
+            return AnyShapeStyle(theme.accent.opacity(0.08))
+        }
+        return AnyShapeStyle(Color.white.opacity(0.04))
+    }
+}
+
 private struct WorkspaceStripLayout {
     let frames: [String: CGRect]
     let contentWidth: CGFloat
@@ -1029,7 +1287,7 @@ private struct WorkspaceColumnView: View {
     @Environment(AppStore.self) private var store
 
     let column: Column
-    let project: Project
+    let workspace: Workspace
     let activeTabId: String?
     let ghosttyApp: GhosttyApp
     let surfaceManager: SurfaceManager
@@ -1045,8 +1303,8 @@ private struct WorkspaceColumnView: View {
         VStack(spacing: Layout.workspaceColumnSpacing) {
             ForEach(columnTabs) { tab in
                 let isFocused = activeTabId == tab.id && !store.sidebarFocused
-                let projectDownloads = browserManager.downloads
-                    .filter { $0.projectId == project.id }
+                let workspaceDownloads = browserManager.downloads
+                    .filter { $0.workspaceId == workspace.id }
                     .sorted { $0.updatedAt > $1.updatedAt }
 
                 ZStack {
@@ -1060,29 +1318,35 @@ private struct WorkspaceColumnView: View {
                         } else {
                             TerminalView(
                                 tabId: tab.id,
-                                paneId: tab.projectSetupPaneId ?? tab.id,
+                                paneId: tab.workspaceSetupPaneId ?? tab.id,
                                 ghosttyApp: ghosttyApp,
                                 surfaceManager: surfaceManager,
-                                projectId: project.id,
-                                projectName: project.name,
-                                workingDirectory: tab.workingDirectory ?? project.path,
+                                workspaceId: workspace.id,
+                                workspaceName: workspace.name,
+                                workingDirectory: store.resolvedWorkingDirectory(for: tab, workspace: workspace),
                                 isFocused: isFocused,
-                                command: store.terminalLaunchCommand(for: tab, project: project)
+                                command: store.terminalLaunchCommand(for: tab, workspace: workspace)
                             )
                         }
                     case .browser:
                         BrowserView(
                             tab: tab,
-                            project: project,
+                            workspace: workspace,
                             browserManager: browserManager,
-                            projectDownloads: projectDownloads,
+                            workspaceDownloads: workspaceDownloads,
                             isFocused: isFocused
                         )
                     case .chat:
-                        Text("Chat panes are not currently supported in Blink workspaces.")
-                            .font(Fonts.primary(size: 13))
-                            .foregroundStyle(theme.textDim)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        VStack(spacing: 8) {
+                            Text("This pane type is no longer supported.")
+                                .font(Fonts.primary(size: 13))
+                                .foregroundStyle(theme.text)
+
+                            Text("Open a terminal, AI session, or browser pane instead.")
+                                .font(Fonts.primary(size: 12))
+                                .foregroundStyle(theme.textDim)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .overlay(
@@ -1092,6 +1356,309 @@ private struct WorkspaceColumnView: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: activeTabId)
+    }
+}
+
+private struct MissingWorkspaceBanner: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let workspace: Workspace
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.yellow)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Workspace folder missing")
+                    .font(Fonts.primary(size: 13, weight: .bold))
+                    .foregroundStyle(theme.text)
+
+                Text(workspace.displayPath)
+                    .font(Fonts.primary(size: 11))
+                    .foregroundStyle(theme.textDim)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            Button("Relink Folder") {
+                store.promptRelinkWorkspace(workspace.id)
+            }
+            .buttonStyle(.plain)
+            .font(Fonts.primary(size: 12, weight: .medium))
+            .foregroundStyle(theme.bg)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Capsule(style: .continuous).fill(theme.accent))
+            .pointerCursor()
+
+            Button("Remove") {
+                store.removeWorkspace(workspace.id)
+            }
+            .buttonStyle(.plain)
+            .font(Fonts.primary(size: 12, weight: .medium))
+            .foregroundStyle(theme.textMuted)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Capsule(style: .continuous).fill(theme.border.opacity(0.24)))
+            .pointerCursor()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(theme.bg.opacity(0.92))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(theme.yellow.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.2), radius: 14, y: 8)
+    }
+}
+
+private struct WorkspacePromptModal: View {
+    @Environment(\.theme) private var theme
+    @Environment(AppStore.self) private var store
+
+    let prompt: WorkspacePromptState
+    let onDismiss: () -> Void
+
+    @State private var value = ""
+    @State private var errorMessage: String?
+    @State private var keyMonitor: Any?
+    @FocusState private var fieldFocused: Bool
+
+    private var workspace: Workspace? {
+        store.workspaces.first(where: { $0.id == prompt.workspaceId })
+    }
+
+    private var panelBackground: some ShapeStyle {
+        if store.hasWallpaper {
+            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
+        } else {
+            AnyShapeStyle(theme.bg.opacity(0.97))
+        }
+    }
+
+    private var title: String {
+        switch prompt.kind {
+        case .rename:
+            return "Rename Workspace"
+        case .relink:
+            return "Relink Workspace"
+        }
+    }
+
+    private var message: String {
+        let name = workspace?.name ?? "this workspace"
+
+        switch prompt.kind {
+        case .rename:
+            return "Choose a new name for \(name)."
+        case .relink:
+            return "Point \(name) at the folder Blink should use."
+        }
+    }
+
+    private var submitTitle: String {
+        switch prompt.kind {
+        case .rename:
+            return "Rename Workspace"
+        case .relink:
+            return "Relink Workspace"
+        }
+    }
+
+    private var fieldLabel: String {
+        switch prompt.kind {
+        case .rename:
+            return "Workspace Name"
+        case .relink:
+            return "Folder Path"
+        }
+    }
+
+    private var helpText: String {
+        switch prompt.kind {
+        case .rename:
+            return "This updates the workspace label in Blink only."
+        case .relink:
+            return "Choose an existing folder or browse for one."
+        }
+    }
+
+    private var canSubmit: Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { onDismiss() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Dismiss workspace prompt")
+
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(Fonts.primary(size: 18, weight: .bold))
+                        .foregroundStyle(theme.text)
+
+                    Text(message)
+                        .font(Fonts.primary(size: 12))
+                        .foregroundStyle(theme.textDim)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+
+                theme.border.frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(fieldLabel)
+                            .font(Fonts.primary(size: 11, weight: .bold))
+                            .foregroundStyle(theme.textMuted)
+                            .textCase(.uppercase)
+
+                        HStack(spacing: 10) {
+                            TextField("", text: $value)
+                                .textFieldStyle(.plain)
+                                .font(Fonts.primary(size: 14, weight: .medium))
+                                .foregroundStyle(theme.text)
+                                .focused($fieldFocused)
+                                .onSubmit {
+                                    submit()
+                                }
+
+                            if prompt.kind == .relink {
+                                Button("Browse") {
+                                    if let path = store.chooseExistingWorkspaceFolder(startingAt: value) {
+                                        value = path
+                                        errorMessage = nil
+                                    }
+                                }
+                                .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(theme.border.opacity(0.18))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(theme.border, lineWidth: 1)
+                        )
+
+                        Text(helpText)
+                            .font(Fonts.primary(size: 11))
+                            .foregroundStyle(theme.textDim)
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.accent2)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(theme.accent2.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+                .padding(20)
+
+                theme.border.frame(height: 1)
+
+                HStack(spacing: 10) {
+                    Button("Cancel") {
+                        onDismiss()
+                    }
+                    .buttonStyle(BlinkActionButtonStyle(kind: .secondary))
+
+                    Spacer()
+
+                    Button(submitTitle) {
+                        submit()
+                    }
+                    .buttonStyle(BlinkActionButtonStyle(kind: .primary))
+                    .disabled(!canSubmit)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+            }
+            .frame(width: 520)
+            .background(panelBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
+        }
+        .onAppear {
+            value = prompt.initialValue
+            installKeyMonitor()
+            DispatchQueue.main.async {
+                fieldFocused = true
+            }
+        }
+        .onDisappear {
+            removeKeyMonitor()
+        }
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+            switch event.keyCode {
+            case 36 where modifiers.isEmpty:
+                submit()
+                return nil
+            case 53 where modifiers.isEmpty:
+                onDismiss()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+    }
+
+    private func submit() {
+        guard canSubmit else { return }
+
+        let didSucceed: Bool
+        switch prompt.kind {
+        case .rename:
+            didSucceed = store.renameWorkspace(prompt.workspaceId, to: value)
+            if !didSucceed {
+                errorMessage = "Enter a workspace name to continue."
+            }
+        case .relink:
+            didSucceed = store.relinkWorkspace(prompt.workspaceId, toPath: value)
+            if !didSucceed {
+                errorMessage = "Choose an existing folder to relink this workspace."
+            }
+        }
+
+        guard didSucceed else { return }
+        onDismiss()
     }
 }
 

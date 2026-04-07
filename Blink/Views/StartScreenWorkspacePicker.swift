@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct StartScreenProjectPicker: View {
+struct StartScreenWorkspacePicker: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
@@ -9,6 +9,7 @@ struct StartScreenProjectPicker: View {
 
     @State private var searchText = ""
     @State private var selectedIndex = 0
+    @State private var hoveredWorkspaceId: String?
     @FocusState private var searchFocused: Bool
 
     private func requestSearchFocus() {
@@ -27,16 +28,16 @@ struct StartScreenProjectPicker: View {
     }
 
     private func moveSelection(by delta: Int) {
-        guard !filteredProjects.isEmpty else { return }
-        let count = filteredProjects.count
+        guard !filteredWorkspaces.isEmpty else { return }
+        let count = filteredWorkspaces.count
         selectedIndex = (selectedIndex + delta + count) % count
     }
 
-    private var filteredProjects: [Project] {
-        store.projects.filter { project in
+    private var filteredWorkspaces: [Workspace] {
+        store.workspaces.filter { workspace in
             searchText.isEmpty
-                || project.name.localizedStandardContains(searchText)
-                || project.path.localizedStandardContains(searchText)
+                || workspace.name.localizedStandardContains(searchText)
+                || workspace.path.localizedStandardContains(searchText)
         }
     }
 
@@ -46,7 +47,7 @@ struct StartScreenProjectPicker: View {
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Dismiss project picker")
+                .accessibilityLabel("Dismiss workspace picker")
 
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
@@ -54,7 +55,7 @@ struct StartScreenProjectPicker: View {
                         .font(Fonts.primary(size: 14))
                         .foregroundStyle(theme.accent)
 
-                    TextField("Switch project...", text: $searchText)
+                    TextField("Switch workspace...", text: $searchText)
                         .font(Fonts.primary(size: 14))
                         .textFieldStyle(.plain)
                         .foregroundStyle(theme.text)
@@ -68,16 +69,16 @@ struct StartScreenProjectPicker: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            if filteredProjects.isEmpty {
-                                Text("No matching projects")
+                            if filteredWorkspaces.isEmpty {
+                                Text("No matching workspaces")
                                     .font(Fonts.primary(size: 13))
                                     .foregroundStyle(theme.textDim)
                                     .frame(maxWidth: .infinity, alignment: .center)
                                     .padding(.vertical, 28)
                             } else {
-                                ForEach(Array(filteredProjects.enumerated()), id: \.element.id) { index, project in
-                                    projectRow(project, isSelected: index == selectedIndex)
-                                        .id(project.id)
+                                ForEach(Array(filteredWorkspaces.enumerated()), id: \.element.id) { index, workspace in
+                                    workspaceRow(workspace, isSelected: index == selectedIndex)
+                                        .id(workspace.id)
                                 }
                             }
                         }
@@ -89,7 +90,7 @@ struct StartScreenProjectPicker: View {
                     .onChange(of: selectedIndex) {
                         scrollSelection(in: proxy)
                     }
-                    .onChange(of: filteredProjects.map(\.id)) {
+                    .onChange(of: filteredWorkspaces.map(\.id)) {
                         scrollSelection(in: proxy, animated: false)
                     }
                 }
@@ -123,7 +124,7 @@ struct StartScreenProjectPicker: View {
                 return .handled
             }
             .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { keyPress in
-                guard !filteredProjects.isEmpty else { return .ignored }
+                guard !filteredWorkspaces.isEmpty else { return .ignored }
 
                 switch keyPress.characters.lowercased() {
                 case "j":
@@ -141,87 +142,129 @@ struct StartScreenProjectPicker: View {
                 return .handled
             }
             .onKeyPress(.return) {
-                guard filteredProjects.indices.contains(selectedIndex) else { return .ignored }
-                selectProject(filteredProjects[selectedIndex].id)
+                guard filteredWorkspaces.indices.contains(selectedIndex) else { return .ignored }
+                selectWorkspace(filteredWorkspaces[selectedIndex].id)
                 return .handled
             }
         }
         .onAppear {
-            if let preferredProjectId = store.activeProjectId ?? store.lastSelectedProjectId,
-               let index = filteredProjects.firstIndex(where: { $0.id == preferredProjectId }) {
+            if let preferredWorkspaceId = store.activeWorkspaceId ?? store.lastSelectedWorkspaceId,
+               let index = filteredWorkspaces.firstIndex(where: { $0.id == preferredWorkspaceId }) {
                 selectedIndex = index
             }
             requestSearchFocus()
         }
-        .onChange(of: store.projectSwitcherFocusRequest) {
+        .onChange(of: store.workspaceSwitcherFocusRequest) {
             requestSearchFocus()
         }
         .onChange(of: searchText) {
             selectedIndex = 0
         }
-        .onChange(of: filteredProjects.count) {
-            if filteredProjects.isEmpty {
+        .onChange(of: filteredWorkspaces.count) {
+            if filteredWorkspaces.isEmpty {
                 selectedIndex = 0
             } else {
-                selectedIndex = min(selectedIndex, filteredProjects.count - 1)
+                selectedIndex = min(selectedIndex, filteredWorkspaces.count - 1)
             }
         }
     }
 
-    private func projectRow(_ project: Project, isSelected: Bool) -> some View {
-        Button {
-            selectProject(project.id)
+    private func workspaceRow(_ workspace: Workspace, isSelected: Bool) -> some View {
+        let isPathMissing = store.isWorkspacePathMissing(workspace.id)
+        return Button {
+            selectWorkspace(workspace.id)
         } label: {
             HStack(spacing: 12) {
-                ProjectFavicon(projectName: project.name, projectPath: project.path, size: 20)
+                WorkspaceFavicon(workspaceName: workspace.name, workspacePath: workspace.path, size: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(project.name)
+                    Text(workspace.name)
                         .font(Fonts.primary(size: 13, weight: .bold))
                         .foregroundStyle(isSelected ? theme.text : theme.textMuted)
                         .lineLimit(1)
 
-                    Text(project.displayPath)
+                    Text(subtitle(for: workspace, isPathMissing: isPathMissing))
                         .font(Fonts.primary(size: 11))
-                        .foregroundStyle(theme.textDim)
+                        .foregroundStyle(isPathMissing ? theme.yellow : theme.textDim)
                         .lineLimit(1)
                 }
 
                 Spacer()
 
-                if store.activeProjectId == project.id {
+                if store.activeWorkspaceId == workspace.id {
                     Text("current")
                         .font(Fonts.primary(size: 10))
                         .foregroundStyle(theme.accent)
-                } else if store.lastSelectedProjectId == project.id {
+                } else if store.lastSelectedWorkspaceId == workspace.id {
                     Text("last")
                         .font(Fonts.primary(size: 10))
                         .foregroundStyle(theme.accent)
+                } else if workspace.isScratchSpace {
+                    Text("scratch")
+                        .font(Fonts.primary(size: 10))
+                        .foregroundStyle(theme.textDim)
+                } else if isPathMissing {
+                    Text("missing")
+                        .font(Fonts.primary(size: 10))
+                        .foregroundStyle(theme.yellow)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(isSelected ? theme.accent.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+            .background(
+                rowBackground(isSelected: isSelected, isHovered: hoveredWorkspaceId == workspace.id)
+            )
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            hoveredWorkspaceId = isHovered ? workspace.id : nil
+        }
+        .pointerCursor()
     }
 
-    private func selectProject(_ id: String) {
+    private func subtitle(for workspace: Workspace, isPathMissing: Bool) -> String {
+        if workspace.isScratchSpace {
+            return "Shells, AI sessions, and browser panes"
+        }
+
+        if isPathMissing {
+            return "Workspace folder is missing"
+        }
+
+        return workspace.displayPath
+    }
+
+    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(theme.accent.opacity(0.12))
+        }
+
+        if isHovered {
+            return AnyShapeStyle(theme.accent.opacity(0.08))
+        }
+
+        return AnyShapeStyle(Color.clear)
+    }
+
+    private func selectWorkspace(_ id: String) {
         onSelect(id)
         onDismiss()
     }
 
     private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {
-        guard filteredProjects.indices.contains(selectedIndex) else { return }
-        let projectId = filteredProjects[selectedIndex].id
+        guard filteredWorkspaces.indices.contains(selectedIndex) else { return }
+        let workspaceId = filteredWorkspaces[selectedIndex].id
 
         DispatchQueue.main.async {
             if animated {
                 withAnimation(.snappy(duration: 0.18)) {
-                    proxy.scrollTo(projectId, anchor: .center)
+                    proxy.scrollTo(workspaceId, anchor: .center)
                 }
             } else {
-                proxy.scrollTo(projectId, anchor: .center)
+                proxy.scrollTo(workspaceId, anchor: .center)
             }
         }
     }

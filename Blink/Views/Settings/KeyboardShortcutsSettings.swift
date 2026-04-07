@@ -21,8 +21,8 @@ private let shortcutCategories: [ShortcutCategory] = [
     ]),
     ShortcutCategory(name: "Windows", shortcuts: [
         ShortcutEntry(action: "New Tab", keys: "⌘T"),
-        ShortcutEntry(action: "New Project Browser", keys: "⌥⌘B"),
-        ShortcutEntry(action: "Toggle Project Browser Sidebar", keys: "⌘S"),
+        ShortcutEntry(action: "New Workspace Browser", keys: "⌥⌘B"),
+        ShortcutEntry(action: "Toggle Workspace Browser Sidebar", keys: "⌘S"),
         ShortcutEntry(action: "Split Below", keys: "⇧⌘_"),
         ShortcutEntry(action: "Split Right", keys: "⇧⌘|"),
         ShortcutEntry(action: "Close Tab", keys: "⌘W"),
@@ -39,18 +39,19 @@ private let shortcutCategories: [ShortcutCategory] = [
     ShortcutCategory(name: "Workspace", shortcuts: [
         ShortcutEntry(action: "Toggle Sidebar", keys: "⌘B"),
         ShortcutEntry(action: "Overview", keys: "⌘O"),
+        ShortcutEntry(action: "Open AI Session", keys: "⇧⌘A"),
         ShortcutEntry(action: "Open Git", keys: "⌘G"),
     ]),
     ShortcutCategory(name: "Browser", shortcuts: [
-        ShortcutEntry(action: "Focus Project Browser Address Bar", keys: "⌥⌘L"),
-        ShortcutEntry(action: "Project Browser Back", keys: "⌘["),
-        ShortcutEntry(action: "Project Browser Forward", keys: "⌘]"),
-        ShortcutEntry(action: "Project Browser Reload", keys: "⌘R"),
-        ShortcutEntry(action: "Toggle Project Browser Developer Tools", keys: "⌥⌘I"),
+        ShortcutEntry(action: "Focus Workspace Browser Address Bar", keys: "⌥⌘L"),
+        ShortcutEntry(action: "Workspace Browser Back", keys: "⌘["),
+        ShortcutEntry(action: "Workspace Browser Forward", keys: "⌘]"),
+        ShortcutEntry(action: "Workspace Browser Reload", keys: "⌘R"),
+        ShortcutEntry(action: "Toggle Workspace Browser Developer Tools", keys: "⌥⌘I"),
     ]),
     ShortcutCategory(name: "App", shortcuts: [
         ShortcutEntry(action: "Settings", keys: "⌘,"),
-        ShortcutEntry(action: "Switch Project", keys: "⌘P"),
+        ShortcutEntry(action: "Switch Workspace", keys: "⌘P"),
         ShortcutEntry(action: "Switch Theme", keys: "⇧⌘T"),
     ]),
 ]

@@ -3,8 +3,20 @@ import AppKit
 import CoreImage
 
 enum ActiveView {
-    case projects
+    case workspaces
     case settings
+}
+
+enum WorkspacePromptKind: Equatable {
+    case rename
+    case relink
+}
+
+struct WorkspacePromptState: Identifiable {
+    let id = UUID()
+    let workspaceId: String
+    let kind: WorkspacePromptKind
+    let initialValue: String
 }
 
 private enum StorageKeys {
@@ -14,12 +26,15 @@ private enum StorageKeys {
     static let backgroundBlur = "blink.backgroundBlur"
     static let hideTitleBar = "blink.hideTitleBar"
     static let sidebarVisible = "blink.sidebarVisible"
-    static let projects = "blink.projects"
-    static let lastSelectedProjectId = "blink.lastSelectedProjectId"
+    static let workspaces = "blink.workspaces"
+    static let lastSelectedWorkspaceId = "blink.lastSelectedWorkspaceId"
     static let lastActiveTabs = "blink.lastActiveTabs"
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
     static let columns = "blink.columns"
-    static let projectSetups = "blink.projectSetups"
+    static let workspaceSetups = "blink.workspaceSetups"
+    static let legacyWorkspaces = "blink.projects"
+    static let legacyLastSelectedWorkspaceId = "blink.lastSelectedProjectId"
+    static let legacyWorkspaceSetups = "blink.projectSetups"
     static let fontFamily = "blink.fontFamily"
     static let uiFontFamily = "blink.uiFontFamily"
     static let fontSize = "blink.fontSize"
@@ -34,21 +49,21 @@ private enum StorageKeys {
 
 @MainActor @Observable
 final class AppStore {
-    // Projects
-    var projects: [Project] {
-        didSet { Self.saveProjects(projects) }
+    // Workspaces
+    var workspaces: [Workspace] {
+        didSet { Self.saveWorkspaces(workspaces) }
     }
-    var projectSetups: [String: ProjectSetup] {
-        didSet { Self.saveProjectSetups(projectSetups) }
+    var workspaceSetups: [String: WorkspaceSetup] {
+        didSet { Self.saveWorkspaceSetups(workspaceSetups) }
     }
-    var activeProjectId: String?
-    var lastSelectedProjectId: String? {
-        didSet { UserDefaults.standard.set(lastSelectedProjectId, forKey: StorageKeys.lastSelectedProjectId) }
+    var activeWorkspaceId: String?
+    var lastSelectedWorkspaceId: String? {
+        didSet { UserDefaults.standard.set(lastSelectedWorkspaceId, forKey: StorageKeys.lastSelectedWorkspaceId) }
     }
 
     // Tabs
     var tabs: [AppTab] = [] {
-        didSet { autosaveProjectSessionsIfNeeded() }
+        didSet { autosaveWorkspaceSessionsIfNeeded() }
     }
     var activeTabId: String?
     var pendingMaximizedTabId: String?
@@ -76,24 +91,30 @@ final class AppStore {
     var columns: [String: [Column]] = [:] {
         didSet {
             Self.saveColumns(columns)
-            autosaveProjectSessionsIfNeeded()
+            autosaveWorkspaceSessionsIfNeeded()
         }
     }
     var columnFocusedTab: [String: String] = [:]
 
     // Theme
     var theme: String {
-        didSet { UserDefaults.standard.set(theme, forKey: StorageKeys.theme) }
+        didSet {
+            UserDefaults.standard.set(theme, forKey: StorageKeys.theme)
+            _ = syncOpenCodeThemeConfiguration()
+        }
     }
 
     // View
-    var activeView: ActiveView = .projects
+    var activeView: ActiveView = .workspaces
     var showThemePicker = false
-    var showProjectSwitcher = false
+    var showWorkspaceSwitcher = false
+    var showWorkspaceOnboarding = false
+    var showAISessionPicker = false
     var showNewTabMenu = false
     var showCommandPalette = false
+    var workspacePrompt: WorkspacePromptState?
     var themePickerFocusRequest = 0
-    var projectSwitcherFocusRequest = 0
+    var workspaceSwitcherFocusRequest = 0
 
     // Background
     var backgroundImage: String? {
@@ -157,7 +178,7 @@ final class AppStore {
     var sidebarVisible: Bool {
         didSet { UserDefaults.standard.set(sidebarVisible, forKey: StorageKeys.sidebarVisible) }
     }
-    var expandedProjectIds: Set<String> = []
+    var expandedWorkspaceIds: Set<String> = []
     var sidebarFocused: Bool = false
     var surfaceManager: SurfaceManager?
     var browserManager: BrowserManager?
@@ -184,7 +205,11 @@ final class AppStore {
     private var claudeHookShellIntegrationDirectoryPath: String?
     @ObservationIgnored
     var detachedShellCommandHandler: ((String) -> Void)?
-    private var suppressProjectSessionAutosave = true
+    @ObservationIgnored
+    var openCodeConfigHomeOverride: URL?
+    @ObservationIgnored
+    var openCodeSourceConfigHomeOverride: URL?
+    private var suppressWorkspaceSessionAutosave = true
 
     func focusTerminal() {
         sidebarFocused = false
@@ -210,21 +235,22 @@ final class AppStore {
 
     init() {
         let defaults = UserDefaults.standard
-        let loadedProjects = Self.loadProjects()
-        let storedLastProjectId = defaults.string(forKey: StorageKeys.lastSelectedProjectId)
+        let loadedWorkspaces = Self.loadWorkspaces()
+        let storedLastWorkspaceId = defaults.string(forKey: StorageKeys.lastSelectedWorkspaceId)
+            ?? defaults.string(forKey: StorageKeys.legacyLastSelectedWorkspaceId)
         self.tmuxIntegrationEnabled = Self.detectTmuxAvailability()
         self.tmuxSocketName = Self.tmuxSocketName()
         self.tmuxConfigPath = Self.installBlinkTmuxConfig(
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
         )?.path
 
-        self.projects = loadedProjects
-        self.projectSetups = Self.loadProjectSetups()
+        self.workspaces = loadedWorkspaces
+        self.workspaceSetups = Self.loadWorkspaceSetups()
         self.theme = defaults.string(forKey: StorageKeys.theme) ?? "Josean"
         self.backgroundImage = defaults.string(forKey: StorageKeys.backgroundImage)
         self.hideTitleBar = defaults.object(forKey: StorageKeys.hideTitleBar) as? Bool ?? false
         self.sidebarVisible = defaults.object(forKey: StorageKeys.sidebarVisible) as? Bool ?? true
-        self.expandedProjectIds = Set(loadedProjects.map(\.id))
+        self.expandedWorkspaceIds = Set(loadedWorkspaces.map(\.id))
         self.fontFamily = defaults.string(forKey: StorageKeys.fontFamily) ?? "MesloLGS Nerd Font Mono"
         self.uiFontFamily = defaults.string(forKey: StorageKeys.uiFontFamily) ?? "MesloLGS Nerd Font Mono"
         self.fontSize = defaults.object(forKey: StorageKeys.fontSize) != nil
@@ -241,11 +267,11 @@ final class AppStore {
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
         self.columns = Self.loadColumns()
-        if let storedLastProjectId,
-           loadedProjects.contains(where: { $0.id == storedLastProjectId }) {
-            self.lastSelectedProjectId = storedLastProjectId
+        if let storedLastWorkspaceId,
+           loadedWorkspaces.contains(where: { $0.id == storedLastWorkspaceId }) {
+            self.lastSelectedWorkspaceId = storedLastWorkspaceId
         } else {
-            self.lastSelectedProjectId = nil
+            self.lastSelectedWorkspaceId = nil
         }
 
         // Double defaults to 0.0 if unset, so check for existence
@@ -274,8 +300,10 @@ final class AppStore {
         claudeHookShellIntegrationDirectoryPath = ClaudeHookScriptInstaller.installShellIntegration(
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
         )?.path
-        suppressProjectSessionAutosave = false
+        sanitizePersistedWorkspaceState()
+        suppressWorkspaceSessionAutosave = false
         startTmuxForegroundCommandPolling()
+        _ = syncOpenCodeThemeConfiguration()
     }
 
     var claudeHookEventDirectoryPath: String? {
@@ -298,7 +326,7 @@ final class AppStore {
 
     func toggleSettings() {
         showCommandPalette = false
-        activeView = activeView == .settings ? .projects : .settings
+        activeView = activeView == .settings ? .workspaces : .settings
     }
 
     func toggleSidebar() {
@@ -312,23 +340,23 @@ final class AppStore {
         }
     }
 
-    func isProjectExpanded(_ id: String) -> Bool {
-        expandedProjectIds.contains(id)
+    func isWorkspaceExpanded(_ id: String) -> Bool {
+        expandedWorkspaceIds.contains(id)
     }
 
-    func expandProject(_ id: String) {
-        expandedProjectIds.insert(id)
+    func expandWorkspace(_ id: String) {
+        expandedWorkspaceIds.insert(id)
     }
 
-    func collapseProject(_ id: String) {
-        expandedProjectIds.remove(id)
+    func collapseWorkspace(_ id: String) {
+        expandedWorkspaceIds.remove(id)
     }
 
-    func toggleProjectExpansion(_ id: String) {
-        if isProjectExpanded(id) {
-            collapseProject(id)
+    func toggleWorkspaceExpansion(_ id: String) {
+        if isWorkspaceExpanded(id) {
+            collapseWorkspace(id)
         } else {
-            expandProject(id)
+            expandWorkspace(id)
         }
     }
 
@@ -376,45 +404,67 @@ final class AppStore {
         return true
     }
 
-    func selectNextProject() {
-        guard !projects.isEmpty else { return }
-        guard let currentId = activeProjectId,
-              let idx = projects.firstIndex(where: { $0.id == currentId }) else {
-            setActiveProject(projects.first?.id)
+    func selectNextWorkspace() {
+        guard !workspaces.isEmpty else { return }
+        guard let currentId = activeWorkspaceId,
+              let idx = workspaces.firstIndex(where: { $0.id == currentId }) else {
+            setActiveWorkspace(workspaces.first?.id)
             return
         }
-        let next = projects.index(after: idx)
-        if next < projects.endIndex {
-            setActiveProject(projects[next].id)
+        let next = workspaces.index(after: idx)
+        if next < workspaces.endIndex {
+            setActiveWorkspace(workspaces[next].id)
         }
     }
 
-    func selectPreviousProject() {
-        guard !projects.isEmpty else { return }
-        guard let currentId = activeProjectId,
-              let idx = projects.firstIndex(where: { $0.id == currentId }) else {
-            setActiveProject(projects.last?.id)
+    func selectPreviousWorkspace() {
+        guard !workspaces.isEmpty else { return }
+        guard let currentId = activeWorkspaceId,
+              let idx = workspaces.firstIndex(where: { $0.id == currentId }) else {
+            setActiveWorkspace(workspaces.last?.id)
             return
         }
-        if idx > projects.startIndex {
-            setActiveProject(projects[projects.index(before: idx)].id)
+        if idx > workspaces.startIndex {
+            setActiveWorkspace(workspaces[workspaces.index(before: idx)].id)
         }
     }
 
-    func presentProjectSwitcher(focusSearch: Bool = false) {
-        guard !projects.isEmpty else { return }
+    func presentWorkspaceSwitcher(focusSearch: Bool = false) {
+        guard !workspaces.isEmpty else { return }
+        workspacePrompt = nil
+        showWorkspaceOnboarding = false
+        showAISessionPicker = false
         showCommandPalette = false
-        showProjectSwitcher = true
+        showWorkspaceSwitcher = true
         if focusSearch {
-            projectSwitcherFocusRequest += 1
+            workspaceSwitcherFocusRequest += 1
         }
     }
 
-    func dismissProjectSwitcher() {
-        showProjectSwitcher = false
+    func dismissWorkspaceSwitcher() {
+        showWorkspaceSwitcher = false
+    }
+
+    func presentWorkspaceOnboarding() {
+        sidebarFocused = false
+        activeView = .workspaces
+        workspacePrompt = nil
+        showNewTabMenu = false
+        showWorkspaceSwitcher = false
+        showThemePicker = false
+        showAISessionPicker = false
+        showCommandPalette = false
+        showWorkspaceOnboarding = true
+    }
+
+    func dismissWorkspaceOnboarding() {
+        showWorkspaceOnboarding = false
     }
 
     func presentThemePicker(focusSearch: Bool = false) {
+        workspacePrompt = nil
+        showWorkspaceOnboarding = false
+        showAISessionPicker = false
         showCommandPalette = false
         showThemePicker = true
         if focusSearch {
@@ -426,15 +476,89 @@ final class AppStore {
         showThemePicker = false
     }
 
+    func presentAISessionPicker() {
+        sidebarFocused = false
+        workspacePrompt = nil
+        showWorkspaceOnboarding = false
+        showWorkspaceSwitcher = false
+        showThemePicker = false
+        showCommandPalette = false
+        showAISessionPicker = true
+    }
+
+    func dismissAISessionPicker() {
+        showAISessionPicker = false
+    }
+
     func presentCommandPalette() {
         sidebarFocused = false
-        showProjectSwitcher = false
+        workspacePrompt = nil
+        showWorkspaceOnboarding = false
+        showAISessionPicker = false
+        showWorkspaceSwitcher = false
         showThemePicker = false
         showCommandPalette = true
     }
 
     func dismissCommandPalette() {
         showCommandPalette = false
+    }
+
+    func dismissWorkspacePrompt() {
+        workspacePrompt = nil
+    }
+
+    private func aiSessionLaunchSpec(for provider: WorkspaceAIProvider) -> (command: String, label: String) {
+        switch provider {
+        case .claude:
+            return ("claude --dangerously-skip-permissions", "Claude Code")
+        case .codex:
+            return ("codex --dangerously-bypass-approvals-and-sandbox", "Codex")
+        case .opencode:
+            return ("opencode", "OpenCode")
+        }
+    }
+
+    @discardableResult
+    func openClaudeSession() -> AppTab? {
+        guard let workspaceId = aiSessionWorkspaceId() else { return nil }
+        let spec = aiSessionLaunchSpec(for: .claude)
+        return openTab(
+            workspaceId: workspaceId,
+            command: spec.command,
+            label: spec.label
+        )
+    }
+
+    @discardableResult
+    func openCodexSession() -> AppTab? {
+        guard let workspaceId = aiSessionWorkspaceId() else { return nil }
+        let spec = aiSessionLaunchSpec(for: .codex)
+        return openTab(
+            workspaceId: workspaceId,
+            command: spec.command,
+            label: spec.label
+        )
+    }
+
+    @discardableResult
+    func openOpenCodeSession() -> AppTab? {
+        guard let workspaceId = aiSessionWorkspaceId() else { return nil }
+        let spec = aiSessionLaunchSpec(for: .opencode)
+        return openTab(
+            workspaceId: workspaceId,
+            command: spec.command,
+            label: spec.label
+        )
+    }
+
+    private func aiSessionWorkspaceId() -> String? {
+        if let activeWorkspaceId {
+            return activeWorkspaceId
+        }
+
+        openScratchSpace()
+        return activeWorkspaceId
     }
 
     // MARK: - Background Actions
@@ -495,43 +619,47 @@ final class AppStore {
 
     // MARK: - Column Helpers
 
-    func projectColumns(for projectId: String) -> [Column] {
-        columns[projectId] ?? []
+    func workspaceColumns(for workspaceId: String) -> [Column] {
+        columns[workspaceId] ?? []
     }
 
     func columnFor(tabId: String) -> Column? {
         guard let tab = tabsById[tabId] else { return nil }
-        return projectColumns(for: tab.projectId).first { $0.tabIds.contains(tabId) }
+        return workspaceColumns(for: tab.workspaceId).first { $0.tabIds.contains(tabId) }
     }
 
     var activeColumn: Column? {
-        guard let projectId = activeProjectId,
-              let tabId = resolvedSelectableTabId(for: projectId, preferred: [activeTabId].compactMap { $0 }) else {
+        guard let workspaceId = activeWorkspaceId,
+              let tabId = resolvedSelectableTabId(for: workspaceId, preferred: [activeTabId].compactMap { $0 }) else {
             return nil
         }
-        return projectColumns(for: projectId).first { $0.tabIds.contains(tabId) }
+        return workspaceColumns(for: workspaceId).first { $0.tabIds.contains(tabId) }
     }
 
     /// Returns tabs in column-major order: left-to-right columns, top-to-bottom within each.
-    func orderedTabs(for projectId: String) -> [AppTab] {
-        let cols = projectColumns(for: projectId)
+    func orderedTabs(for workspaceId: String) -> [AppTab] {
+        let cols = workspaceColumns(for: workspaceId)
         let lookup = tabsById
         return cols.flatMap { col in
             col.tabIds.compactMap { lookup[$0] }
         }
     }
 
-    func projectSetup(for projectId: String) -> ProjectSetup? {
-        projectSetups[projectId]
+    func workspaceSetup(for workspaceId: String) -> WorkspaceSetup? {
+        workspaceSetups[workspaceId]
     }
 
-    func hasProjectSetup(for projectId: String) -> Bool {
-        projectSetups[projectId] != nil
+    func hasWorkspaceSetup(for workspaceId: String) -> Bool {
+        workspaceSetups[workspaceId] != nil
     }
 
-    func projectSetupDisplayPath(for tab: AppTab, project: Project) -> String {
-        let path = tab.workingDirectory ?? project.path
+    func workspaceSetupDisplayPath(for tab: AppTab, workspace: Workspace) -> String {
+        let path = validatedWorkingDirectory(tab.workingDirectory, workspaceId: workspace.id)
         return path.replacing("/Users/\(NSUserName())", with: "~")
+    }
+
+    func resolvedWorkingDirectory(for tab: AppTab, workspace: Workspace) -> String {
+        validatedWorkingDirectory(tab.workingDirectory, workspaceId: workspace.id)
     }
 
     func managedCommandState(for tabId: String) -> ManagedCommandState? {
@@ -561,6 +689,7 @@ final class AppStore {
 
         surfaceManager?.destroySurface(tabId: tabId)
         managedCommandStates[tabId] = ManagedCommandState(status: .running)
+        armManagedAITrackingIfNeeded(for: tab)
 
         if focusAfterLaunch {
             setActiveTab(tabId)
@@ -594,7 +723,14 @@ final class AppStore {
             if sendPendingTmuxShellCommandIfNeeded(for: tabId) {
                 return
             }
-            if shouldPreserveShellDetectedAIState(for: tabId, tab: tab) {
+            let shouldPreserveAIState = shouldPreserveShellDetectedAIState(for: tabId, tab: tab)
+            if shouldResetTerminalSubmittedLineTracking(
+                for: tabId,
+                preservingAIState: shouldPreserveAIState
+            ) {
+                resetTerminalSubmittedLineTracking(for: tabId)
+            }
+            if shouldPreserveAIState {
                 return
             }
             aiTabsAwaitingInitialPromptTitle[tabId] = nil
@@ -607,7 +743,7 @@ final class AppStore {
     }
 
     func handleTerminalLineSubmission(_ line: String, for tabId: String) {
-        guard let tab = tabsById[tabId], tab.isShell, !tab.isManagedCommand else { return }
+        guard let tab = tabsById[tabId], tab.isShell else { return }
         if let aiKind = ShellDetectedAIPaneKind(submittedLine: line) {
             shellDetectedAIPaneKinds[tabId] = aiKind
             aiTabsAwaitingInitialPromptTitle[tabId] = aiKind
@@ -634,42 +770,244 @@ final class AppStore {
         let trimmedPrompt = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else { return }
 
-        setTabTitle(tabId, title: aiPromptTitle(from: trimmedPrompt, fallback: aiKind.displayName))
+        let promptTitle = aiPromptTitle(from: trimmedPrompt, fallback: aiKind.displayName)
+        setTabTitle(tabId, title: promptTitle)
         aiTabsAwaitingInitialPromptTitle[tabId] = nil
     }
 
-    func terminalLaunchCommand(for tab: AppTab, project: Project) -> String? {
-        if tab.isShell, tab.command == nil, tab.projectSetupPaneId != nil, tmuxIntegrationEnabled {
+    func terminalLaunchCommand(for tab: AppTab, workspace: Workspace) -> String? {
+        if tab.isShell, tab.command == nil, tab.workspaceSetupPaneId != nil, tmuxIntegrationEnabled {
             return tmuxAttachCommand(
-                project: project,
+                workspace: workspace,
                 tab: tab,
-                workingDirectory: tab.workingDirectory ?? project.path
+                workingDirectory: validatedWorkingDirectory(tab.workingDirectory, workspaceId: workspace.id)
             )
+        }
+
+        if let command = tab.command,
+           ShellDetectedAIPaneKind(submittedLine: command) == .opencode {
+            return openCodeLaunchCommand(command)
         }
 
         return tab.command
     }
 
+    private static let openCodeThemeSchemaURL = "https://opencode.ai/theme.json"
+    private static let openCodeTUISchemaURL = "https://opencode.ai/tui.json"
+    private static let blinkOpenCodeThemeName = "blink-current"
+
+    private func openCodeLaunchCommand(_ command: String) -> String {
+        guard let configHome = syncOpenCodeThemeConfiguration() else { return command }
+        return "env XDG_CONFIG_HOME=\(shellQuote(configHome.path)) \(command)"
+    }
+
+    @discardableResult
+    private func syncOpenCodeThemeConfiguration() -> URL? {
+        guard let terminalTheme = TerminalTheme.load(name: theme) else { return nil }
+
+        let fileManager = FileManager.default
+        let sourceConfigHome = openCodeSourceConfigHomeURL()
+        let scopedConfigHome = openCodeConfigHomeURL()
+        let sourceConfigDirectory = sourceConfigHome.appendingPathComponent("opencode", isDirectory: true)
+        let scopedConfigDirectory = scopedConfigHome.appendingPathComponent("opencode", isDirectory: true)
+        let scopedThemesDirectory = scopedConfigDirectory.appendingPathComponent("themes", isDirectory: true)
+
+        do {
+            try? fileManager.removeItem(at: scopedConfigDirectory)
+            try fileManager.createDirectory(at: scopedConfigDirectory, withIntermediateDirectories: true)
+
+            if fileManager.fileExists(atPath: sourceConfigDirectory.path) {
+                let sourceItems = try fileManager.contentsOfDirectory(
+                    at: sourceConfigDirectory,
+                    includingPropertiesForKeys: nil
+                )
+                for item in sourceItems {
+                    let itemName = item.lastPathComponent
+                    guard itemName != "tui.json", itemName != "themes" else { continue }
+                    try fileManager.createSymbolicLink(
+                        at: scopedConfigDirectory.appendingPathComponent(itemName),
+                        withDestinationURL: item
+                    )
+                }
+            }
+
+            try fileManager.createDirectory(at: scopedThemesDirectory, withIntermediateDirectories: true)
+
+            let sourceThemesDirectory = sourceConfigDirectory.appendingPathComponent("themes", isDirectory: true)
+            if fileManager.fileExists(atPath: sourceThemesDirectory.path) {
+                let sourceThemes = try fileManager.contentsOfDirectory(
+                    at: sourceThemesDirectory,
+                    includingPropertiesForKeys: nil
+                )
+                for themeFile in sourceThemes {
+                    try fileManager.createSymbolicLink(
+                        at: scopedThemesDirectory.appendingPathComponent(themeFile.lastPathComponent),
+                        withDestinationURL: themeFile
+                    )
+                }
+            }
+
+            let generatedThemeURL = scopedThemesDirectory
+                .appendingPathComponent(Self.blinkOpenCodeThemeName)
+                .appendingPathExtension("json")
+            let generatedThemeData = try JSONSerialization.data(
+                withJSONObject: openCodeThemeDocument(for: terminalTheme),
+                options: [.prettyPrinted, .sortedKeys]
+            )
+            try generatedThemeData.write(to: generatedThemeURL, options: .atomic)
+
+            var tuiDocument: [String: Any] = ["$schema": Self.openCodeTUISchemaURL]
+            let sourceTUIURL = sourceConfigDirectory.appendingPathComponent("tui.json")
+            if let sourceTUIData = try? Data(contentsOf: sourceTUIURL),
+               let parsed = try? JSONSerialization.jsonObject(with: sourceTUIData) as? [String: Any] {
+                tuiDocument = parsed
+            }
+
+            tuiDocument["$schema"] = tuiDocument["$schema"] ?? Self.openCodeTUISchemaURL
+            tuiDocument["theme"] = Self.blinkOpenCodeThemeName
+
+            let scopedTUIURL = scopedConfigDirectory.appendingPathComponent("tui.json")
+            let scopedTUIData = try JSONSerialization.data(
+                withJSONObject: tuiDocument,
+                options: [.prettyPrinted, .sortedKeys]
+            )
+            try scopedTUIData.write(to: scopedTUIURL, options: .atomic)
+
+            return scopedConfigHome
+        } catch {
+            print("[AppStore] Failed to sync OpenCode theme config: \(error)")
+            return nil
+        }
+    }
+
+    private func openCodeThemeDocument(for terminalTheme: TerminalTheme) -> [String: Any] {
+        func paletteColor(_ index: Int, fallback: String) -> String {
+            guard terminalTheme.palette.indices.contains(index) else { return fallback }
+            return terminalTheme.palette[index]
+        }
+
+        let defs: [String: String] = [
+            "bg": "none",
+            "bgPanel": "none",
+            "bgElement": terminalTheme.selectionBackground,
+            "fg": terminalTheme.foreground,
+            "fgMuted": paletteColor(8, fallback: terminalTheme.foreground),
+            "green": paletteColor(2, fallback: terminalTheme.foreground),
+            "greenBright": paletteColor(10, fallback: paletteColor(2, fallback: terminalTheme.foreground)),
+            "red": paletteColor(1, fallback: terminalTheme.foreground),
+            "yellow": paletteColor(3, fallback: terminalTheme.foreground),
+            "blue": paletteColor(4, fallback: terminalTheme.foreground),
+            "purple": paletteColor(5, fallback: terminalTheme.foreground),
+            "cyan": paletteColor(6, fallback: terminalTheme.foreground),
+            "border": paletteColor(8, fallback: terminalTheme.selectionBackground),
+            "borderActive": terminalTheme.foreground,
+            "borderSubtle": terminalTheme.background,
+        ]
+
+        let theme: [String: String] = [
+            "primary": "cyan",
+            "secondary": "blue",
+            "accent": "greenBright",
+            "error": "red",
+            "warning": "yellow",
+            "success": "green",
+            "info": "blue",
+            "text": "fg",
+            "textMuted": "fgMuted",
+            "background": "bg",
+            "backgroundPanel": "bgPanel",
+            "backgroundElement": "bgElement",
+            "border": "border",
+            "borderActive": "borderActive",
+            "borderSubtle": "borderSubtle",
+            "diffAdded": "green",
+            "diffRemoved": "red",
+            "diffContext": "fgMuted",
+            "diffHunkHeader": "fgMuted",
+            "diffHighlightAdded": "green",
+            "diffHighlightRemoved": "red",
+            "diffAddedBg": "none",
+            "diffRemovedBg": "none",
+            "diffContextBg": "none",
+            "diffLineNumber": "fgMuted",
+            "diffAddedLineNumberBg": "none",
+            "diffRemovedLineNumberBg": "none",
+            "markdownText": "fg",
+            "markdownHeading": "cyan",
+            "markdownLink": "blue",
+            "markdownLinkText": "greenBright",
+            "markdownCode": "green",
+            "markdownBlockQuote": "fgMuted",
+            "markdownEmph": "yellow",
+            "markdownStrong": "yellow",
+            "markdownHorizontalRule": "fgMuted",
+            "markdownListItem": "cyan",
+            "markdownListEnumeration": "greenBright",
+            "markdownImage": "blue",
+            "markdownImageText": "greenBright",
+            "markdownCodeBlock": "fg",
+            "syntaxComment": "fgMuted",
+            "syntaxKeyword": "purple",
+            "syntaxFunction": "blue",
+            "syntaxVariable": "cyan",
+            "syntaxString": "green",
+            "syntaxNumber": "yellow",
+            "syntaxType": "greenBright",
+            "syntaxOperator": "purple",
+            "syntaxPunctuation": "fg",
+        ]
+
+        return [
+            "$schema": Self.openCodeThemeSchemaURL,
+            "defs": defs,
+            "theme": theme,
+        ]
+    }
+
+    private func openCodeSourceConfigHomeURL() -> URL {
+        if let openCodeSourceConfigHomeOverride {
+            return openCodeSourceConfigHomeOverride
+        }
+
+        if let xdgConfigHome = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"],
+           !xdgConfigHome.isEmpty {
+            return URL(fileURLWithPath: xdgConfigHome, isDirectory: true)
+        }
+
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config", isDirectory: true)
+    }
+
+    private func openCodeConfigHomeURL() -> URL {
+        if let openCodeConfigHomeOverride {
+            return openCodeConfigHomeOverride
+        }
+
+        let baseURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return baseURL.appendingPathComponent("blink-opencode", isDirectory: true)
+    }
+
     // MARK: - Actions
 
-    func setActiveProject(_ id: String?) {
-        // Remember current tab for the project we're leaving
-        if let currentProject = activeProjectId, let currentTab = activeTabId {
-            lastActiveTab[currentProject] = currentTab
+    func setActiveWorkspace(_ id: String?) {
+        // Remember current tab for the workspace we're leaving
+        if let currentWorkspace = activeWorkspaceId, let currentTab = activeTabId {
+            lastActiveTab[currentWorkspace] = currentTab
         }
 
-        activeProjectId = id
+        activeWorkspaceId = id
         if let id {
-            lastSelectedProjectId = id
+            lastSelectedWorkspaceId = id
         }
-        activeView = .projects
+        activeView = .workspaces
 
         // Sync columns with actual tabs — remove stale IDs, add uncolumned tabs
         if let id {
-            let existingTabIds = Set(projectTabs(for: id).map(\.id))
+            let existingTabIds = Set(workspaceTabs(for: id).map(\.id))
 
             // Remove stale tab IDs from persisted columns, drop empty columns
-            var cols = projectColumns(for: id)
+            var cols = workspaceColumns(for: id)
             cols = cols.compactMap { col in
                 var cleaned = col
                 cleaned.tabIds = col.tabIds.filter { existingTabIds.contains($0) }
@@ -678,7 +1016,7 @@ final class AppStore {
 
             // Add any tabs not in a column
             let columnedTabIds = Set(cols.flatMap(\.tabIds))
-            let uncolumnedTabs = projectTabs(for: id).filter { !columnedTabIds.contains($0.id) }
+            let uncolumnedTabs = workspaceTabs(for: id).filter { !columnedTabIds.contains($0.id) }
             for tab in uncolumnedTabs {
                 cols.append(Column(id: UUID().uuidString, tabIds: [tab.id]))
             }
@@ -699,19 +1037,41 @@ final class AppStore {
         }
     }
 
-    var lastSelectedProject: Project? {
-        guard let id = lastSelectedProjectId else { return nil }
-        return projects.first { $0.id == id }
+    var lastSelectedWorkspace: Workspace? {
+        guard let id = lastSelectedWorkspaceId else { return nil }
+        return workspaces.first { $0.id == id }
     }
 
-    func openProjectSession(_ id: String, restoringSavedSetup: Bool = true) {
-        setActiveProject(id)
-        if activeTabId == nil {
-            if restoringSavedSetup, hasProjectSetup(for: id) {
-                restoreProjectSetup(for: id)
-            } else {
-                _ = openTab(projectId: id)
-            }
+    func isWorkspacePathMissing(_ workspaceId: String) -> Bool {
+        guard let workspace = workspaces.first(where: { $0.id == workspaceId }) else { return false }
+        guard !workspace.isScratchSpace else { return false }
+        return !Self.directoryExists(at: workspace.path)
+    }
+
+    @discardableResult
+    func ensureScratchSpace() -> Workspace {
+        if let scratch = workspaces.first(where: \.isScratchSpace) {
+            return scratch
+        }
+
+        let scratch = Workspace.scratchSpace()
+        workspaces.insert(scratch, at: 0)
+        expandedWorkspaceIds.insert(scratch.id)
+        return scratch
+    }
+
+    func openScratchSpace() {
+        let scratch = ensureScratchSpace()
+        openWorkspaceSession(scratch.id)
+    }
+
+    func openWorkspaceSession(_ id: String, restoringSavedSetup: Bool = true) {
+        setActiveWorkspace(id)
+        if activeTabId == nil,
+           restoringSavedSetup,
+           !isWorkspacePathMissing(id),
+           hasWorkspaceSetup(for: id) {
+            restoreWorkspaceSetup(for: id)
         }
         sidebarFocused = false
         DispatchQueue.main.async { [weak self] in
@@ -719,27 +1079,27 @@ final class AppStore {
         }
     }
 
-    func resumeLastProjectSession() {
-        guard let project = lastSelectedProject else { return }
-        openProjectSession(project.id)
+    func resumeLastWorkspaceSession() {
+        guard let workspace = lastSelectedWorkspace else { return }
+        openWorkspaceSession(workspace.id)
     }
 
     func setActiveTab(_ id: String) {
         guard let tab = tabsById[id] else { return }
-        if activeProjectId != tab.projectId {
-            setActiveProject(tab.projectId)
+        if activeWorkspaceId != tab.workspaceId {
+            setActiveWorkspace(tab.workspaceId)
         }
 
-        expandProject(tab.projectId)
-        let resolvedTabId = resolvedSelectableTabId(for: tab.projectId, preferred: [id]) ?? id
+        expandWorkspace(tab.workspaceId)
+        let resolvedTabId = resolvedSelectableTabId(for: tab.workspaceId, preferred: [id]) ?? id
         activeTabId = resolvedTabId
-        lastActiveTab[tab.projectId] = resolvedTabId
+        lastActiveTab[tab.workspaceId] = resolvedTabId
         clearUnread(resolvedTabId)
     }
 
     func selectNextTab() {
-        guard let projectId = activeProjectId else { return }
-        let ordered = orderedTabs(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let ordered = orderedTabs(for: workspaceId)
         guard !ordered.isEmpty else { return }
 
         guard let activeTabId,
@@ -757,8 +1117,8 @@ final class AppStore {
     }
 
     func selectPreviousTab() {
-        guard let projectId = activeProjectId else { return }
-        let ordered = orderedTabs(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let ordered = orderedTabs(for: workspaceId)
         guard !ordered.isEmpty else { return }
 
         guard let activeTabId,
@@ -775,8 +1135,8 @@ final class AppStore {
     }
 
     func focusLeft() {
-        guard let projectId = activeProjectId else { return }
-        let cols = projectColumns(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let cols = workspaceColumns(for: workspaceId)
 
         if sidebarFocused { return }
 
@@ -798,8 +1158,8 @@ final class AppStore {
     }
 
     func focusRight() {
-        guard let projectId = activeProjectId else { return }
-        let cols = projectColumns(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let cols = workspaceColumns(for: workspaceId)
 
         if sidebarFocused {
             sidebarFocused = false
@@ -845,30 +1205,30 @@ final class AppStore {
     }
 
     func moveColumnLeft() {
-        guard let projectId = activeProjectId,
+        guard let workspaceId = activeWorkspaceId,
               let currentCol = activeColumn else { return }
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let idx = cols.firstIndex(where: { $0.id == currentCol.id }),
               idx > cols.startIndex else { return }
         cols.swapAt(idx, cols.index(before: idx))
-        columns[projectId] = cols
+        columns[workspaceId] = cols
     }
 
     func moveColumnRight() {
-        guard let projectId = activeProjectId,
+        guard let workspaceId = activeWorkspaceId,
               let currentCol = activeColumn else { return }
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let idx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
         let nextIdx = cols.index(after: idx)
         guard nextIdx < cols.endIndex else { return }
         cols.swapAt(idx, nextIdx)
-        columns[projectId] = cols
+        columns[workspaceId] = cols
     }
 
     func absorbFromLeft() {
-        guard let projectId = activeProjectId,
+        guard let workspaceId = activeWorkspaceId,
               let currentCol = activeColumn else { return }
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }),
               colIdx > cols.startIndex else { return }
 
@@ -890,13 +1250,13 @@ final class AppStore {
             cols.remove(at: sourceIdx)
         }
 
-        columns[projectId] = cols
+        columns[workspaceId] = cols
     }
 
     func absorbFromRight() {
-        guard let projectId = activeProjectId,
+        guard let workspaceId = activeWorkspaceId,
               let currentCol = activeColumn else { return }
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
 
         let sourceIdx = cols.index(after: colIdx)
@@ -918,16 +1278,16 @@ final class AppStore {
             cols.remove(at: sourceIdx)
         }
 
-        columns[projectId] = cols
+        columns[workspaceId] = cols
     }
 
     func expelActiveTab() {
-        guard let projectId = activeProjectId,
+        guard let workspaceId = activeWorkspaceId,
               let activeTabId,
               let currentCol = activeColumn else { return }
         guard currentCol.tabIds.count > 1 else { return }
 
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else { return }
 
         // Remove tab from current column
@@ -940,15 +1300,15 @@ final class AppStore {
         let newCol = Column(id: UUID().uuidString, tabIds: [activeTabId])
         cols.insert(newCol, at: cols.index(after: colIdx))
 
-        columns[projectId] = cols
+        columns[workspaceId] = cols
         // Focus follows expelled tab (activeTabId unchanged)
     }
 
     // MARK: - Overview Actions
 
     func toggleOverview() {
-        guard let projectId = activeProjectId else { return }
-        let cols = projectColumns(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let cols = workspaceColumns(for: workspaceId)
         guard !cols.isEmpty else { return }
 
         if isOverviewMode {
@@ -964,8 +1324,8 @@ final class AppStore {
         if let tabId {
             if tabsById[tabId] != nil {
                 setActiveTab(tabId)
-            } else if let projectId = activeProjectId,
-                      let column = projectColumns(for: projectId).first(where: { $0.id == tabId }),
+            } else if let workspaceId = activeWorkspaceId,
+                      let column = workspaceColumns(for: workspaceId).first(where: { $0.id == tabId }),
                       let fallback = column.tabIds.first {
                 setActiveTab(fallback)
             }
@@ -976,8 +1336,8 @@ final class AppStore {
     }
 
     func overviewHighlightLeft() {
-        guard let projectId = activeProjectId else { return }
-        let cols = projectColumns(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let cols = workspaceColumns(for: workspaceId)
         guard let highlightId = overviewHighlightedColumnId,
               let idx = cols.firstIndex(where: { $0.id == highlightId }),
               idx > cols.startIndex else { return }
@@ -987,8 +1347,8 @@ final class AppStore {
     }
 
     func overviewHighlightRight() {
-        guard let projectId = activeProjectId else { return }
-        let cols = projectColumns(for: projectId)
+        guard let workspaceId = activeWorkspaceId else { return }
+        let cols = workspaceColumns(for: workspaceId)
         guard let highlightId = overviewHighlightedColumnId,
               let idx = cols.firstIndex(where: { $0.id == highlightId }) else { return }
         let next = cols.index(after: idx)
@@ -1000,8 +1360,8 @@ final class AppStore {
 
     func overviewHighlightUp() {
         guard let highlightedColId = overviewHighlightedColumnId,
-              let projectId = activeProjectId,
-              let col = projectColumns(for: projectId).first(where: { $0.id == highlightedColId }),
+              let workspaceId = activeWorkspaceId,
+              let col = workspaceColumns(for: workspaceId).first(where: { $0.id == highlightedColId }),
               let currentTab = overviewHighlightedTabId,
               let idx = col.tabIds.firstIndex(of: currentTab),
               idx > col.tabIds.startIndex else { return }
@@ -1010,8 +1370,8 @@ final class AppStore {
 
     func overviewHighlightDown() {
         guard let highlightedColId = overviewHighlightedColumnId,
-              let projectId = activeProjectId,
-              let col = projectColumns(for: projectId).first(where: { $0.id == highlightedColId }),
+              let workspaceId = activeWorkspaceId,
+              let col = workspaceColumns(for: workspaceId).first(where: { $0.id == highlightedColId }),
               let currentTab = overviewHighlightedTabId,
               let idx = col.tabIds.firstIndex(of: currentTab) else { return }
         let next = col.tabIds.index(after: idx)
@@ -1021,34 +1381,34 @@ final class AppStore {
 
     // MARK: - Tab Actions
 
-    /// Create a new shell tab for a project.
+    /// Create a new shell tab for a workspace.
     @discardableResult
     func openTab(
-        projectId: String,
+        workspaceId: String,
         command: String? = nil,
         label: String? = nil,
         workingDirectory: String? = nil,
         role: String? = nil,
-        projectSetupPaneId: String? = nil
+        workspaceSetupPaneId: String? = nil
     ) -> AppTab {
         let tab = makeShellTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: command,
             label: label,
             workingDirectory: workingDirectory,
             role: role,
-            projectSetupPaneId: projectSetupPaneId
+            workspaceSetupPaneId: workspaceSetupPaneId
         )
         registerManagedCommandStateIfNeeded(for: tab)
-        insertTab(tab, for: projectId, after: nil)
+        insertTab(tab, for: workspaceId, after: nil)
 
         // Create a new single-tab column
         let column = Column(id: UUID().uuidString, tabIds: [tab.id])
-        var projectCols = columns[projectId] ?? []
-        projectCols.append(column)
-        columns[projectId] = projectCols
+        var workspaceCols = columns[workspaceId] ?? []
+        workspaceCols.append(column)
+        columns[workspaceId] = workspaceCols
 
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
         setActiveTab(tab.id)
         activateTerminalFocusSoon()
         return tab
@@ -1056,28 +1416,28 @@ final class AppStore {
 
     @discardableResult
     func openBrowserTab(
-        projectId: String,
+        workspaceId: String,
         url: String? = nil,
         maximizeColumn: Bool = true,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         browserState: BrowserPaneState? = nil,
         preferredFocus: BrowserFocusTarget? = nil
     ) -> AppTab {
         let tab = makeBrowserTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             url: url,
-            projectSetupPaneId: projectSetupPaneId,
+            workspaceSetupPaneId: workspaceSetupPaneId,
             browserState: browserState,
             preferredFocus: preferredFocus
         )
-        insertTab(tab, for: projectId, after: nil)
+        insertTab(tab, for: workspaceId, after: nil)
 
         let column = Column(id: UUID().uuidString, tabIds: [tab.id])
-        var projectCols = columns[projectId] ?? []
-        projectCols.append(column)
-        columns[projectId] = projectCols
+        var workspaceCols = columns[workspaceId] ?? []
+        workspaceCols.append(column)
+        columns[workspaceId] = workspaceCols
 
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
         setActiveTab(tab.id)
         if maximizeColumn {
             requestColumnMaximize(tab.id)
@@ -1087,14 +1447,15 @@ final class AppStore {
     }
 
     @discardableResult
-    func openBrowserTabForActiveProject(
+    func openBrowserTabForActiveWorkspace(
         url: String? = nil,
         maximizeColumn: Bool = true
     ) -> AppTab? {
-        guard let projectId = activeProjectId else { return nil }
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return nil }
         let resolvedURL = url ?? BrowserDefaults.homePageURLString
         return openBrowserTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             url: resolvedURL,
             maximizeColumn: maximizeColumn,
             preferredFocus: .addressBar
@@ -1102,12 +1463,13 @@ final class AppStore {
     }
 
     func openNewTabForActiveSurface() {
-        guard let projectId = activeProjectId else { return }
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return }
 
         if !sidebarFocused,
            let activeTabId,
            let activeTab = tabsById[activeTabId],
-           activeTab.projectId == projectId,
+           activeTab.workspaceId == workspaceId,
            activeTab.isBrowser {
             _ = openBrowserTabInPane(
                 activeTabId,
@@ -1117,78 +1479,80 @@ final class AppStore {
             return
         }
 
-        _ = openTab(projectId: projectId)
+        _ = openTab(workspaceId: workspaceId)
     }
 
     func splitActivePaneWithNewTab() {
-        guard let projectId = activeProjectId else { return }
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return }
 
         guard let currentCol = activeColumn,
               let activeTabId else {
-            _ = openTab(projectId: projectId)
+            _ = openTab(workspaceId: workspaceId)
             return
         }
 
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }),
               let tabIdx = cols[colIdx].tabIds.firstIndex(of: activeTabId) else {
-            _ = openTab(projectId: projectId)
+            _ = openTab(workspaceId: workspaceId)
             return
         }
 
-        let tab = makeShellTab(projectId: projectId, command: nil, label: nil)
-        insertTab(tab, for: projectId, after: activeTabId)
+        let tab = makeShellTab(workspaceId: workspaceId, command: nil, label: nil)
+        insertTab(tab, for: workspaceId, after: activeTabId)
         cols[colIdx].tabIds.insert(tab.id, at: cols[colIdx].tabIds.index(after: tabIdx))
-        columns[projectId] = cols
+        columns[workspaceId] = cols
 
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
         setActiveTab(tab.id)
         activateTerminalFocusSoon()
     }
 
     func splitActiveColumnWithNewTab() {
-        guard let projectId = activeProjectId else { return }
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return }
 
         guard let currentCol = activeColumn,
               let anchorTabId = currentCol.tabIds.last else {
-            _ = openTab(projectId: projectId)
+            _ = openTab(workspaceId: workspaceId)
             return
         }
 
-        var cols = projectColumns(for: projectId)
+        var cols = workspaceColumns(for: workspaceId)
         guard let colIdx = cols.firstIndex(where: { $0.id == currentCol.id }) else {
-            _ = openTab(projectId: projectId)
+            _ = openTab(workspaceId: workspaceId)
             return
         }
 
-        let tab = makeShellTab(projectId: projectId, command: nil, label: nil)
-        insertTab(tab, for: projectId, after: anchorTabId)
+        let tab = makeShellTab(workspaceId: workspaceId, command: nil, label: nil)
+        insertTab(tab, for: workspaceId, after: anchorTabId)
         cols.insert(
             Column(id: UUID().uuidString, tabIds: [tab.id]),
             at: cols.index(after: colIdx)
         )
-        columns[projectId] = cols
+        columns[workspaceId] = cols
 
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
         setActiveTab(tab.id)
         activateTerminalFocusSoon()
     }
 
     @discardableResult
     func openOrFocusCommandTab(
-        projectId: String,
+        workspaceId: String,
         command: String,
         label: String,
         workingDirectory: String? = nil,
         role: String? = nil,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         fullWidth: Bool = false,
         maximizeColumn: Bool = false
     ) -> AppTab {
-        if let existing = projectTabs(for: projectId).first(where: {
+        if let existing = workspaceTabs(for: workspaceId).first(where: {
             $0.command == command
-                && effectiveWorkingDirectory($0.workingDirectory, projectId: projectId)
-                    == effectiveWorkingDirectory(workingDirectory, projectId: projectId)
+                && effectiveWorkingDirectory($0.workingDirectory, workspaceId: workspaceId)
+                    == effectiveWorkingDirectory(workingDirectory, workspaceId: workspaceId)
         }) {
             if existing.isManagedCommand && isManagedCommandStopped(existing.id) {
                 restartManagedCommandTab(existing.id)
@@ -1197,9 +1561,9 @@ final class AppStore {
             }
             if fullWidth, !fullWidthTabIds.contains(existing.id) {
                 // Existing tab found but not in full-width mode — make it full-width
-                savedColumns[projectId] = columns[projectId] ?? []
+                savedColumns[workspaceId] = columns[workspaceId] ?? []
                 let column = Column(id: UUID().uuidString, tabIds: [existing.id])
-                columns[projectId] = [column]
+                columns[workspaceId] = [column]
                 fullWidthTabIds.insert(existing.id)
             }
             setActiveTab(existing.id)
@@ -1210,21 +1574,21 @@ final class AppStore {
             return tabsById[existing.id] ?? existing
         } else if fullWidth {
             return openFullWidthTab(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 command: command,
                 label: label,
                 workingDirectory: workingDirectory,
                 role: role,
-                projectSetupPaneId: projectSetupPaneId
+                workspaceSetupPaneId: workspaceSetupPaneId
             )
         } else {
             let tab = openTab(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 command: command,
                 label: label,
                 workingDirectory: workingDirectory,
                 role: role,
-                projectSetupPaneId: projectSetupPaneId
+                workspaceSetupPaneId: workspaceSetupPaneId
             )
             if maximizeColumn {
                 requestColumnMaximize(tab.id)
@@ -1234,10 +1598,10 @@ final class AppStore {
     }
 
     @discardableResult
-    func openOrFocusBrowserTab(projectId: String, url: String) -> AppTab {
+    func openOrFocusBrowserTab(workspaceId: String, url: String) -> AppTab {
         let resolvedURLString = BrowserURLResolver.resolve(url)?.absoluteString ?? url
 
-        if let existing = projectTabs(for: projectId).first(where: { tab in
+        if let existing = workspaceTabs(for: workspaceId).first(where: { tab in
             tab.isBrowser && (tab.browserState?.tabs.contains { $0.state.urlString == resolvedURLString } ?? false)
         }), let browserTabId = existing.browserState?.tabs.first(where: { $0.state.urlString == resolvedURLString })?.id {
             setActiveTab(existing.id)
@@ -1246,59 +1610,60 @@ final class AppStore {
         }
 
         if let activeBrowserTab = tabsById[activeTabId ?? ""],
-           activeBrowserTab.projectId == projectId,
+           activeBrowserTab.workspaceId == workspaceId,
            activeBrowserTab.isBrowser {
             _ = openBrowserTabInPane(activeBrowserTab.id, url: resolvedURLString)
             return tabsById[activeBrowserTab.id] ?? activeBrowserTab
         }
 
-        if let existingBrowserPane = projectTabs(for: projectId).first(where: \.isBrowser) {
+        if let existingBrowserPane = workspaceTabs(for: workspaceId).first(where: \.isBrowser) {
             _ = openBrowserTabInPane(existingBrowserPane.id, url: resolvedURLString)
             return tabsById[existingBrowserPane.id] ?? existingBrowserPane
         }
 
-        return openBrowserTab(projectId: projectId, url: resolvedURLString)
+        return openBrowserTab(workspaceId: workspaceId, url: resolvedURLString)
     }
 
     @discardableResult
-    func openOrFocusBrowserTabForActiveProject(url: String) -> AppTab? {
-        guard let projectId = activeProjectId else { return nil }
-        return openOrFocusBrowserTab(projectId: projectId, url: url)
+    func openOrFocusBrowserTabForActiveWorkspace(url: String) -> AppTab? {
+        guard let workspaceId = activeWorkspaceId else { return nil }
+        return openOrFocusBrowserTab(workspaceId: workspaceId, url: url)
     }
 
     @discardableResult
-    func openOrFocusCommandTabForActiveProject(
+    func openOrFocusCommandTabForActiveWorkspace(
         command: String,
         label: String,
         workingDirectory: String? = nil,
         role: String? = nil,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         fullWidth: Bool = false,
         maximizeColumn: Bool = false
     ) -> AppTab? {
-        guard let projectId = activeProjectId else { return nil }
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return nil }
         return openOrFocusCommandTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: command,
             label: label,
             workingDirectory: workingDirectory,
             role: role,
-            projectSetupPaneId: projectSetupPaneId,
+            workspaceSetupPaneId: workspaceSetupPaneId,
             fullWidth: fullWidth,
             maximizeColumn: maximizeColumn
         )
     }
 
     func openFileInEditor(
-        projectId: String,
+        workspaceId: String,
         path: String,
         line: Int? = nil,
         column: Int? = nil
     ) {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-        let resolvedPath = resolveExistingProjectFilePath(
+        let resolvedPath = resolveExistingWorkspaceFilePath(
             normalizedPath,
-            projectId: projectId
+            workspaceId: workspaceId
         ) ?? normalizedPath
 
         guard fileEditorLauncher.opensInsideBlink else {
@@ -1314,7 +1679,7 @@ final class AppStore {
         }
 
         if focusExistingTmuxEditorTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             path: resolvedPath,
             line: line,
             column: column
@@ -1324,7 +1689,7 @@ final class AppStore {
 
         if tmuxIntegrationEnabled {
             openFileInNewTmuxEditorTab(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 path: resolvedPath,
                 line: line,
                 column: column
@@ -1339,16 +1704,17 @@ final class AppStore {
             column: column,
             customTemplate: fileEditorCustomCommand
         )
-        _ = openTab(projectId: projectId, command: command, label: label)
+        _ = openTab(workspaceId: workspaceId, command: command, label: label)
     }
 
-    func openFileInEditorForActiveProject(
+    func openFileInEditorForActiveWorkspace(
         path: String,
         line: Int? = nil,
         column: Int? = nil
     ) {
-        guard let projectId = activeProjectId else { return }
-        openFileInEditor(projectId: projectId, path: path, line: line, column: column)
+        guard let workspaceId = activeWorkspaceId,
+              !isWorkspacePathMissing(workspaceId) else { return }
+        openFileInEditor(workspaceId: workspaceId, path: path, line: line, column: column)
     }
 
     func requestColumnMaximize(_ tabId: String) {
@@ -1367,40 +1733,40 @@ final class AppStore {
 
     // MARK: - Full Width Tabs
 
-    /// Columns saved before a full-width tab replaced them, keyed by project ID.
+    /// Columns saved before a full-width tab replaced them, keyed by workspace ID.
     private var savedColumns: [String: [Column]] = [:]
-    /// Tracks which tab triggered full-width mode per project, so we can restore on close.
+    /// Tracks which tab triggered full-width mode per workspace, so we can restore on close.
     private var fullWidthTabIds: Set<String> = []
 
     /// Open a tab that replaces all columns, taking the full workspace width.
     /// The previous layout is saved and restored when the tab closes.
     @discardableResult
     private func openFullWidthTab(
-        projectId: String,
+        workspaceId: String,
         command: String,
         label: String,
         workingDirectory: String? = nil,
         role: String? = nil,
-        projectSetupPaneId: String? = nil
+        workspaceSetupPaneId: String? = nil
     ) -> AppTab {
         let tab = AppTab(
             id: UUID().uuidString,
             kind: .terminal,
             label: label,
             defaultLabel: label,
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: command,
             role: role,
             workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId
+            workspaceSetupPaneId: workspaceSetupPaneId
         )
         tabs.append(tab)
         registerManagedCommandStateIfNeeded(for: tab)
 
         // Save current columns and replace with just this tab
-        savedColumns[projectId] = columns[projectId] ?? []
+        savedColumns[workspaceId] = columns[workspaceId] ?? []
         let column = Column(id: UUID().uuidString, tabIds: [tab.id])
-        columns[projectId] = [column]
+        columns[workspaceId] = [column]
         fullWidthTabIds.insert(tab.id)
 
         setActiveTab(tab.id)
@@ -1408,10 +1774,10 @@ final class AppStore {
     }
 
     /// Restore columns after a full-width tab closes. Called from closeTab.
-    private func restoreColumnsIfNeeded(tabId: String, projectId: String) {
+    private func restoreColumnsIfNeeded(tabId: String, workspaceId: String) {
         guard fullWidthTabIds.remove(tabId) != nil,
-              let saved = savedColumns.removeValue(forKey: projectId) else { return }
-        columns[projectId] = saved
+              let saved = savedColumns.removeValue(forKey: workspaceId) else { return }
+        columns[workspaceId] = saved
     }
 
     /// Update a tab's title.
@@ -1602,18 +1968,18 @@ final class AppStore {
         unreadTabs.remove(tabId)
     }
 
-    /// Check if a project has any unread tabs.
-    func hasUnread(projectId: String) -> Bool {
-        let projectTabIds = Set(projectTabs(for: projectId).map(\.id))
-        return !unreadTabs.isDisjoint(with: projectTabIds)
+    /// Check if a workspace has any unread tabs.
+    func hasUnread(workspaceId: String) -> Bool {
+        let workspaceTabIds = Set(workspaceTabs(for: workspaceId).map(\.id))
+        return !unreadTabs.isDisjoint(with: workspaceTabIds)
     }
 
     func claudeActivity(for tabId: String) -> ClaudeTabActivity? {
         claudeTabActivities[tabId]
     }
 
-    func claudeProjectActivity(for projectId: String) -> ClaudeTabActivity? {
-        let activities = projectTabs(for: projectId)
+    func claudeWorkspaceActivity(for workspaceId: String) -> ClaudeTabActivity? {
+        let activities = workspaceTabs(for: workspaceId)
             .compactMap { claudeTabActivities[$0.id] }
 
         if let needsInput = activities
@@ -1633,22 +1999,22 @@ final class AppStore {
             .max(by: { $0.updatedAt < $1.updatedAt })
     }
 
-    func projectTabs(for projectId: String) -> [AppTab] {
-        tabs.filter { $0.projectId == projectId }
+    func workspaceTabs(for workspaceId: String) -> [AppTab] {
+        tabs.filter { $0.workspaceId == workspaceId }
     }
 
-    func terminalCount(for projectId: String) -> Int {
-        tabs.filter { $0.projectId == projectId && $0.isShell }.count
+    func terminalCount(for workspaceId: String) -> Int {
+        tabs.filter { $0.workspaceId == workspaceId && $0.isShell }.count
     }
 
     private func handleClaudeHookEvent(_ event: ClaudeHookEvent) {
         let resolvedTabId: String? = {
-            if let tab = tabsById[event.tabId], tab.projectId == event.projectId {
+            if let tab = tabsById[event.tabId], tab.workspaceId == event.workspaceId {
                 return tab.id
             }
             if let paneId = event.paneId {
                 return tabs.first {
-                    $0.projectId == event.projectId && $0.projectSetupPaneId == paneId
+                    $0.workspaceId == event.workspaceId && $0.workspaceSetupPaneId == paneId
                 }?.id
             }
             return nil
@@ -1726,17 +2092,17 @@ final class AppStore {
 #if DEBUG
     func handleClaudeHookEventForTesting(
         event: String,
-        projectId: String,
+        workspaceId: String,
         tabId: String,
         rawInput: String,
         paneId: String? = nil
     ) {
         handleClaudeHookEvent(ClaudeHookEvent(
             event: event,
-            projectId: projectId,
+            workspaceId: workspaceId,
             tabId: tabId,
             paneId: paneId,
-            projectPath: nil,
+            workspacePath: nil,
             cwd: nil,
             pid: nil,
             rawInput: rawInput
@@ -1744,32 +2110,34 @@ final class AppStore {
     }
 #endif
 
-    func removeProject(_ id: String) {
-        let projectTabs = tabs.filter { $0.projectId == id }
-        let tabIds = projectTabs.map(\.id)
-        let browserControllerIds = projectTabs.flatMap(browserControllerIds(for:))
-        let paneIds = projectTabs.compactMap(\.projectSetupPaneId)
-        projects.removeAll { $0.id == id }
-        projectSetups[id] = nil
-        tabs.removeAll { $0.projectId == id }
+    func removeWorkspace(_ id: String) {
+        guard !workspaces.contains(where: { $0.id == id && $0.isScratchSpace }) else { return }
+
+        let workspaceTabs = tabs.filter { $0.workspaceId == id }
+        let tabIds = workspaceTabs.map(\.id)
+        let browserControllerIds = workspaceTabs.flatMap(browserControllerIds(for:))
+        let paneIds = workspaceTabs.compactMap(\.workspaceSetupPaneId)
+        workspaces.removeAll { $0.id == id }
+        workspaceSetups[id] = nil
+        tabs.removeAll { $0.workspaceId == id }
         clearManagedCommandStates(for: tabIds)
         clearClaudeTabActivities(for: tabIds)
         clearPendingTmuxShellCommands(for: tabIds)
         unreadTabs.subtract(tabIds)
         lastActiveTab[id] = nil
-        if activeProjectId == id {
-            activeProjectId = nil
+        if activeWorkspaceId == id {
+            activeWorkspaceId = nil
             activeTabId = nil
         }
-        if lastSelectedProjectId == id {
-            lastSelectedProjectId = nil
+        if lastSelectedWorkspaceId == id {
+            lastSelectedWorkspaceId = nil
         }
-        expandedProjectIds.remove(id)
+        expandedWorkspaceIds.remove(id)
         workspaceViewportOffsets[id] = nil
 
         // Clean up column state
-        if let projectCols = columns[id] {
-            for col in projectCols {
+        if let workspaceCols = columns[id] {
+            for col in workspaceCols {
                 columnFocusedTab[col.id] = nil
             }
         }
@@ -1780,26 +2148,105 @@ final class AppStore {
         DispatchQueue.main.async {
             surfaceManager?.destroySurfaces(tabIds: tabIds)
         }
-        destroyTmuxProjectSession(projectId: id, paneIds: paneIds)
+        destroyTmuxWorkspaceSession(workspaceId: id, paneIds: paneIds)
+    }
+
+    @discardableResult
+    func renameWorkspace(_ id: String, to name: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              let workspaceIndex = workspaces.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+
+        let workspace = workspaces[workspaceIndex]
+        guard !workspace.isScratchSpace else { return false }
+
+        workspaces[workspaceIndex] = Workspace(
+            id: workspace.id,
+            name: trimmedName,
+            path: workspace.path,
+            color: workspace.color,
+            createdAt: workspace.createdAt
+        )
+        return true
+    }
+
+    func promptRenameWorkspace(_ id: String) {
+        guard let workspace = workspaces.first(where: { $0.id == id }),
+              !workspace.isScratchSpace else { return }
+        workspacePrompt = WorkspacePromptState(
+            workspaceId: id,
+            kind: .rename,
+            initialValue: workspace.name
+        )
+    }
+
+    @discardableResult
+    func relinkWorkspace(_ id: String, toPath path: String) -> Bool {
+        let normalizedPath = normalizedWorkspacePath(path)
+        guard Self.directoryExists(at: normalizedPath),
+              let workspaceIndex = workspaces.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+
+        let workspace = workspaces[workspaceIndex]
+        guard !workspace.isScratchSpace else { return false }
+
+        workspaces[workspaceIndex] = Workspace(
+            id: workspace.id,
+            name: workspace.name,
+            path: normalizedPath,
+            color: workspace.color,
+            createdAt: workspace.createdAt
+        )
+
+        if activeWorkspaceId == id,
+           workspaceTabs(for: id).isEmpty,
+           hasWorkspaceSetup(for: id) {
+            restoreWorkspaceSetup(for: id)
+        }
+
+        return true
+    }
+
+    func promptRelinkWorkspace(_ id: String) {
+        guard let workspace = workspaces.first(where: { $0.id == id }),
+              !workspace.isScratchSpace else { return }
+        workspacePrompt = WorkspacePromptState(
+            workspaceId: id,
+            kind: .relink,
+            initialValue: workspace.path
+        )
+    }
+
+    func revealWorkspaceInFinder(_ id: String) {
+        guard let workspace = workspaces.first(where: { $0.id == id }),
+              !workspace.isScratchSpace,
+              Self.directoryExists(at: workspace.path) else {
+            return
+        }
+
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: workspace.path)])
     }
 
     func closeTab(_ id: String) {
         guard let tab = tabsById[id] else { return }
-        let projectId = tab.projectId
-        let paneId = tab.projectSetupPaneId
+        let workspaceId = tab.workspaceId
+        let paneId = tab.workspaceSetupPaneId
 
         // If this was a full-width tab, restore the saved layout and clean up
         if fullWidthTabIds.contains(id) {
-            restoreColumnsIfNeeded(tabId: id, projectId: projectId)
+            restoreColumnsIfNeeded(tabId: id, workspaceId: workspaceId)
             tabs.removeAll { $0.id == id }
             managedCommandStates[id] = nil
             claudeTabActivities[id] = nil
             clearPendingTmuxShellCommands(for: [id])
             unreadTabs.remove(id)
-            if lastActiveTab[projectId] == id { lastActiveTab[projectId] = nil }
+            if lastActiveTab[workspaceId] == id { lastActiveTab[workspaceId] = nil }
             // Focus the previously active tab in the restored layout
             if activeTabId == id {
-                let restoredCols = projectColumns(for: projectId)
+                let restoredCols = workspaceColumns(for: workspaceId)
                 if let firstCol = restoredCols.first,
                    let fallback = columnFocusedTab[firstCol.id] ?? firstCol.tabIds.first {
                     setActiveTab(fallback)
@@ -1808,7 +2255,7 @@ final class AppStore {
                 }
             }
             if let paneId, shouldUseTmux(for: tab) {
-                destroyTmuxPane(projectId: projectId, paneId: paneId)
+                destroyTmuxPane(workspaceId: workspaceId, paneId: paneId)
             }
             switch tab.kind {
             case .terminal:
@@ -1822,31 +2269,31 @@ final class AppStore {
         }
 
         // Find the column and position of this tab
-        var projectCols = columns[projectId] ?? []
-        guard let colIdx = projectCols.firstIndex(where: { $0.tabIds.contains(id) }) else { return }
-        let paneIdx = projectCols[colIdx].tabIds.firstIndex(of: id)!
+        var workspaceCols = columns[workspaceId] ?? []
+        guard let colIdx = workspaceCols.firstIndex(where: { $0.tabIds.contains(id) }) else { return }
+        let paneIdx = workspaceCols[colIdx].tabIds.firstIndex(of: id)!
 
         // Remove tab from column
-        projectCols[colIdx].tabIds.removeAll { $0 == id }
+        workspaceCols[colIdx].tabIds.removeAll { $0 == id }
 
         // Determine next focus before removing empty column
         var nextFocusTabId: String? = nil
         if activeTabId == id {
-            if !projectCols[colIdx].tabIds.isEmpty {
+            if !workspaceCols[colIdx].tabIds.isEmpty {
                 // Prefer next pane down, then previous pane up
-                let newPaneIdx = min(paneIdx, projectCols[colIdx].tabIds.count - 1)
-                nextFocusTabId = projectCols[colIdx].tabIds[newPaneIdx]
+                let newPaneIdx = min(paneIdx, workspaceCols[colIdx].tabIds.count - 1)
+                nextFocusTabId = workspaceCols[colIdx].tabIds[newPaneIdx]
             }
         }
 
         // Remove column if empty
-        if projectCols[colIdx].tabIds.isEmpty {
-            let removedColId = projectCols[colIdx].id
+        if workspaceCols[colIdx].tabIds.isEmpty {
+            let removedColId = workspaceCols[colIdx].id
             columnFocusedTab[removedColId] = nil
-            projectCols.remove(at: colIdx)
+            workspaceCols.remove(at: colIdx)
         }
 
-        columns[projectId] = projectCols
+        columns[workspaceId] = workspaceCols
 
         // Remove tab data
         tabs.removeAll { $0.id == id }
@@ -1854,8 +2301,8 @@ final class AppStore {
         claudeTabActivities[id] = nil
         clearPendingTmuxShellCommands(for: [id])
         unreadTabs.remove(id)
-        if lastActiveTab[projectId] == id {
-            lastActiveTab[projectId] = nil
+        if lastActiveTab[workspaceId] == id {
+            lastActiveTab[workspaceId] = nil
         }
 
         // Set next focus
@@ -1864,7 +2311,7 @@ final class AppStore {
                 setActiveTab(next)
             } else {
                 // Fall back to adjacent column (prefer right, then left)
-                let updatedCols = projectColumns(for: projectId)
+                let updatedCols = workspaceColumns(for: workspaceId)
                 let adjacentCol: Column? = {
                     // colIdx now points to what was the right neighbor (since we removed the empty column)
                     if colIdx < updatedCols.count {
@@ -1879,13 +2326,13 @@ final class AppStore {
                     setActiveTab(fallback)
                 } else {
                     activeTabId = nil
-                    workspaceViewportOffsets[projectId] = nil
+                    workspaceViewportOffsets[workspaceId] = nil
                     if sidebarVisible { sidebarFocused = true }
                 }
             }
         }
 
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
 
         let surfaceManager = surfaceManager
         if tab.isBrowser {
@@ -1902,7 +2349,7 @@ final class AppStore {
             }
         }
         if let paneId, shouldUseTmux(for: tab) {
-            destroyTmuxPane(projectId: projectId, paneId: paneId)
+            destroyTmuxPane(workspaceId: workspaceId, paneId: paneId)
         }
     }
 
@@ -1922,35 +2369,35 @@ final class AppStore {
         closeTab(activeTabId)
     }
 
-    func restoreProjectSetup(for projectId: String? = nil) {
-        let targetProjectId = projectId ?? activeProjectId
-        guard let targetProjectId,
-              let setup = projectSetups[targetProjectId] else { return }
+    func restoreWorkspaceSetup(for workspaceId: String? = nil) {
+        let targetWorkspaceId = workspaceId ?? activeWorkspaceId
+        guard let targetWorkspaceId,
+              let setup = workspaceSetups[targetWorkspaceId] else { return }
 
-        replaceProjectSession(for: targetProjectId, using: setup)
-        if activeProjectId == targetProjectId {
-            setActiveProject(targetProjectId)
+        replaceWorkspaceSession(for: targetWorkspaceId, using: setup)
+        if activeWorkspaceId == targetWorkspaceId {
+            setActiveWorkspace(targetWorkspaceId)
         }
     }
 
-    private func replaceProjectSession(for projectId: String, using setup: ProjectSetup) {
-        suppressProjectSessionAutosave = true
+    private func replaceWorkspaceSession(for workspaceId: String, using setup: WorkspaceSetup) {
+        suppressWorkspaceSessionAutosave = true
         defer {
-            suppressProjectSessionAutosave = false
-            autosaveProjectSessionsIfNeeded()
+            suppressWorkspaceSessionAutosave = false
+            autosaveWorkspaceSessionsIfNeeded()
         }
 
-        let existingProjectTabs = tabs.filter { $0.projectId == projectId }
-        let existingTabIds = existingProjectTabs.map(\.id)
-        let existingBrowserControllerIds = existingProjectTabs.flatMap(browserControllerIds(for:))
-        tabs.removeAll { $0.projectId == projectId }
+        let existingWorkspaceTabs = tabs.filter { $0.workspaceId == workspaceId }
+        let existingTabIds = existingWorkspaceTabs.map(\.id)
+        let existingBrowserControllerIds = existingWorkspaceTabs.flatMap(browserControllerIds(for:))
+        tabs.removeAll { $0.workspaceId == workspaceId }
         clearManagedCommandStates(for: existingTabIds)
         clearClaudeTabActivities(for: existingTabIds)
         unreadTabs.subtract(existingTabIds)
-        lastActiveTab[projectId] = nil
-        workspaceViewportOffsets[projectId] = nil
+        lastActiveTab[workspaceId] = nil
+        workspaceViewportOffsets[workspaceId] = nil
 
-        let resolvedSetup = normalizedProjectSetup(from: setup)
+        let resolvedSetup = normalizedWorkspaceSetup(from: setup)
         let paneLookup = Dictionary(uniqueKeysWithValues: resolvedSetup.panes.map { ($0.id, $0) })
         var paneToTabId: [String: String] = [:]
         var rebuiltTabs: [AppTab] = []
@@ -1958,32 +2405,32 @@ final class AppStore {
         for column in resolvedSetup.columns {
             for paneId in column.paneIds {
                 guard let pane = paneLookup[paneId] else { continue }
-                let workingDirectory = resolvedWorkingDirectory(for: pane, projectId: projectId)
+                let workingDirectory = resolvedWorkingDirectory(for: pane, workspaceId: workspaceId)
                 let tab: AppTab
                 switch pane.kind {
                 case .shell:
                     tab = makeShellTab(
-                        projectId: projectId,
+                        workspaceId: workspaceId,
                         command: nil,
-                        label: pane.label,
+                        label: nil,
                         workingDirectory: workingDirectory,
                         role: pane.role,
-                        projectSetupPaneId: pane.id
+                        workspaceSetupPaneId: pane.id
                     )
                 case .command:
                     tab = makeShellTab(
-                        projectId: projectId,
+                        workspaceId: workspaceId,
                         command: pane.command,
                         label: pane.label,
                         workingDirectory: workingDirectory,
                         role: pane.role,
-                        projectSetupPaneId: pane.id
+                        workspaceSetupPaneId: pane.id
                     )
                 case .browser:
                     tab = makeBrowserTab(
-                        projectId: projectId,
+                        workspaceId: workspaceId,
                         url: pane.browserState?.selectedTab?.state.urlString,
-                        projectSetupPaneId: pane.id,
+                        workspaceSetupPaneId: pane.id,
                         browserState: pane.browserState
                     )
                 case .chat:
@@ -1996,16 +2443,16 @@ final class AppStore {
         }
 
         tabs.append(contentsOf: rebuiltTabs)
-        columns[projectId] = resolvedSetup.columns.compactMap { column in
+        columns[workspaceId] = resolvedSetup.columns.compactMap { column in
             let tabIds = column.paneIds.compactMap { paneToTabId[$0] }
             guard !tabIds.isEmpty else { return nil }
             return Column(id: column.id, tabIds: tabIds)
         }
-        reindexTabs(for: projectId)
+        reindexTabs(for: workspaceId)
 
-        if let firstTabId = columns[projectId]?.first?.tabIds.first ?? rebuiltTabs.first?.id {
-            lastActiveTab[projectId] = firstTabId
-            if activeProjectId == projectId {
+        if let firstTabId = columns[workspaceId]?.first?.tabIds.first ?? rebuiltTabs.first?.id {
+            lastActiveTab[workspaceId] = firstTabId
+            if activeWorkspaceId == workspaceId {
                 activeTabId = firstTabId
             }
         }
@@ -2017,28 +2464,28 @@ final class AppStore {
         }
     }
 
-    private func currentProjectSetupSnapshot(for projectId: String) -> ProjectSetup? {
-        let cols = projectColumns(for: projectId)
+    private func currentWorkspaceSetupSnapshot(for workspaceId: String) -> WorkspaceSetup? {
+        let cols = workspaceColumns(for: workspaceId)
         guard !cols.isEmpty else { return nil }
 
         let lookup = tabsById
-        var panes: [ProjectSetupPane] = []
+        var panes: [WorkspaceSetupPane] = []
         var tabIdToPaneId: [String: String] = [:]
         var nextPaneIndex = 0
 
         for column in cols {
             for tabId in column.tabIds {
                 guard let tab = lookup[tabId] else { continue }
-                let paneId = tab.projectSetupPaneId ?? "pane-\(nextPaneIndex)"
+                let paneId = tab.workspaceSetupPaneId ?? "pane-\(nextPaneIndex)"
                 nextPaneIndex += 1
                 panes.append(
-                    ProjectSetupPane(
+                    WorkspaceSetupPane(
                         id: paneId,
-                        kind: projectSetupPaneKind(for: tab),
-                        label: tab.label,
+                        kind: workspaceSetupPaneKind(for: tab),
+                        label: persistedWorkspaceSetupLabel(for: tab),
                         role: tab.role,
                         command: tab.command,
-                        workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, projectId: projectId),
+                        workingDirectory: normalizedWorkingDirectory(tab.workingDirectory, workspaceId: workspaceId),
                         browserState: tab.browserState
                     )
                 )
@@ -2046,27 +2493,27 @@ final class AppStore {
             }
         }
 
-        let setupColumns: [ProjectSetupColumn] = cols.enumerated().compactMap { entry in
+        let setupColumns: [WorkspaceSetupColumn] = cols.enumerated().compactMap { entry in
             let (index, column) = entry
             let paneIds = column.tabIds.compactMap { tabIdToPaneId[$0] }
             guard !paneIds.isEmpty else { return nil }
-            return ProjectSetupColumn(id: "col-\(index)", paneIds: paneIds)
+            return WorkspaceSetupColumn(id: "col-\(index)", paneIds: paneIds)
         }
 
         guard !setupColumns.isEmpty else { return nil }
-        return ProjectSetup(projectId: projectId, updatedAt: .now, columns: setupColumns, panes: panes)
+        return WorkspaceSetup(workspaceId: workspaceId, updatedAt: .now, columns: setupColumns, panes: panes)
     }
 
-    private func autosaveProjectSessionsIfNeeded() {
-        guard !suppressProjectSessionAutosave else { return }
+    private func autosaveWorkspaceSessionsIfNeeded() {
+        guard !suppressWorkspaceSessionAutosave else { return }
 
-        var nextProjectSetups = projectSetups
+        var nextWorkspaceSetups = workspaceSetups
         var changed = false
 
-        for project in projects {
-            let snapshot = currentProjectSetupSnapshot(for: project.id)
-            let normalizedSnapshot = snapshot.map(normalizedProjectSetup(from:))
-            let normalizedExisting = projectSetups[project.id].map(normalizedProjectSetup(from:))
+        for workspace in workspaces {
+            let snapshot = currentWorkspaceSetupSnapshot(for: workspace.id)
+            let normalizedSnapshot = snapshot.map(normalizedWorkspaceSetup(from:))
+            let normalizedExisting = workspaceSetups[workspace.id].map(normalizedWorkspaceSetup(from:))
 
             // Keep the last known session when runtime state is temporarily empty,
             // such as during launch before panes are restored.
@@ -2080,19 +2527,19 @@ final class AppStore {
 
             changed = true
             if let snapshot {
-                nextProjectSetups[project.id] = snapshot
+                nextWorkspaceSetups[workspace.id] = snapshot
             }
         }
 
         if changed {
-            projectSetups = nextProjectSetups
+            workspaceSetups = nextWorkspaceSetups
         }
     }
 
-    private func normalizedProjectSetup(from setup: ProjectSetup) -> ProjectSetup {
+    private func normalizedWorkspaceSetup(from setup: WorkspaceSetup) -> WorkspaceSetup {
         let setup = Self.sanitizeLegacyChatPanes(in: setup)
         let paneLookup = Dictionary(uniqueKeysWithValues: setup.panes.map { ($0.id, $0) })
-        var normalizedPanes: [ProjectSetupPane] = []
+        var normalizedPanes: [WorkspaceSetupPane] = []
         var oldToNewPaneIds: [String: String] = [:]
         var nextPaneIndex = 0
 
@@ -2103,47 +2550,47 @@ final class AppStore {
                 nextPaneIndex += 1
                 oldToNewPaneIds[paneId] = normalizedId
                 normalizedPanes.append(
-                    ProjectSetupPane(
+                    WorkspaceSetupPane(
                         id: normalizedId,
                         kind: pane.kind,
                         label: pane.label,
                         role: pane.role,
                         command: pane.command,
-                        workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, projectId: setup.projectId),
+                        workingDirectory: normalizedWorkingDirectory(pane.workingDirectory, workspaceId: setup.workspaceId),
                         browserState: pane.browserState
                     )
                 )
             }
         }
 
-        let normalizedColumns: [ProjectSetupColumn] = setup.columns.enumerated().compactMap { entry in
+        let normalizedColumns: [WorkspaceSetupColumn] = setup.columns.enumerated().compactMap { entry in
             let (index, column) = entry
             let paneIds = column.paneIds.compactMap { oldToNewPaneIds[$0] }
             guard !paneIds.isEmpty else { return nil }
-            return ProjectSetupColumn(id: "col-\(index)", paneIds: paneIds)
+            return WorkspaceSetupColumn(id: "col-\(index)", paneIds: paneIds)
         }
 
-        return ProjectSetup(
-            projectId: setup.projectId,
+        return WorkspaceSetup(
+            workspaceId: setup.workspaceId,
             updatedAt: .distantPast,
             columns: normalizedColumns,
             panes: normalizedPanes
         )
     }
 
-    private func normalizedWorkingDirectory(_ path: String?, projectId: String) -> String? {
+    private func normalizedWorkingDirectory(_ path: String?, workspaceId: String) -> String? {
         guard let path else { return nil }
-        if let projectPath = projectPath(for: projectId), path == projectPath {
+        if let workspacePath = workspacePath(for: workspaceId), path == workspacePath {
             return nil
         }
         return path
     }
 
-    private func resolvedWorkingDirectory(for pane: ProjectSetupPane, projectId: String) -> String? {
-        pane.workingDirectory ?? projectPath(for: projectId)
+    private func resolvedWorkingDirectory(for pane: WorkspaceSetupPane, workspaceId: String) -> String {
+        validatedWorkingDirectory(pane.workingDirectory, workspaceId: workspaceId)
     }
 
-    private func projectSetupPaneKind(for tab: AppTab) -> ProjectSetupPaneKind {
+    private func workspaceSetupPaneKind(for tab: AppTab) -> WorkspaceSetupPaneKind {
         switch tab.kind {
         case .terminal:
             return tab.command == nil ? .shell : .command
@@ -2154,23 +2601,82 @@ final class AppStore {
         }
     }
 
-    private func projectPath(for projectId: String) -> String? {
-        projects.first(where: { $0.id == projectId })?.path
+    private func persistedWorkspaceSetupLabel(for tab: AppTab) -> String {
+        if tab.isShell && tab.command == nil {
+            return tab.defaultLabel
+        }
+
+        return tab.label
     }
 
-    private func effectiveWorkingDirectory(_ path: String?, projectId: String) -> String {
-        path ?? projectPath(for: projectId) ?? ""
+    private func workspacePath(for workspaceId: String) -> String? {
+        workspaces.first(where: { $0.id == workspaceId })?.path
+    }
+
+    private func effectiveWorkingDirectory(_ path: String?, workspaceId: String) -> String {
+        validatedWorkingDirectory(path, workspaceId: workspaceId)
+    }
+
+    private func validatedWorkingDirectory(_ path: String?, workspaceId: String) -> String {
+        if let path, Self.directoryExists(at: path) {
+            return path
+        }
+
+        if let workspacePath = workspacePath(for: workspaceId), Self.directoryExists(at: workspacePath) {
+            return workspacePath
+        }
+
+        return NSHomeDirectory()
+    }
+
+    private func sanitizePersistedWorkspaceState() {
+        let validWorkspaceIds = Set(workspaces.map(\.id))
+        Self.saveWorkspaces(workspaces)
+
+        let nextWorkspaceSetups = workspaceSetups.filter { validWorkspaceIds.contains($0.key) }
+        if nextWorkspaceSetups != workspaceSetups {
+            workspaceSetups = nextWorkspaceSetups
+        }
+
+        let nextColumns = columns.filter { validWorkspaceIds.contains($0.key) }
+        if nextColumns != columns {
+            columns = nextColumns
+        }
+
+        let nextLastActiveTab = lastActiveTab.filter { validWorkspaceIds.contains($0.key) }
+        if nextLastActiveTab != lastActiveTab {
+            lastActiveTab = nextLastActiveTab
+        }
+
+        let nextViewportOffsets = workspaceViewportOffsets.filter { validWorkspaceIds.contains($0.key) }
+        if nextViewportOffsets != workspaceViewportOffsets {
+            workspaceViewportOffsets = nextViewportOffsets
+        }
+
+        let nextExpandedWorkspaceIds = expandedWorkspaceIds.intersection(validWorkspaceIds)
+        if nextExpandedWorkspaceIds != expandedWorkspaceIds {
+            expandedWorkspaceIds = nextExpandedWorkspaceIds
+        }
+
+        if let activeWorkspaceId, !validWorkspaceIds.contains(activeWorkspaceId) {
+            self.activeWorkspaceId = nil
+            activeTabId = nil
+        }
+
+        if let lastSelectedWorkspaceId, !validWorkspaceIds.contains(lastSelectedWorkspaceId) {
+            self.lastSelectedWorkspaceId = nil
+        }
     }
 
     private func makeShellTab(
-        projectId: String,
+        workspaceId: String,
         command: String?,
         label: String?,
         workingDirectory: String? = nil,
         role: String? = nil,
-        projectSetupPaneId: String? = nil
+        workspaceSetupPaneId: String? = nil
     ) -> AppTab {
-        let count = tabs.filter { $0.projectId == projectId && $0.isShell && $0.command == nil }.count + 1
+        let count = tabs.filter { $0.workspaceId == workspaceId && $0.isShell && $0.command == nil }.count + 1
         let defaultLabel = command == nil ? "Terminal \(count)" : (label ?? "Terminal \(count)")
         let resolvedLabel = label ?? defaultLabel
         return AppTab(
@@ -2178,24 +2684,24 @@ final class AppStore {
             kind: .terminal,
             label: resolvedLabel,
             defaultLabel: defaultLabel,
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: command,
             role: role,
             workingDirectory: workingDirectory,
-            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId()
+            workspaceSetupPaneId: workspaceSetupPaneId ?? makeWorkspaceSetupPaneId()
         )
     }
 
     private func makeBrowserTab(
-        projectId: String,
+        workspaceId: String,
         url: String?,
-        projectSetupPaneId: String? = nil,
+        workspaceSetupPaneId: String? = nil,
         browserState: BrowserPaneState? = nil,
         preferredFocus: BrowserFocusTarget? = nil
     ) -> AppTab {
         let resolvedURLString = url.flatMap { BrowserURLResolver.resolve($0)?.absoluteString ?? $0 }
-        let count = tabs.filter { $0.projectId == projectId && $0.isBrowser }.count + 1
-        let defaultLabel = "Project Browser \(count)"
+        let count = tabs.filter { $0.workspaceId == workspaceId && $0.isBrowser }.count + 1
+        let defaultLabel = "Workspace Browser \(count)"
         let resolvedState = browserState ?? BrowserPaneState.singleTab(
             urlString: resolvedURLString,
             preferredFocus: preferredFocus
@@ -2206,8 +2712,8 @@ final class AppStore {
             kind: .browser,
             label: browserPaneLabel(for: resolvedState, fallback: defaultLabel),
             defaultLabel: defaultLabel,
-            projectId: projectId,
-            projectSetupPaneId: projectSetupPaneId ?? makeProjectSetupPaneId(),
+            workspaceId: workspaceId,
+            workspaceSetupPaneId: workspaceSetupPaneId ?? makeWorkspaceSetupPaneId(),
             browserState: resolvedState
         )
     }
@@ -2222,11 +2728,11 @@ final class AppStore {
         return tab.browserState?.tabs.map(\.id) ?? []
     }
 
-    private func insertTab(_ tab: AppTab, for projectId: String, after anchorTabId: String?) {
+    private func insertTab(_ tab: AppTab, for workspaceId: String, after anchorTabId: String?) {
         guard let anchorTabId,
               let anchorIndex = tabs.firstIndex(where: { $0.id == anchorTabId }) else {
-            if let projectLastIndex = tabs.lastIndex(where: { $0.projectId == projectId }) {
-                tabs.insert(tab, at: tabs.index(after: projectLastIndex))
+            if let workspaceLastIndex = tabs.lastIndex(where: { $0.workspaceId == workspaceId }) {
+                tabs.insert(tab, at: tabs.index(after: workspaceLastIndex))
             } else {
                 tabs.append(tab)
             }
@@ -2239,6 +2745,26 @@ final class AppStore {
     private func registerManagedCommandStateIfNeeded(for tab: AppTab) {
         guard tab.isManagedCommand else { return }
         managedCommandStates[tab.id] = ManagedCommandState(status: .running)
+        armManagedAITrackingIfNeeded(for: tab)
+    }
+
+    private func armManagedAITrackingIfNeeded(for tab: AppTab) {
+        guard tab.isManagedCommand,
+              let command = tab.command,
+              let aiKind = ShellDetectedAIPaneKind(submittedLine: command) else {
+            return
+        }
+
+        shellDetectedAIPaneKinds[tab.id] = aiKind
+        aiTabsAwaitingInitialPromptTitle[tab.id] = aiKind
+
+        if aiKind == .claude, claudeTabActivities[tab.id]?.kind != .needsInput {
+            claudeTabActivities[tab.id] = ClaudeTabActivity(
+                kind: .running,
+                summary: nil,
+                updatedAt: .now
+            )
+        }
     }
 
     private func clearManagedCommandStates(for tabIds: [String]) {
@@ -2262,7 +2788,7 @@ final class AppStore {
     }
 
     private func shouldUseTmux(for tab: AppTab) -> Bool {
-        tmuxIntegrationEnabled && tab.isShell && tab.command == nil && tab.projectSetupPaneId != nil
+        tmuxIntegrationEnabled && tab.isShell && tab.command == nil && tab.workspaceSetupPaneId != nil
     }
 
     private func isReusableTmuxEditorTab(_ tab: AppTab) -> Bool {
@@ -2270,25 +2796,25 @@ final class AppStore {
         return tab.label == "Neovim" || tab.label == "Vim"
     }
 
-    private func preferredTmuxEditorTab(for projectId: String) -> AppTab? {
+    private func preferredTmuxEditorTab(for workspaceId: String) -> AppTab? {
         if let activeTabId,
            let activeTab = tabsById[activeTabId],
-           activeTab.projectId == projectId,
+           activeTab.workspaceId == workspaceId,
            isReusableTmuxEditorTab(activeTab) {
             return activeTab
         }
 
-        return projectTabs(for: projectId).first(where: isReusableTmuxEditorTab)
+        return workspaceTabs(for: workspaceId).first(where: isReusableTmuxEditorTab)
     }
 
-    private func makeProjectSetupPaneId() -> String {
+    private func makeWorkspaceSetupPaneId() -> String {
         UUID().uuidString.lowercased()
     }
 
-    private func tmuxAttachCommand(project: Project, tab: AppTab, workingDirectory: String) -> String {
-        guard let paneId = tab.projectSetupPaneId else { return "exec false" }
-        let baseSession = tmuxBaseSessionName(for: project.id)
-        let clientSession = tmuxClientSessionName(projectId: project.id, paneId: paneId)
+    private func tmuxAttachCommand(workspace: Workspace, tab: AppTab, workingDirectory: String) -> String {
+        guard let paneId = tab.workspaceSetupPaneId else { return "exec false" }
+        let baseSession = tmuxBaseSessionName(for: workspace.id)
+        let clientSession = tmuxClientSessionName(workspaceId: workspace.id, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
         let tmuxPrefix = tmuxCommandPrefix()
         let baseTarget = shellQuote(baseSession)
@@ -2296,7 +2822,7 @@ final class AppStore {
         let windowTarget = shellQuote(windowName)
         let sessionWindowTarget = shellQuote("\(clientSession):\(windowName)")
         let workingDirectoryArg = shellQuote(workingDirectory)
-        let shellCommand = tmuxShellLaunchCommand(project: project, tab: tab)
+        let shellCommand = tmuxShellLaunchCommand(workspace: workspace, tab: tab)
 
         let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
         let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
@@ -2309,10 +2835,10 @@ final class AppStore {
             .joined(separator: "; ")
     }
 
-    private func destroyTmuxPane(projectId: String, paneId: String) {
+    private func destroyTmuxPane(workspaceId: String, paneId: String) {
         guard tmuxIntegrationEnabled else { return }
-        let baseSession = tmuxBaseSessionName(for: projectId)
-        let clientSession = tmuxClientSessionName(projectId: projectId, paneId: paneId)
+        let baseSession = tmuxBaseSessionName(for: workspaceId)
+        let clientSession = tmuxClientSessionName(workspaceId: workspaceId, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
         let tmuxPrefix = tmuxCommandPrefix()
 
@@ -2322,12 +2848,12 @@ final class AppStore {
         """)
     }
 
-    private func destroyTmuxProjectSession(projectId: String, paneIds: [String]) {
+    private func destroyTmuxWorkspaceSession(workspaceId: String, paneIds: [String]) {
         guard tmuxIntegrationEnabled else { return }
-        let baseSession = tmuxBaseSessionName(for: projectId)
+        let baseSession = tmuxBaseSessionName(for: workspaceId)
         let tmuxPrefix = tmuxCommandPrefix()
         let clientKills = paneIds.map {
-            "\(tmuxPrefix) kill-session -t \(shellQuote(tmuxClientSessionName(projectId: projectId, paneId: $0))) >/dev/null 2>&1 || true"
+            "\(tmuxPrefix) kill-session -t \(shellQuote(tmuxClientSessionName(workspaceId: workspaceId, paneId: $0))) >/dev/null 2>&1 || true"
         }
 
         runDetachedShellCommand((clientKills + [
@@ -2336,17 +2862,17 @@ final class AppStore {
     }
 
     private func focusExistingTmuxEditorTab(
-        projectId: String,
+        workspaceId: String,
         path: String,
         line: Int?,
         column: Int?
     ) -> Bool {
-        guard let tab = preferredTmuxEditorTab(for: projectId),
-              let paneId = tab.projectSetupPaneId else {
+        guard let tab = preferredTmuxEditorTab(for: workspaceId),
+              let paneId = tab.workspaceSetupPaneId else {
             return false
         }
 
-        let foregroundCommand = tmuxPaneCurrentCommand(projectId: projectId, paneId: paneId)
+        let foregroundCommand = tmuxPaneCurrentCommand(workspaceId: workspaceId, paneId: paneId)
         let normalizedForegroundCommand = foregroundCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         let shouldSendVimCommand: Bool
@@ -2358,16 +2884,16 @@ final class AppStore {
 
         if shouldSendVimCommand {
             runDetachedShellCommand(tmuxSendKeysCommand(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 paneId: paneId,
                 text: vimOpenCommand(path: path, line: line, column: column)
             ))
         } else {
-            guard let project = projects.first(where: { $0.id == projectId }) else { return false }
+            guard let workspace = workspaces.first(where: { $0.id == workspaceId }) else { return false }
             runDetachedShellCommand(tmuxSendShellCommand(
                 tab: tab,
-                project: project,
-                workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: projectId),
+                workspace: workspace,
+                workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, workspaceId: workspaceId),
                 text: NvimLauncher.command(path: path, line: line, column: column)
             ))
         }
@@ -2378,7 +2904,7 @@ final class AppStore {
     }
 
     private func openFileInNewTmuxEditorTab(
-        projectId: String,
+        workspaceId: String,
         path: String,
         line: Int?,
         column: Int?
@@ -2387,7 +2913,7 @@ final class AppStore {
             .deletingLastPathComponent()
             .path
         let tab = openTab(
-            projectId: projectId,
+            workspaceId: workspaceId,
             command: nil,
             label: "Neovim",
             workingDirectory: workingDirectory
@@ -2409,32 +2935,32 @@ final class AppStore {
         try? task.run()
     }
 
-    private func tmuxBaseSessionName(for projectId: String) -> String {
-        "blink-\(projectId)"
+    private func tmuxBaseSessionName(for workspaceId: String) -> String {
+        "blink-\(workspaceId)"
     }
 
-    private func tmuxClientSessionName(projectId: String, paneId: String) -> String {
-        "blink-\(projectId)-\(paneId)"
+    private func tmuxClientSessionName(workspaceId: String, paneId: String) -> String {
+        "blink-\(workspaceId)-\(paneId)"
     }
 
     private func tmuxWindowName(for paneId: String) -> String {
         "pane-\(paneId)"
     }
 
-    private func tmuxWindowTarget(projectId: String, paneId: String) -> String {
-        "\(tmuxBaseSessionName(for: projectId)):\(tmuxWindowName(for: paneId))"
+    private func tmuxWindowTarget(workspaceId: String, paneId: String) -> String {
+        "\(tmuxBaseSessionName(for: workspaceId)):\(tmuxWindowName(for: paneId))"
     }
 
-    private func tmuxShellLaunchCommand(project: Project, tab: AppTab) -> String {
+    private func tmuxShellLaunchCommand(workspace: Workspace, tab: AppTab) -> String {
         let shell = UserDefaults.standard.string(forKey: "blink.shell")
             ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let shellName = URL(fileURLWithPath: shell).lastPathComponent
         var assignments: [(String, String)] = [
             ("BLINK_TAB_ID", tab.id),
-            ("BLINK_PANE_ID", tab.projectSetupPaneId ?? tab.id),
-            ("BLINK_PROJECT_ID", project.id),
-            ("BLINK_PROJECT_NAME", project.name),
-            ("BLINK_PROJECT_PATH", project.path),
+            ("BLINK_PANE_ID", tab.workspaceSetupPaneId ?? tab.id),
+            ("BLINK_PROJECT_ID", workspace.id),
+            ("BLINK_PROJECT_NAME", workspace.name),
+            ("BLINK_PROJECT_PATH", workspace.path),
         ]
 
         if let hookEventDirectoryPath = claudeHookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
@@ -2472,15 +2998,15 @@ final class AppStore {
         return "env -u TMUX \(envPrefix)\(shellQuote(shell)) -l"
     }
 
-    private func tmuxEnsureWindowCommand(tab: AppTab, project: Project, workingDirectory: String) -> String {
-        guard let paneId = tab.projectSetupPaneId else { return "true" }
+    private func tmuxEnsureWindowCommand(tab: AppTab, workspace: Workspace, workingDirectory: String) -> String {
+        guard let paneId = tab.workspaceSetupPaneId else { return "true" }
         let tmuxPrefix = tmuxCommandPrefix()
-        let baseSession = tmuxBaseSessionName(for: project.id)
+        let baseSession = tmuxBaseSessionName(for: workspace.id)
         let windowName = tmuxWindowName(for: paneId)
         let baseTarget = shellQuote(baseSession)
         let windowTarget = shellQuote(windowName)
         let workingDirectoryArg = shellQuote(workingDirectory)
-        let shellCommand = tmuxShellLaunchCommand(project: project, tab: tab)
+        let shellCommand = tmuxShellLaunchCommand(workspace: workspace, tab: tab)
 
         let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
         let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
@@ -2587,24 +3113,24 @@ final class AppStore {
         return output
     }
 
-    private func resolveExistingProjectFilePath(_ path: String, projectId: String) -> String? {
+    private func resolveExistingWorkspaceFilePath(_ path: String, workspaceId: String) -> String? {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         guard !FileManager.default.fileExists(atPath: normalizedPath),
-              let projectPath = projects.first(where: { $0.id == projectId })?.path else {
+              let workspacePath = workspaces.first(where: { $0.id == workspaceId })?.path else {
             return FileManager.default.fileExists(atPath: normalizedPath) ? normalizedPath : nil
         }
 
-        let normalizedProjectPath = URL(fileURLWithPath: projectPath, isDirectory: true)
+        let normalizedWorkspacePath = URL(fileURLWithPath: workspacePath, isDirectory: true)
             .standardizedFileURL
             .path
-        let relativeCandidates = candidateProjectPathSuffixes(
+        let relativeCandidates = candidateWorkspacePathSuffixes(
             for: normalizedPath,
-            projectPath: normalizedProjectPath
+            workspacePath: normalizedWorkspacePath
         )
 
         for suffix in relativeCandidates {
-            let matches = matchingProjectFiles(
-                under: normalizedProjectPath,
+            let matches = matchingWorkspaceFiles(
+                under: normalizedWorkspacePath,
                 suffix: suffix
             )
             if matches.count == 1 {
@@ -2615,12 +3141,12 @@ final class AppStore {
         return nil
     }
 
-    private func candidateProjectPathSuffixes(for path: String, projectPath: String) -> [String] {
+    private func candidateWorkspacePathSuffixes(for path: String, workspacePath: String) -> [String] {
         var candidates: [String] = []
-        let normalizedProjectPrefix = projectPath.hasSuffix("/") ? projectPath : "\(projectPath)/"
+        let normalizedWorkspacePrefix = workspacePath.hasSuffix("/") ? workspacePath : "\(workspacePath)/"
 
-        if path.hasPrefix(normalizedProjectPrefix) {
-            let relativePath = String(path.dropFirst(normalizedProjectPrefix.count))
+        if path.hasPrefix(normalizedWorkspacePrefix) {
+            let relativePath = String(path.dropFirst(normalizedWorkspacePrefix.count))
             if !relativePath.isEmpty {
                 candidates.append(relativePath)
             }
@@ -2637,9 +3163,9 @@ final class AppStore {
         return candidates
     }
 
-    private func matchingProjectFiles(under projectPath: String, suffix: String) -> [String] {
+    private func matchingWorkspaceFiles(under workspacePath: String, suffix: String) -> [String] {
         guard let enumerator = FileManager.default.enumerator(
-            at: URL(fileURLWithPath: projectPath, isDirectory: true),
+            at: URL(fileURLWithPath: workspacePath, isDirectory: true),
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else {
@@ -2669,9 +3195,9 @@ final class AppStore {
         syncTmuxForegroundCommandIfNeeded(for: tabId)
     }
 
-    private func tmuxPaneCurrentCommand(projectId: String, paneId: String) -> String? {
+    private func tmuxPaneCurrentCommand(workspaceId: String, paneId: String) -> String? {
         let tmuxPrefix = tmuxCommandPrefix()
-        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        let target = shellQuote(tmuxWindowTarget(workspaceId: workspaceId, paneId: paneId))
         return runSynchronousShellCommand(
             "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
         )
@@ -2692,13 +3218,13 @@ final class AppStore {
         guard let activeTabId,
               let tab = tabsById[activeTabId],
               shouldUseTmux(for: tab),
-              let paneId = tab.projectSetupPaneId else {
+              let paneId = tab.workspaceSetupPaneId else {
             return
         }
 
-        let projectId = tab.projectId
+        let workspaceId = tab.workspaceId
         let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
-            projectId: projectId,
+            workspaceId: workspaceId,
             paneId: paneId,
             socketName: Self.tmuxSocketName(),
             configPath: tmuxConfigPath
@@ -2716,15 +3242,15 @@ final class AppStore {
     private func syncTmuxForegroundCommandIfNeeded(for tabId: String) {
         guard let tab = tabsById[tabId],
               shouldUseTmux(for: tab),
-              let paneId = tab.projectSetupPaneId else {
+              let paneId = tab.workspaceSetupPaneId else {
             return
         }
 
-        let projectId = tab.projectId
+        let workspaceId = tab.workspaceId
         Task { [weak self] in
             guard let self else { return }
             let resolvedCommand = await Self.fetchTmuxPaneCurrentCommand(
-                projectId: projectId,
+                workspaceId: workspaceId,
                 paneId: paneId,
                 socketName: Self.tmuxSocketName(),
                 configPath: self.tmuxConfigPath
@@ -2766,7 +3292,14 @@ final class AppStore {
 
         guard TabTitleFilter.isShellPrompt(normalizedCommand) else { return }
 
-        if shouldPreserveShellDetectedAIState(for: tabId, tab: tab) {
+        let shouldPreserveAIState = shouldPreserveShellDetectedAIState(for: tabId, tab: tab)
+        if shouldResetTerminalSubmittedLineTracking(
+            for: tabId,
+            preservingAIState: shouldPreserveAIState
+        ) {
+            resetTerminalSubmittedLineTracking(for: tabId)
+        }
+        if shouldPreserveAIState {
             return
         }
 
@@ -2788,6 +3321,26 @@ final class AppStore {
         return tab.label != tab.defaultLabel && tab.label != displayName
     }
 
+    private func resetTerminalSubmittedLineTracking(for tabId: String) {
+        surfaceManager?.surface(for: tabId)?.clearSubmittedLineTracking()
+    }
+
+    private func shouldResetTerminalSubmittedLineTracking(
+        for tabId: String,
+        preservingAIState: Bool
+    ) -> Bool {
+        guard surfaceManager?.surface(for: tabId)?.hasTrackedSubmittedLine == true else {
+            return false
+        }
+
+        if !preservingAIState {
+            return shellDetectedAIPaneKinds[tabId] != nil || claudeTabActivities[tabId] != nil
+        }
+
+        guard let aiKind = shellDetectedAIPaneKinds[tabId] else { return true }
+        return aiTabsAwaitingInitialPromptTitle[tabId] != aiKind
+    }
+
     private func shouldPreserveShellDetectedAIState(for tabId: String, tab: AppTab) -> Bool {
         guard let aiKind = shellDetectedAIPaneKinds[tabId] else { return false }
         if aiTabsAwaitingInitialPromptTitle[tabId] == aiKind {
@@ -2796,14 +3349,14 @@ final class AppStore {
         return shouldPreserveCustomAITitle(for: tab, displayName: aiKind.displayName)
     }
 
-    private func resolvedSelectableTabId(for projectId: String, preferred: [String]) -> String? {
-        let projectTabIds = Set(projectTabs(for: projectId).map(\.id))
-        let projectCols = projectColumns(for: projectId)
+    private func resolvedSelectableTabId(for workspaceId: String, preferred: [String]) -> String? {
+        let workspaceTabIds = Set(workspaceTabs(for: workspaceId).map(\.id))
+        let workspaceCols = workspaceColumns(for: workspaceId)
 
         func selectable(_ tabId: String?) -> String? {
             guard let tabId,
-                  projectTabIds.contains(tabId),
-                  projectCols.contains(where: { $0.tabIds.contains(tabId) }) else {
+                  workspaceTabIds.contains(tabId),
+                  workspaceCols.contains(where: { $0.tabIds.contains(tabId) }) else {
                 return nil
             }
             return tabId
@@ -2815,17 +3368,17 @@ final class AppStore {
             }
         }
 
-        if let remembered = selectable(lastActiveTab[projectId]) {
+        if let remembered = selectable(lastActiveTab[workspaceId]) {
             return remembered
         }
 
-        for column in projectCols {
+        for column in workspaceCols {
             if let focused = selectable(columnFocusedTab[column.id]) {
                 return focused
             }
         }
 
-        return projectCols.first?.tabIds.first ?? projectTabs(for: projectId).first?.id
+        return workspaceCols.first?.tabIds.first ?? workspaceTabs(for: workspaceId).first?.id
     }
 
     private func shellDetectedAIKind(forDisplayName displayName: String) -> ShellDetectedAIPaneKind? {
@@ -2855,14 +3408,14 @@ final class AppStore {
     }
 
     nonisolated private static func fetchTmuxPaneCurrentCommand(
-        projectId: String,
+        workspaceId: String,
         paneId: String,
         socketName: String,
         configPath: String?
     ) async -> String? {
         await Task.detached(priority: .utility) {
             let tmuxPrefix = tmuxCommandPrefix(socketName: socketName, configPath: configPath)
-            let target = shellQuote("blink-\(projectId):pane-\(paneId)")
+            let target = shellQuote("blink-\(workspaceId):pane-\(paneId)")
             return runSynchronousShellCommand(
                 "\(tmuxPrefix) display-message -p -t \(target) '#{pane_current_command}'"
             )
@@ -2917,9 +3470,9 @@ final class AppStore {
         return command
     }
 
-    private func tmuxSendKeysCommand(projectId: String, paneId: String, text: String) -> String {
+    private func tmuxSendKeysCommand(workspaceId: String, paneId: String, text: String) -> String {
         let tmuxPrefix = tmuxCommandPrefix()
-        let target = shellQuote(tmuxWindowTarget(projectId: projectId, paneId: paneId))
+        let target = shellQuote(tmuxWindowTarget(workspaceId: workspaceId, paneId: paneId))
         let literalText = shellQuote(text)
 
         return [
@@ -2931,17 +3484,17 @@ final class AppStore {
 
     private func tmuxSendShellCommand(
         tab: AppTab,
-        project: Project,
+        workspace: Workspace,
         workingDirectory: String,
         text: String
     ) -> String {
-        guard let paneId = tab.projectSetupPaneId else { return "true" }
+        guard let paneId = tab.workspaceSetupPaneId else { return "true" }
         let tmuxPrefix = tmuxCommandPrefix()
-        let target = shellQuote(tmuxWindowTarget(projectId: project.id, paneId: paneId))
+        let target = shellQuote(tmuxWindowTarget(workspaceId: workspace.id, paneId: paneId))
         let literalText = shellQuote(text)
 
         return [
-            tmuxEnsureWindowCommand(tab: tab, project: project, workingDirectory: workingDirectory),
+            tmuxEnsureWindowCommand(tab: tab, workspace: workspace, workingDirectory: workingDirectory),
             "\(tmuxPrefix) send-keys -t \(target) -l \(literalText)",
             "\(tmuxPrefix) send-keys -t \(target) Enter",
         ].joined(separator: "; ")
@@ -2951,23 +3504,23 @@ final class AppStore {
     private func sendPendingTmuxShellCommandIfNeeded(for tabId: String) -> Bool {
         guard let text = pendingTmuxShellCommands.removeValue(forKey: tabId),
               let tab = tabsById[tabId],
-              let project = projects.first(where: { $0.id == tab.projectId }) else {
+              let workspace = workspaces.first(where: { $0.id == tab.workspaceId }) else {
             return false
         }
 
         runDetachedShellCommand(tmuxSendShellCommand(
             tab: tab,
-            project: project,
-            workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, projectId: tab.projectId),
+            workspace: workspace,
+            workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, workspaceId: tab.workspaceId),
             text: text
         ))
         return true
     }
 
-    /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a project.
-    private func reindexTabs(for projectId: String) {
+    /// Re-number default tab labels ("Terminal 1", "Terminal 2", ...) for a workspace.
+    private func reindexTabs(for workspaceId: String) {
         var counter = 0
-        for i in tabs.indices where tabs[i].projectId == projectId && tabs[i].isShell && tabs[i].command == nil {
+        for i in tabs.indices where tabs[i].workspaceId == workspaceId && tabs[i].isShell && tabs[i].command == nil {
             counter += 1
             let newDefault = "Terminal \(counter)"
             if tabs[i].label == tabs[i].defaultLabel {
@@ -2977,62 +3530,312 @@ final class AppStore {
         }
     }
 
-    // MARK: - Project Management
+    // MARK: - Workspace Management
 
-    /// Add a project from a directory path.
-    @discardableResult
-    func addProject(path: String, activating: Bool = false) -> Project {
-        if let existing = projects.first(where: { $0.path == path }) {
-            if activating {
-                openProjectSession(existing.id)
-            }
-            return existing
-        }
-
-        let name = (path as NSString).lastPathComponent
-        let project = Project(
-            id: UUID().uuidString,
-            name: name,
-            path: path,
-            color: "#7aa2f7",
-            createdAt: .now
-        )
-        projects.append(project)
-        expandedProjectIds.insert(project.id)
-        if activating {
-            openProjectSession(project.id)
-        }
-        return project
+    private func normalizedWorkspacePath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
-    @discardableResult
-    func pickProjectFolder(activating: Bool = false) -> Project? {
+    func workspaceForPath(_ path: String) -> Workspace? {
+        let normalizedPath = normalizedWorkspacePath(path)
+        return workspaces.first { normalizedWorkspacePath($0.path) == normalizedPath }
+    }
+
+    func isValidWorkspaceFolderName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return !trimmed.contains("/") && trimmed != "." && trimmed != ".."
+    }
+
+    private func chooseWorkspaceDirectory(message: String, startingAt path: String? = nil) -> String? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.message = "Select a project folder"
+        panel.message = message
+
+        if let path {
+            let normalizedPath = normalizedWorkspacePath(path)
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: normalizedPath, isDirectory: &isDirectory) {
+                let url = URL(fileURLWithPath: normalizedPath)
+                panel.directoryURL = isDirectory.boolValue ? url : url.deletingLastPathComponent()
+            } else {
+                panel.directoryURL = URL(fileURLWithPath: normalizedPath).deletingLastPathComponent()
+            }
+        }
 
         guard panel.runModal() == .OK, let url = panel.url else {
             return nil
         }
 
-        return addProject(path: url.path, activating: activating)
+        return normalizedWorkspacePath(url.path)
     }
 
-    // MARK: - Project Persistence
+    func chooseExistingWorkspaceFolder(startingAt path: String? = nil) -> String? {
+        chooseWorkspaceDirectory(
+            message: "Select a workspace folder",
+            startingAt: path
+        )
+    }
 
-    private static func loadProjects() -> [Project] {
-        guard let data = UserDefaults.standard.data(forKey: StorageKeys.projects),
-              let projects = try? JSONDecoder().decode([Project].self, from: data) else {
-            return []
+    func chooseWorkspaceParentFolder(startingAt path: String? = nil) -> String? {
+        chooseWorkspaceDirectory(
+            message: "Select the parent folder for the new workspace",
+            startingAt: path
+        )
+    }
+
+    private func seededWorkspaceSetup(
+        for workspaceId: String,
+        starter: WorkspaceStarter,
+        aiProvider: WorkspaceAIProvider,
+        browserURL: String
+    ) -> WorkspaceSetup? {
+        let paneId = makeWorkspaceSetupPaneId()
+        let trimmedBrowserURL = browserURL.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let pane: WorkspaceSetupPane?
+        switch starter {
+        case .empty:
+            pane = nil
+        case .terminal:
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .shell,
+                label: "Terminal 1",
+                role: nil,
+                command: nil,
+                workingDirectory: nil,
+                browserState: nil
+            )
+        case .aiSession:
+            let spec = aiSessionLaunchSpec(for: aiProvider)
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .command,
+                label: spec.label,
+                role: nil,
+                command: spec.command,
+                workingDirectory: nil,
+                browserState: nil
+            )
+        case .browser:
+            let resolvedURL = trimmedBrowserURL.isEmpty ? BrowserDefaults.homePageURLString : trimmedBrowserURL
+            let state = BrowserPaneState.singleTab(
+                urlString: BrowserURLResolver.resolve(resolvedURL)?.absoluteString ?? resolvedURL,
+                preferredFocus: .addressBar
+            )
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .browser,
+                label: browserPaneLabel(for: state, fallback: "Workspace Browser 1"),
+                role: nil,
+                command: nil,
+                workingDirectory: nil,
+                browserState: state
+            )
+        case .git:
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .command,
+                label: "lazygit",
+                role: nil,
+                command: "lazygit",
+                workingDirectory: nil,
+                browserState: nil
+            )
+        case .neovim:
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .command,
+                label: "Neovim",
+                role: nil,
+                command: NvimLauncher.command(),
+                workingDirectory: nil,
+                browserState: nil
+            )
+        case .files:
+            pane = WorkspaceSetupPane(
+                id: paneId,
+                kind: .command,
+                label: "Yazi",
+                role: nil,
+                command: YaziLauncher.command(theme: nil),
+                workingDirectory: nil,
+                browserState: nil
+            )
         }
-        return projects
+
+        guard let pane else { return nil }
+        return WorkspaceSetup(
+            workspaceId: workspaceId,
+            updatedAt: .now,
+            columns: [WorkspaceSetupColumn(id: "col-0", paneIds: [pane.id])],
+            panes: [pane]
+        )
     }
 
-    private static func saveProjects(_ projects: [Project]) {
-        if let data = try? JSONEncoder().encode(projects) {
-            UserDefaults.standard.set(data, forKey: StorageKeys.projects)
+    @discardableResult
+    func completeWorkspaceOnboarding(
+        mode: WorkspaceOnboardingMode,
+        name: String,
+        existingFolderPath: String,
+        parentFolderPath: String,
+        newFolderName: String,
+        starter: WorkspaceStarter,
+        aiProvider: WorkspaceAIProvider,
+        browserURL: String
+    ) throws -> Workspace {
+        let fileManager = FileManager.default
+        let resolvedURL: URL
+
+        switch mode {
+        case .existingFolder:
+            let trimmedPath = existingFolderPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedPath.isEmpty else {
+                throw WorkspaceCreationError.missingWorkspaceFolder
+            }
+
+            let normalizedPath = normalizedWorkspacePath(trimmedPath)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: normalizedPath, isDirectory: &isDirectory) else {
+                throw WorkspaceCreationError.workspaceFolderDoesNotExist
+            }
+            guard isDirectory.boolValue else {
+                throw WorkspaceCreationError.selectedPathIsNotDirectory
+            }
+
+            resolvedURL = URL(fileURLWithPath: normalizedPath)
+
+        case .createFolder:
+            let trimmedParentPath = parentFolderPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedParentPath.isEmpty else {
+                throw WorkspaceCreationError.missingParentFolder
+            }
+
+            let trimmedFolderName = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedFolderName.isEmpty else {
+                throw WorkspaceCreationError.missingFolderName
+            }
+            guard isValidWorkspaceFolderName(trimmedFolderName) else {
+                throw WorkspaceCreationError.invalidFolderName
+            }
+
+            let normalizedParentPath = normalizedWorkspacePath(trimmedParentPath)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: normalizedParentPath, isDirectory: &isDirectory) else {
+                throw WorkspaceCreationError.parentFolderDoesNotExist
+            }
+            guard isDirectory.boolValue else {
+                throw WorkspaceCreationError.selectedPathIsNotDirectory
+            }
+
+            let workspaceURL = URL(fileURLWithPath: normalizedParentPath, isDirectory: true)
+                .appendingPathComponent(trimmedFolderName, isDirectory: true)
+                .standardizedFileURL
+
+            if fileManager.fileExists(atPath: workspaceURL.path, isDirectory: &isDirectory) {
+                guard isDirectory.boolValue else {
+                    throw WorkspaceCreationError.selectedPathIsNotDirectory
+                }
+            } else {
+                do {
+                    try fileManager.createDirectory(at: workspaceURL, withIntermediateDirectories: true)
+                } catch {
+                    throw WorkspaceCreationError.failedToCreateFolder(workspaceURL.path)
+                }
+            }
+
+            resolvedURL = workspaceURL
+        }
+
+        if let existing = workspaceForPath(resolvedURL.path) {
+            openWorkspaceSession(existing.id)
+            return existing
+        }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workspace = addWorkspace(
+            name: trimmedName.isEmpty ? nil : trimmedName,
+            path: resolvedURL.path,
+            activating: false
+        )
+
+        if workspaceTabs(for: workspace.id).isEmpty,
+           !hasWorkspaceSetup(for: workspace.id),
+           let setup = seededWorkspaceSetup(
+            for: workspace.id,
+            starter: starter,
+            aiProvider: aiProvider,
+            browserURL: browserURL
+           ) {
+            workspaceSetups[workspace.id] = setup
+        }
+
+        openWorkspaceSession(workspace.id)
+        return workspace
+    }
+
+    /// Add a workspace from a directory path.
+    @discardableResult
+    func addWorkspace(name: String? = nil, path: String, activating: Bool = false) -> Workspace {
+        let normalizedPath = normalizedWorkspacePath(path)
+
+        if let existing = workspaces.first(where: { normalizedWorkspacePath($0.path) == normalizedPath }) {
+            if activating {
+                openWorkspaceSession(existing.id)
+            }
+            return existing
+        }
+
+        let resolvedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workspaceName = resolvedName?.isEmpty == false
+            ? resolvedName!
+            : (normalizedPath as NSString).lastPathComponent
+        let workspace = Workspace(
+            id: UUID().uuidString,
+            name: workspaceName,
+            path: normalizedPath,
+            color: "#7aa2f7",
+            createdAt: .now
+        )
+        workspaces.append(workspace)
+        expandedWorkspaceIds.insert(workspace.id)
+        if activating {
+            openWorkspaceSession(workspace.id)
+        }
+        return workspace
+    }
+
+    @discardableResult
+    func pickWorkspaceFolder(activating: Bool = false) -> Workspace? {
+        guard let path = chooseExistingWorkspaceFolder() else {
+            return nil
+        }
+
+        return addWorkspace(path: path, activating: activating)
+    }
+
+    // MARK: - Workspace Persistence
+
+    private static func loadWorkspaces() -> [Workspace] {
+        let persistedWorkspaces: [Workspace]
+        if let data = UserDefaults.standard.data(forKey: StorageKeys.workspaces)
+            ?? UserDefaults.standard.data(forKey: StorageKeys.legacyWorkspaces),
+           let decodedWorkspaces = try? JSONDecoder().decode([Workspace].self, from: data) {
+            persistedWorkspaces = decodedWorkspaces.filter { !$0.isScratchSpace && directoryExists(at: $0.path) }
+        } else {
+            persistedWorkspaces = []
+        }
+
+        return [Workspace.scratchSpace()] + persistedWorkspaces
+    }
+
+    private static func saveWorkspaces(_ workspaces: [Workspace]) {
+        let persistedWorkspaces = workspaces.filter { !$0.isScratchSpace }
+        if let data = try? JSONEncoder().encode(persistedWorkspaces) {
+            UserDefaults.standard.set(data, forKey: StorageKeys.workspaces)
         }
     }
 
@@ -3050,9 +3853,10 @@ final class AppStore {
         }
     }
 
-    private static func loadProjectSetups() -> [String: ProjectSetup] {
-        guard let data = UserDefaults.standard.data(forKey: StorageKeys.projectSetups),
-              let setups = try? JSONDecoder().decode([String: ProjectSetup].self, from: data) else {
+    private static func loadWorkspaceSetups() -> [String: WorkspaceSetup] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKeys.workspaceSetups)
+            ?? UserDefaults.standard.data(forKey: StorageKeys.legacyWorkspaceSetups),
+              let setups = try? JSONDecoder().decode([String: WorkspaceSetup].self, from: data) else {
             return [:]
         }
         return setups.reduce(into: [:]) { result, entry in
@@ -3062,42 +3866,47 @@ final class AppStore {
         }
     }
 
-    private static func saveProjectSetups(_ setups: [String: ProjectSetup]) {
+    private static func saveWorkspaceSetups(_ setups: [String: WorkspaceSetup]) {
         if let data = try? JSONEncoder().encode(setups) {
-            UserDefaults.standard.set(data, forKey: StorageKeys.projectSetups)
+            UserDefaults.standard.set(data, forKey: StorageKeys.workspaceSetups)
         }
     }
 
-    private static func sanitizeLegacyChatPanes(in setup: ProjectSetup) -> ProjectSetup {
+    private static func sanitizeLegacyChatPanes(in setup: WorkspaceSetup) -> WorkspaceSetup {
         let allowedPaneIds = Set(
             setup.panes
                 .filter { $0.kind != .chat }
                 .map(\.id)
         )
         let panes = setup.panes.filter { allowedPaneIds.contains($0.id) }
-        let columns: [ProjectSetupColumn] = setup.columns.compactMap { column in
+        let columns: [WorkspaceSetupColumn] = setup.columns.compactMap { column in
             let paneIds = column.paneIds.filter { allowedPaneIds.contains($0) }
             guard !paneIds.isEmpty else { return nil }
-            return ProjectSetupColumn(id: column.id, paneIds: paneIds)
+            return WorkspaceSetupColumn(id: column.id, paneIds: paneIds)
         }
-        return ProjectSetup(
-            projectId: setup.projectId,
+        return WorkspaceSetup(
+            workspaceId: setup.workspaceId,
             updatedAt: setup.updatedAt,
             columns: columns,
             panes: panes
         )
     }
 
-    func workspaceViewportOffset(for projectId: String) -> CGFloat {
-        CGFloat(workspaceViewportOffsets[projectId] ?? 0)
+    private static func directoryExists(at path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    func hasWorkspaceViewportOffset(for projectId: String) -> Bool {
-        workspaceViewportOffsets[projectId] != nil
+    func workspaceViewportOffset(for workspaceId: String) -> CGFloat {
+        CGFloat(workspaceViewportOffsets[workspaceId] ?? 0)
     }
 
-    func setWorkspaceViewportOffset(_ offset: CGFloat, for projectId: String) {
-        workspaceViewportOffsets[projectId] = Double(offset)
+    func hasWorkspaceViewportOffset(for workspaceId: String) -> Bool {
+        workspaceViewportOffsets[workspaceId] != nil
+    }
+
+    func setWorkspaceViewportOffset(_ offset: CGFloat, for workspaceId: String) {
+        workspaceViewportOffsets[workspaceId] = Double(offset)
     }
 
     private static func loadDictionary<Value: Decodable>(forKey key: String) -> [String: Value] {

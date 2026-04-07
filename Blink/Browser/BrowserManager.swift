@@ -45,7 +45,7 @@ final class BrowserManager {
 
     func controller(
         for tabId: String,
-        projectId: String,
+        workspaceId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
     ) -> any BrowserHostController {
@@ -55,7 +55,7 @@ final class BrowserManager {
 
         let controller = makeController(
             tabId: tabId,
-            projectId: projectId,
+            workspaceId: workspaceId,
             initialState: initialState,
             onStateChange: onStateChange
         )
@@ -65,7 +65,7 @@ final class BrowserManager {
 
     private func makeController(
         tabId: String,
-        projectId: String,
+        workspaceId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
     ) -> any BrowserHostController {
@@ -84,7 +84,7 @@ final class BrowserManager {
         case .chromium:
             return ChromiumBrowserController(
                 tabId: tabId,
-                projectId: projectId,
+                workspaceId: workspaceId,
                 initialState: initialState,
                 onStateChange: wrappedStateChange,
                 onDownloadUpdate: { [weak self] download in
@@ -146,25 +146,25 @@ final class BrowserManager {
     }
 
     func recentDownloads(
-        for projectId: String,
+        for workspaceId: String,
         limit: Int = 4
     ) -> [BrowserDownloadItem] {
         Array(
             downloads
-                .filter { $0.projectId == projectId }
+                .filter { $0.workspaceId == workspaceId }
                 .sorted { $0.updatedAt > $1.updatedAt }
                 .prefix(limit)
         )
     }
 
-    func downloads(for projectId: String) -> [BrowserDownloadItem] {
+    func downloads(for workspaceId: String) -> [BrowserDownloadItem] {
         downloads
-            .filter { $0.projectId == projectId }
+            .filter { $0.workspaceId == workspaceId }
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    func clearDownloads(for projectId: String) {
-        downloads.removeAll { $0.projectId == projectId }
+    func clearDownloads(for workspaceId: String) {
+        downloads.removeAll { $0.workspaceId == workspaceId }
     }
 
     func recordHistoryEntry(from state: BrowserTabState) {

@@ -16,9 +16,9 @@ struct BrowserView: View {
     @Environment(AppStore.self) private var store
 
     let tab: AppTab
-    let project: Project
+    let workspace: Workspace
     let browserManager: BrowserManager
-    let projectDownloads: [BrowserDownloadItem]
+    let workspaceDownloads: [BrowserDownloadItem]
     let isFocused: Bool
 
     @State private var addressText = ""
@@ -34,7 +34,7 @@ struct BrowserView: View {
     @State private var isAddressBarSuggestionsActive = false
     @State private var swipeIndicatorHideWorkItem: DispatchWorkItem?
     @State private var swipeNavigationFeedback: BrowserSwipeNavigationFeedback?
-    @State private var visibleProjectDownloads: [BrowserDownloadItem] = []
+    @State private var visibleWorkspaceDownloads: [BrowserDownloadItem] = []
     @FocusState private var addressBarFocused: Bool
 
     @State private var sidebarHoverDismissWorkItem: DispatchWorkItem?
@@ -78,7 +78,7 @@ struct BrowserView: View {
     private func resolveController(for browserTab: BrowserPaneTab) -> any BrowserHostController {
         browserManager.controller(
             for: browserTab.id,
-            projectId: project.id,
+            workspaceId: workspace.id,
             initialState: browserTab.state
         ) { state in
             DispatchQueue.main.async {
@@ -90,8 +90,8 @@ struct BrowserView: View {
     var body: some View {
         Group {
             if let selectedBrowserTab {
-                let resolvedProjectDownloads = visibleProjectDownloads.isEmpty ? projectDownloads : visibleProjectDownloads
-                let activeDownloads = resolvedProjectDownloads.filter(\.isInProgress)
+                let resolvedWorkspaceDownloads = visibleWorkspaceDownloads.isEmpty ? workspaceDownloads : visibleWorkspaceDownloads
+                let activeDownloads = resolvedWorkspaceDownloads.filter(\.isInProgress)
                 let controller = resolveController(for: selectedBrowserTab)
                 ZStack(alignment: .leading) {
                     ZStack(alignment: .leading) {
@@ -115,7 +115,7 @@ struct BrowserView: View {
                         browserSidebar(
                             selectedBrowserTab: selectedBrowserTab,
                             controller: controller,
-                            resolvedProjectDownloads: resolvedProjectDownloads,
+                            resolvedWorkspaceDownloads: resolvedWorkspaceDownloads,
                             activeDownloads: activeDownloads
                         )
                         .animation(Self.sidebarTransition, value: isSidebarExpanded)
@@ -186,16 +186,16 @@ struct BrowserView: View {
                     cancelSwipeIndicatorHide()
                     highlightedAddressSuggestionID = nil
                     swipeNavigationFeedback = nil
-                    visibleProjectDownloads = []
+                    visibleWorkspaceDownloads = []
                     isDownloadsPopoverPresented = false
                 }
             } else {
                 VStack(spacing: 12) {
-                    Text("No Project Browser Tabs")
+                    Text("No Workspace Browser Tabs")
                         .font(Fonts.primary(size: 16, weight: .bold))
                         .foregroundStyle(theme.text)
 
-                    Button("Open Project Browser Tab") {
+                    Button("Open Workspace Browser Tab") {
                         _ = store.openBrowserTabInPane(
                             tab.id,
                             url: BrowserDefaults.homePageURLString,
@@ -256,7 +256,7 @@ struct BrowserView: View {
     private func browserSidebar(
         selectedBrowserTab: BrowserPaneTab,
         controller: any BrowserHostController,
-        resolvedProjectDownloads: [BrowserDownloadItem],
+        resolvedWorkspaceDownloads: [BrowserDownloadItem],
         activeDownloads: [BrowserDownloadItem]
     ) -> some View {
         if isSidebarExpanded {
@@ -284,7 +284,7 @@ struct BrowserView: View {
                 sidebarHeader(
                     browserTab: selectedBrowserTab,
                     controller: controller,
-                    projectDownloads: resolvedProjectDownloads,
+                    workspaceDownloads: resolvedWorkspaceDownloads,
                     activeDownloads: activeDownloads
                 )
             }
@@ -298,14 +298,14 @@ struct BrowserView: View {
     private func sidebarHeader(
         browserTab: BrowserPaneTab,
         controller: any BrowserHostController,
-        projectDownloads: [BrowserDownloadItem],
+        workspaceDownloads: [BrowserDownloadItem],
         activeDownloads: [BrowserDownloadItem]
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 sidebarActionButton(
                     systemName: paneState.isSidebarPinned ? "sidebar.left" : "sidebar.right",
-                    accessibilityLabel: paneState.isSidebarPinned ? "Unpin Project Browser Sidebar" : "Pin Project Browser Sidebar"
+                    accessibilityLabel: paneState.isSidebarPinned ? "Unpin Workspace Browser Sidebar" : "Pin Workspace Browser Sidebar"
                 ) {
                     dismissAddressBarFocus(for: browserTab.id)
                     store.toggleBrowserSidebarPinned(for: tab.id)
@@ -340,7 +340,7 @@ struct BrowserView: View {
                 }
 
                 downloadsButton(
-                    projectDownloads: projectDownloads,
+                    workspaceDownloads: workspaceDownloads,
                     activeDownloads: activeDownloads
                 )
             }
@@ -406,7 +406,7 @@ struct BrowserView: View {
                     }
                     .buttonStyle(.plain)
                     .pointerCursor()
-                    .help("New Project Browser Tab")
+                    .help("New Workspace Browser Tab")
 
                     Button {
                         dismissAddressBarFocus(for: browserTab.id)
@@ -471,14 +471,14 @@ struct BrowserView: View {
     }
 
     private func downloadsButton(
-        projectDownloads: [BrowserDownloadItem],
+        workspaceDownloads: [BrowserDownloadItem],
         activeDownloads: [BrowserDownloadItem]
     ) -> some View {
         let hasActiveDownloads = !activeDownloads.isEmpty
         let activeDownloadProgress = downloadProgress(for: activeDownloads)
         let isDownloadHighlighted = hasActiveDownloads || isRecentDownloadHighlighted
-        let latestDownloadActivity = projectDownloads.first?.updatedAt
-        let latestDownloadCompleted = projectDownloads.first.map { !$0.isInProgress && $0.isComplete } ?? false
+        let latestDownloadActivity = workspaceDownloads.first?.updatedAt
+        let latestDownloadCompleted = workspaceDownloads.first.map { !$0.isInProgress && $0.isComplete } ?? false
         return Button {
             dismissAddressBarFocus(for: selectedBrowserTab?.id ?? activeDownloads.first?.browserTabId ?? "")
             isDownloadsPopoverPresented.toggle()
@@ -532,7 +532,7 @@ struct BrowserView: View {
         .help("Downloads")
         .popover(isPresented: $isDownloadsPopoverPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             BrowserDownloadsPopoverView(
-                downloads: projectDownloads,
+                downloads: workspaceDownloads,
                 onOpen: { download in
                     browserManager.openDownload(download)
                 },
@@ -540,7 +540,7 @@ struct BrowserView: View {
                     browserManager.revealDownload(download)
                 },
                 onClear: {
-                    browserManager.clearDownloads(for: project.id)
+                    browserManager.clearDownloads(for: workspace.id)
                 }
             )
             .padding(6)
@@ -856,7 +856,7 @@ struct BrowserView: View {
     }
 
     private func syncVisibleDownloads() {
-        visibleProjectDownloads = browserManager.downloads(for: project.id)
+        visibleWorkspaceDownloads = browserManager.downloads(for: workspace.id)
     }
 
     private func downloadButtonBackgroundColor(

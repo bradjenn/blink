@@ -5,7 +5,7 @@
 <h1 align="center">Blink</h1>
 
 <p align="center">
-  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, fast project switching, and an isolated project browser
+  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, fast workspace switching, CLI AI sessions, and an isolated workspace browser
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
   <a href="#install">Install</a> •
   <a href="#keybindings">Keybindings</a> •
   <a href="#development">Development</a> •
-  <a href="#project-structure">Project Structure</a> •
+  <a href="#workspace-structure">Workspace Structure</a> •
   <a href="#license">License</a>
 </p>
 
@@ -32,8 +32,8 @@
 ### Terminal
 
 - **libghostty engine** — GPU-accelerated rendering via Metal, the same core that powers [Ghostty](https://ghostty.org)
-- **tmux-backed shell persistence** — project shells and editors can be reattached instead of restarted
-- **Managed tool panes** — open dedicated tabs for Neovim, lazygit, Yazi, Spotify, and other project commands inside the workspace
+- **tmux-backed shell persistence** — workspace shells and editors can be reattached instead of restarted
+- **Managed tool panes** — open dedicated tabs for Neovim, lazygit, Yazi, Spotify, and other workspace commands inside the workspace
 - **Drag-and-drop file support** — drop files onto the terminal to paste their path
 - **MesloLGS Nerd Font** — bundled with full icon/glyph support out of the box
 
@@ -44,18 +44,19 @@
 - **Overview mode** — zoom out to see all columns and panes at once
 - **Resizable columns** — cycle through width presets with `⌘]` / `⌘[`
 
-### Project Management
+### Workspace Management
 
-- **Auto-discovers projects** from `~/Code` on launch
-- **Per-project workspace restore** — Blink remembers your tab/column layout and reconnects shell panes on relaunch
-- **Sidebar with git branch tracking** — see the active branch for each project at a glance
-- **Shell-first tooling** — run `nvim`, `lazygit`, `yazi`, `spotify`, or any other CLI in project-scoped tabs without extra wrappers
+- **Scratch Space and folder-based workspaces** — jump into a general workspace or add any folder as a workspace
+- **Per-workspace restore** — Blink remembers your tab/column layout and reconnects shell panes on relaunch
+- **Sidebar with git branch tracking** — see the active branch for each workspace at a glance
+- **Shell-first tooling** — run `nvim`, `lazygit`, `yazi`, `spotify`, or any other CLI in workspace-scoped tabs without extra wrappers
+- **CLI AI sessions** — launch Claude Code, Codex, or OpenCode in tracked workspace panes
 
-### Project Browser
+### Workspace Browser
 
-- **Isolated project browser panes** — open web pages inside the current project workspace without turning Blink into a full personal browser
-- **Project-scoped Chromium profiles** — cookies and storage stay scoped to the active project browser context
-- **Browser panes live in the same layout model** — browser, chat, and terminal panes share the same columns, focus model, and tab workflow
+- **Isolated workspace browser panes** — open web pages inside the current workspace without turning Blink into a full personal browser
+- **Workspace-scoped Chromium profiles** — cookies and storage stay scoped to the active workspace browser context
+- **Browser panes live in the same layout model** — browser and terminal panes share the same columns, focus model, and tab workflow
 - **Built for dev flows first** — localhost previews, docs, auth redirects, downloads, and DevTools are in scope; sync/import/general browsing are not
 
 ### Appearance
@@ -86,7 +87,7 @@ Requires macOS Sonoma+ and Apple Silicon (M1 or later).
 
 Persistent shell/editor reattachment and in-app Neovim reuse work best with `tmux`, and Blink Neovim integration assumes `nvim` is installed.
 
-The browser in Blink is an isolated project browser, not a full general-purpose browser replacement.
+The browser in Blink is an isolated workspace browser, not a full general-purpose browser replacement.
 
 ## Keybindings
 
@@ -107,10 +108,11 @@ All shortcuts use `Cmd` (`⌘`) as the modifier.
 | `⇧⌘E` | Expel pane |
 | `⌘O` | Overview |
 | `⌘B` | Toggle sidebar |
-| `⌥⌘B` | Open project browser |
-| `⌥⌘L` | Focus project browser address bar |
+| `⌥⌘B` | Open workspace browser |
+| `⌥⌘L` | Focus workspace browser address bar |
 | `⌘G` | Open lazygit |
-| `⌘P` | Project switcher |
+| `⇧⌘A` | Open AI session |
+| `⌘P` | Workspace switcher |
 | `⇧⌘T` | Theme picker |
 | `⌘,` | Settings |
 | `⌘1`–`⌘9` | Jump to window N |
@@ -125,7 +127,7 @@ All shortcuts use `Cmd` (`⌘`) as the modifier.
 | Terminal Rendering | Metal via libghostty (GhosttyKit) |
 | Shell Persistence | tmux |
 | Window Chrome | AppKit (NSWindow, NSMenu) |
-| Project Config | XcodeGen (`project.yml`) |
+| Workspace Config | XcodeGen (`workspace.yml`) |
 | Testing | XCTest |
 
 ### Prerequisites
@@ -151,7 +153,7 @@ Build and run from Xcode (`⌘R`), or create a release DMG:
 ./scripts/build-dmg.sh
 ```
 
-## Project Structure
+## Workspace Structure
 
 ```
 Blink/
@@ -160,7 +162,7 @@ Blink/
 ├── Resources/                  # Bundled fonts, themes, wallpapers
 ├── Models/
 │   ├── Column.swift            # Column layout model
-│   ├── Project.swift           # Project definition
+│   ├── Workspace.swift           # Workspace definition
 │   ├── Tab.swift               # Tab state
 │   └── WallpaperPreset.swift   # Wallpaper configuration
 ├── Store/
@@ -178,12 +180,12 @@ Blink/
 │   └── Color+Hex.swift         # Hex color parsing
 ├── Views/
 │   ├── Shell.swift             # Main workspace layout (columns, tabs, overview)
-│   ├── Sidebar.swift           # Project sidebar
+│   ├── Sidebar.swift           # Workspace sidebar
 │   ├── TabBar.swift            # Tab strip
 │   ├── StatusLine.swift        # Bottom status bar
 │   ├── ThemePicker.swift       # Theme selection overlay
 │   ├── SettingsPage.swift      # Settings panel
-│   ├── StartScreen.swift       # Welcome / project picker
+│   ├── StartScreen.swift       # Welcome / workspace picker
 │   └── Settings/               # Settings sub-pages
 ├── Utilities/
 │   ├── Constants.swift         # Layout constants, defaults
@@ -192,7 +194,7 @@ Blink/
 │   └── GhosttyKit.xcframework # Pre-built libghostty binary
 ├── BTests/                     # Unit tests
 ├── scripts/                    # Build and packaging scripts
-└── project.yml                 # XcodeGen project definition
+└── workspace.yml                 # XcodeGen workspace definition
 ```
 
 ## License

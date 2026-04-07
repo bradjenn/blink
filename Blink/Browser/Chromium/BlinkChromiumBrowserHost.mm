@@ -1331,7 +1331,7 @@ private:
 @implementation BlinkChromiumBrowserHost {
 @private
     NSString *_tabIdentifier;
-    NSString *_projectIdentifier;
+    NSString *_workspaceIdentifier;
     BOOL _browserCreationPending;
     BOOL _isInvalidated;
     BOOL _isInLiveResize;
@@ -1344,7 +1344,7 @@ private:
 }
 
 - (instancetype)initWithTabIdentifier:(NSString *)tabIdentifier
-                    projectIdentifier:(NSString *)projectIdentifier
+                    workspaceIdentifier:(NSString *)workspaceIdentifier
                      initialURLString:(NSString *)initialURLString {
     self = [super init];
     if (self == nil) {
@@ -1352,7 +1352,7 @@ private:
     }
 
     _tabIdentifier = [tabIdentifier copy];
-    _projectIdentifier = [projectIdentifier copy];
+    _workspaceIdentifier = [workspaceIdentifier copy];
     _hostView = [[BlinkChromiumHostView alloc] initWithFrame:NSZeroRect];
     _hostView.owner = self;
     _pendingPopupControllers = [NSMutableDictionary dictionary];
@@ -1704,7 +1704,7 @@ private:
     }
 
     BlinkChromiumRequestContext *requestContext =
-        [[BlinkChromiumRuntime sharedRuntime] requestContextForProjectIdentifier:_projectIdentifier];
+        [[BlinkChromiumRuntime sharedRuntime] requestContextForWorkspaceIdentifier:_workspaceIdentifier];
     if (requestContext == nil) {
         return;
     }
