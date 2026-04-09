@@ -153,6 +153,10 @@ Build and run from Xcode (`⌘R`), or create a release DMG:
 ./scripts/build-dmg.sh
 ```
 
+### Chromium / CEF Notes
+
+- [`docs/cef-upgrade-smoke-tests.md`](docs/cef-upgrade-smoke-tests.md) covers the manual regression pass for popup auth, downloads, WebAuthn-adjacent flows, and popup close behavior after Chromium work.
+
 ## Workspace Structure
 
 ```

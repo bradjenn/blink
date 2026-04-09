@@ -59,14 +59,6 @@ struct ThemePicker: View {
         store.hasWallpaper ? store.backgroundOpacity : 1.0
     }
 
-    private var panelBackground: some ShapeStyle {
-        if store.hasWallpaper {
-            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-        } else {
-            AnyShapeStyle(theme.bg.opacity(0.97))
-        }
-    }
-
     private func requestSearchFocus() {
         searchFocused = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
@@ -82,83 +74,77 @@ struct ThemePicker: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { dismissPicker() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Dismiss")
+            BlinkModalBackdrop(
+                onDismiss: dismissPicker,
+                accessibilityLabel: "Dismiss"
+            )
 
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(">")
-                        .font(Fonts.primary(size: 14))
-                        .foregroundStyle(theme.accent)
-                    TextField("Search themes...", text: $searchText)
-                        .font(Fonts.primary(size: 14))
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(theme.text)
-                        .focused($searchFocused)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            BlinkModalPanel(width: 500) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Text(">")
+                            .font(Fonts.primary(size: 14))
+                            .foregroundStyle(theme.accent)
+                        TextField("Search themes...", text: $searchText)
+                            .font(Fonts.primary(size: 14))
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(theme.text)
+                            .focused($searchFocused)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            if !filteredFavorites.isEmpty {
-                                sectionHeader("FAVORITES")
-                                ForEach(Array(filteredFavorites.enumerated()), id: \.element) { idx, name in
-                                    themeRow(name: name, globalIndex: idx)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                if !filteredFavorites.isEmpty {
+                                    sectionHeader("FAVORITES")
+                                    ForEach(Array(filteredFavorites.enumerated()), id: \.element) { idx, name in
+                                        themeRow(name: name, globalIndex: idx)
+                                    }
+                                }
+
+                                if !filteredDark.isEmpty {
+                                    sectionHeader("DARK")
+                                    ForEach(Array(filteredDark.enumerated()), id: \.element) { idx, name in
+                                        let globalIdx = filteredFavorites.count + idx
+                                        themeRow(name: name, globalIndex: globalIdx)
+                                    }
+                                }
+
+                                if !filteredLight.isEmpty {
+                                    sectionHeader("LIGHT")
+                                    ForEach(Array(filteredLight.enumerated()), id: \.element) { idx, name in
+                                        let globalIdx = filteredFavorites.count + filteredDark.count + idx
+                                        themeRow(name: name, globalIndex: globalIdx)
+                                    }
                                 }
                             }
-
-                            if !filteredDark.isEmpty {
-                                sectionHeader("DARK")
-                                ForEach(Array(filteredDark.enumerated()), id: \.element) { idx, name in
-                                    let globalIdx = filteredFavorites.count + idx
-                                    themeRow(name: name, globalIndex: globalIdx)
-                                }
-                            }
-
-                            if !filteredLight.isEmpty {
-                                sectionHeader("LIGHT")
-                                ForEach(Array(filteredLight.enumerated()), id: \.element) { idx, name in
-                                    let globalIdx = filteredFavorites.count + filteredDark.count + idx
-                                    themeRow(name: name, globalIndex: globalIdx)
-                                }
-                            }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                        .onAppear {
+                            scrollSelection(in: proxy, animated: false)
+                        }
+                        .onChange(of: selectedIndex) {
+                            scrollSelection(in: proxy)
+                        }
                     }
-                    .onAppear {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                    .onChange(of: selectedIndex) {
-                        scrollSelection(in: proxy)
-                    }
-                }
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                HStack(spacing: 14) {
-                    hint("↑↓ j/k", label: "navigate")
-                    hint("↵", label: "select")
-                    hint("esc", label: "close")
+                    HStack(spacing: 14) {
+                        hint("↑↓ j/k", label: "navigate")
+                        hint("↵", label: "select")
+                        hint("esc", label: "close")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 480)
             }
-            .frame(width: 500, height: 480)
-            .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
                 moveSelection(by: -1)
                 return .handled
@@ -273,10 +259,7 @@ struct ThemePicker: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .background(
-                rowBackground(isSelected: isSelected, isHovered: hoveredThemeName == name)
-            )
+            .blinkSelectableRow(isSelected: isSelected, isHovered: hoveredThemeName == name)
         }
         .buttonStyle(.plain)
         .id(name)
@@ -285,18 +268,6 @@ struct ThemePicker: View {
             hoveredThemeName = isHovered ? name : nil
         }
         .pointerCursor()
-    }
-
-    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(theme.accent.opacity(0.12))
-        }
-
-        if isHovered {
-            return AnyShapeStyle(theme.accent.opacity(0.08))
-        }
-
-        return AnyShapeStyle(Color.clear)
     }
 
     private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {

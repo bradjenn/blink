@@ -267,6 +267,18 @@ final class BrowserHostingView: NSView {
 
 final class BrowserSidebarHoverTrackingView: NSView {
     var onHoverChange: ((Bool) -> Void)?
+    var isEnabled: Bool = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            if isEnabled {
+                installEventMonitorIfNeeded()
+                evaluateHoverState()
+            } else {
+                removeEventMonitor()
+                setHovering(false)
+            }
+        }
+    }
     var hotspotWidth: CGFloat = 0
     var leadingEdgeInset: CGFloat = 0
 
@@ -283,7 +295,7 @@ final class BrowserSidebarHoverTrackingView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
-        if window != nil {
+        if window != nil, isEnabled {
             installEventMonitorIfNeeded()
             evaluateHoverState()
         } else {
@@ -327,7 +339,7 @@ final class BrowserSidebarHoverTrackingView: NSView {
     }
 
     private func installEventMonitorIfNeeded() {
-        guard eventMonitor == nil else { return }
+        guard isEnabled, eventMonitor == nil else { return }
 
         window?.acceptsMouseMovedEvents = true
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
@@ -344,6 +356,10 @@ final class BrowserSidebarHoverTrackingView: NSView {
     }
 
     private func evaluateHoverState(for event: NSEvent? = nil) {
+        guard isEnabled else {
+            setHovering(false)
+            return
+        }
         guard let window else {
             setHovering(false)
             return
@@ -375,12 +391,14 @@ final class BrowserSidebarHoverTrackingView: NSView {
 
 struct BrowserSidebarHoverRegion: NSViewRepresentable {
     let onHoverChange: (Bool) -> Void
+    let isEnabled: Bool
     let hotspotWidth: CGFloat
     let leadingEdgeInset: CGFloat
 
     func makeNSView(context: Context) -> BrowserSidebarHoverTrackingView {
         let view = BrowserSidebarHoverTrackingView()
         view.onHoverChange = onHoverChange
+        view.isEnabled = isEnabled
         view.hotspotWidth = hotspotWidth
         view.leadingEdgeInset = leadingEdgeInset
         return view
@@ -389,6 +407,7 @@ struct BrowserSidebarHoverRegion: NSViewRepresentable {
     func updateNSView(_ nsView: BrowserSidebarHoverTrackingView, context: Context) {
         let didChangeGeometry = nsView.hotspotWidth != hotspotWidth || nsView.leadingEdgeInset != leadingEdgeInset
         nsView.onHoverChange = onHoverChange
+        nsView.isEnabled = isEnabled
         nsView.hotspotWidth = hotspotWidth
         nsView.leadingEdgeInset = leadingEdgeInset
         if didChangeGeometry {

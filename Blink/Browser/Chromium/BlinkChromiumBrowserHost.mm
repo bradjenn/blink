@@ -10,6 +10,7 @@
 #include "include/cef_frame.h"
 #include "include/cef_life_span_handler.h"
 #include "include/cef_load_handler.h"
+#include "include/cef_permission_handler.h"
 #include "include/cef_request_handler.h"
 #include "include/cef_request_context.h"
 #include "include/wrapper/cef_helpers.h"
@@ -24,6 +25,7 @@
 
 typedef void (^BlinkChromiumOpenNewTabHandler)(NSString *_Nullable urlString);
 typedef void (^BlinkChromiumPopupLifecycleHandler)(void);
+typedef void (^BlinkChromiumAuthenticationCompletedHandler)(NSString *urlString);
 typedef void (^BlinkChromiumDownloadUpdateHandler)(NSString *downloadIdentifier,
                                                    NSString *_Nullable urlString,
                                                    NSString *suggestedFileName,
@@ -305,14 +307,6 @@ BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
         return NO;
     }
 
-    if (([provider isEqualToString:@"google"] || [idp isEqualToString:@"google"]) &&
-        (([host containsString:@"supabase"] && [path containsString:@"/auth/"]) ||
-         [path containsString:@"/authorize"] ||
-         [path containsString:@"/callback"] ||
-         [absoluteString containsString:@"oauth"])) {
-        return YES;
-    }
-
     if (([host isEqualToString:@"api.daily.dev"] && [path hasPrefix:@"/auth/"]) ||
         ([host isEqualToString:@"app.daily.dev"] && [path hasPrefix:@"/callback"])) {
         return NO;
@@ -330,20 +324,19 @@ BOOL BlinkChromiumShouldOpenPopupExternally(NSString *urlString) {
         return NO;
     }
 
-    if ([host isEqualToString:@"accounts.google.com"]) {
-        return YES;
-    }
-
-    if ([host hasSuffix:@".accounts.google.com"]) {
-        return YES;
-    }
-
-    if (([host hasSuffix:@".google.com"] || [host isEqualToString:@"google.com"]) &&
-        ([path containsString:@"/o/oauth"] ||
-         [path containsString:@"/signin/oauth"] ||
-         [absoluteString containsString:@"oauth"] ||
-         [absoluteString containsString:@"googleusercontent.com"])) {
-        return YES;
+    // Keep Google auth embedded in the popup. Bluetooth/passkey suppression now
+    // happens in Chromium runtime configuration, so handing the flow to the
+    // default browser breaks the in-app callback sequence.
+    if ([provider isEqualToString:@"google"] ||
+        [idp isEqualToString:@"google"] ||
+        [host isEqualToString:@"accounts.google.com"] ||
+        [host hasSuffix:@".accounts.google.com"] ||
+        (([host hasSuffix:@".google.com"] || [host isEqualToString:@"google.com"]) &&
+         ([path containsString:@"/o/oauth"] ||
+          [path containsString:@"/signin/oauth"] ||
+          [absoluteString containsString:@"oauth"] ||
+          [absoluteString containsString:@"googleusercontent.com"]))) {
+        return NO;
     }
 
     return NO;
@@ -531,6 +524,7 @@ class BlinkChromiumClient final : public CefClient,
                                   public CefLoadHandler,
                                   public CefLifeSpanHandler,
                                   public CefFocusHandler,
+                                  public CefPermissionHandler,
                                   public CefRequestHandler {
 public:
     explicit BlinkChromiumClient(id<BlinkChromiumClientHost> host)
@@ -604,11 +598,33 @@ public:
         host->ShowDevTools(windowInfo, nullptr, settings, CefPoint());
     }
 
-    void CloseBrowser() {
+    void CloseBrowser(bool forceClose = false) {
         CEF_REQUIRE_UI_THREAD();
         if (browser_ != nullptr) {
-            browser_->GetHost()->CloseBrowser(true);
+            browser_->GetHost()->CloseBrowser(forceClose);
         }
+    }
+
+    bool TryCloseBrowser() {
+        CEF_REQUIRE_UI_THREAD();
+        if (browser_ == nullptr) {
+            return true;
+        }
+
+        return browser_->GetHost()->TryCloseBrowser();
+    }
+
+    bool IsReadyToBeClosed() const {
+        CEF_REQUIRE_UI_THREAD();
+        if (browser_ == nullptr) {
+            return true;
+        }
+
+        return browser_->GetHost()->IsReadyToBeClosed();
+    }
+
+    bool IsClosing() const {
+        return is_closing_;
     }
 
     void WasResized() {
@@ -635,6 +651,10 @@ public:
     }
 
     CefRefPtr<CefRequestHandler> GetRequestHandler() override {
+        return this;
+    }
+
+    CefRefPtr<CefPermissionHandler> GetPermissionHandler() override {
         return this;
     }
 
@@ -728,21 +748,18 @@ public:
         );
 
         if (targetURLString == nil || [targetURLString isEqualToString:@"about:blank"]) {
-            if (BlinkChromiumPopupFeaturesRequestSeparateWindow(popupFeatures) ||
-                !BlinkChromiumTargetDispositionOpensTab(target_disposition)) {
-                if ([host_ clientConfigurePopupWithID:popup_id
-                                      targetURLString:targetURLString
-                                    targetDisposition:target_disposition
-                                        popupFeatures:popupFeatures
-                                           windowInfo:windowInfo
-                                               client:client
-                                             settings:settings]) {
-                    BlinkChromiumPopupDebugLog(@"Popup retained as hidden bootstrap %@", targetURLString ?: @"<nil>");
-                    return false;
-                }
+            if ([host_ clientConfigurePopupWithID:popup_id
+                                  targetURLString:targetURLString
+                                targetDisposition:target_disposition
+                                    popupFeatures:popupFeatures
+                                       windowInfo:windowInfo
+                                           client:client
+                                         settings:settings]) {
+                BlinkChromiumPopupDebugLog(@"Popup retained as hidden bootstrap %@", targetURLString ?: @"<nil>");
+                return false;
             }
 
-            BlinkChromiumPopupDebugLog(@"Blank bootstrap popup fell back to default handling");
+            BlinkChromiumPopupDebugLog(@"Blank bootstrap popup failed custom handling");
             client = nullptr;
             return false;
         }
@@ -786,6 +803,41 @@ public:
         }
     }
 
+    bool OnRequestMediaAccessPermission(
+        CefRefPtr<CefBrowser> browser,
+        CefRefPtr<CefFrame> frame,
+        const CefString& requesting_origin,
+        uint32_t requested_permissions,
+        CefRefPtr<CefMediaAccessCallback> callback
+    ) override {
+        CEF_REQUIRE_UI_THREAD();
+        BlinkChromiumPopupDebugLog(@"Denied media permission origin=%@ permissions=0x%x",
+                                   BlinkChromiumStringOrNil(requesting_origin) ?: @"<nil>",
+                                   requested_permissions);
+        if (callback != nullptr) {
+            callback->Cancel();
+        }
+        return true;
+    }
+
+    bool OnShowPermissionPrompt(
+        CefRefPtr<CefBrowser> browser,
+        uint64_t prompt_id,
+        const CefString& requesting_origin,
+        uint32_t requested_permissions,
+        CefRefPtr<CefPermissionPromptCallback> callback
+    ) override {
+        CEF_REQUIRE_UI_THREAD();
+        BlinkChromiumPopupDebugLog(@"Denied permission prompt id=%llu origin=%@ permissions=0x%x",
+                                   prompt_id,
+                                   BlinkChromiumStringOrNil(requesting_origin) ?: @"<nil>",
+                                   requested_permissions);
+        if (callback != nullptr) {
+            callback->Continue(CEF_PERMISSION_RESULT_DENY);
+        }
+        return true;
+    }
+
     void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
         CEF_REQUIRE_UI_THREAD();
         browser_ = browser;
@@ -804,10 +856,18 @@ public:
 
     void OnBeforeClose(CefRefPtr<CefBrowser> browser) override {
         CEF_REQUIRE_UI_THREAD();
+        BlinkChromiumPopupDebugLog(@"OnBeforeClose browser=%d", browser != nullptr ? browser->GetIdentifier() : -1);
         browser_ = nullptr;
         if (host_ != nil) {
             [host_ clientDidCloseBrowser];
         }
+    }
+
+    bool DoClose(CefRefPtr<CefBrowser> browser) override {
+        CEF_REQUIRE_UI_THREAD();
+        BlinkChromiumPopupDebugLog(@"DoClose browser=%d", browser != nullptr ? browser->GetIdentifier() : -1);
+        is_closing_ = true;
+        return false;
     }
 
     void OnGotFocus(CefRefPtr<CefBrowser> browser) override {
@@ -883,6 +943,7 @@ private:
     std::string current_url_;
     std::string current_title_;
     bool pending_focus_ = false;
+    bool is_closing_ = false;
     bool can_go_back_ = false;
     bool can_go_forward_ = false;
     bool is_loading_ = false;
@@ -898,6 +959,7 @@ private:
 - (instancetype)initWithInitialURLString:(nullable NSString *)initialURLString
                            popupFeatures:(const CefPopupFeatures&)popupFeatures
                              onOpenNewTab:(BlinkChromiumOpenNewTabHandler)onOpenNewTab
+                 onAuthenticationCompleted:(BlinkChromiumAuthenticationCompletedHandler)onAuthenticationCompleted
                          onDownloadUpdate:(BlinkChromiumDownloadUpdateHandler)onDownloadUpdate
                                 onCreated:(BlinkChromiumPopupLifecycleHandler)onCreated
                                  onClosed:(BlinkChromiumPopupLifecycleHandler)onClosed;
@@ -910,20 +972,26 @@ private:
 
 @implementation BlinkChromiumPopupWindowController {
 @private
+    dispatch_block_t _pendingPresentationWorkItem;
     NSString *_initialURLString;
     BOOL _didCreateBrowser;
+    BOOL _didCompleteAuthenticationFlow;
     BOOL _didHandOffExternalNavigation;
     BOOL _didFinishClosing;
     BOOL _hasPresentedWindow;
+    BOOL _isManagingDownloadLifecycle;
     BOOL _isClosingBrowser;
     BOOL _isInLiveResize;
+    BOOL _didSchedulePostCloseCompletion;
     NSSize _lastReportedHostSize;
+    NSString *_completedAuthenticationURLString;
     dispatch_block_t _pendingResizeWorkItem;
     NSWindow *_window;
     BlinkChromiumHostView *_hostView;
     BlinkChromiumBrowserStateSnapshot *_snapshot;
     NSMutableDictionary<NSNumber *, BlinkChromiumPopupWindowController *> *_pendingPopupControllers;
     BlinkChromiumOpenNewTabHandler _onOpenNewTab;
+    BlinkChromiumAuthenticationCompletedHandler _onAuthenticationCompleted;
     BlinkChromiumDownloadUpdateHandler _onDownloadUpdate;
     BlinkChromiumPopupLifecycleHandler _onCreated;
     BlinkChromiumPopupLifecycleHandler _onClosed;
@@ -933,6 +1001,7 @@ private:
 - (instancetype)initWithInitialURLString:(NSString *)initialURLString
                            popupFeatures:(const CefPopupFeatures&)popupFeatures
                              onOpenNewTab:(BlinkChromiumOpenNewTabHandler)onOpenNewTab
+                 onAuthenticationCompleted:(BlinkChromiumAuthenticationCompletedHandler)onAuthenticationCompleted
                          onDownloadUpdate:(BlinkChromiumDownloadUpdateHandler)onDownloadUpdate
                                 onCreated:(BlinkChromiumPopupLifecycleHandler)onCreated
                                  onClosed:(BlinkChromiumPopupLifecycleHandler)onClosed {
@@ -944,6 +1013,7 @@ private:
     _initialURLString = [initialURLString copy];
     _pendingPopupControllers = [NSMutableDictionary dictionary];
     _onOpenNewTab = [onOpenNewTab copy];
+    _onAuthenticationCompleted = [onAuthenticationCompleted copy];
     _onDownloadUpdate = [onDownloadUpdate copy];
     _onCreated = [onCreated copy];
     _onClosed = [onClosed copy];
@@ -959,10 +1029,12 @@ private:
                                           styleMask:styleMask
                                             backing:NSBackingStoreBuffered
                                               defer:NO];
+    _window.releasedWhenClosed = NO;
     _window.delegate = self;
     _window.identifier = NSUserInterfaceItemIdentifier(@"BlinkChromiumPopupWindow");
     _window.title = BlinkChromiumWindowTitle(nil, _initialURLString);
     _window.contentView = _hostView;
+    _window.initialFirstResponder = _hostView;
 
     _client = new BlinkChromiumClient(self);
     [BlinkChromiumActivePopupControllers() addObject:self];
@@ -971,6 +1043,10 @@ private:
 }
 
 - (BOOL)shouldPresentWindowForURLString:(NSString *)urlString {
+    if (_isManagingDownloadLifecycle) {
+        return NO;
+    }
+
     NSString *candidateURLString = urlString ?: _snapshot.urlString ?: _initialURLString;
     if (candidateURLString.length == 0 || [candidateURLString isEqualToString:@"about:blank"]) {
         return NO;
@@ -983,13 +1059,130 @@ private:
     return YES;
 }
 
+- (BOOL)shouldCompleteAuthenticationPopupForURLString:(NSString *)urlString
+                                            isLoading:(BOOL)isLoading {
+    if (_didCompleteAuthenticationFlow || isLoading || urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSString *host = url.host.lowercaseString;
+    NSString *path = url.path.lowercaseString;
+    NSString *absoluteString = url.absoluteString.lowercaseString;
+
+    if ([host isEqualToString:@"api.daily.dev"] && [path hasPrefix:@"/auth/callback/"]) {
+        return YES;
+    }
+
+    if ([host isEqualToString:@"app.daily.dev"] &&
+        [path hasPrefix:@"/callback"] &&
+        [absoluteString containsString:@"login=true"]) {
+        return YES;
+    }
+
+    return NO;
+}
+
+- (void)hideWindowForDownloadIfNeeded {
+    if (_isManagingDownloadLifecycle) {
+        return;
+    }
+
+    _isManagingDownloadLifecycle = YES;
+    [self cancelPendingPresentationWorkItem];
+    if (_window != nil) {
+        BlinkChromiumPopupDebugLog(@"Hiding popup window while download continues");
+        [_window orderOut:nil];
+    }
+}
+
+- (void)dismissWindowIfNeeded {
+    NSWindow *window = _window;
+    if (window == nil) {
+        return;
+    }
+
+    BlinkChromiumPopupDebugLog(@"Dismissing popup window");
+    _window = nil;
+    window.delegate = nil;
+    if (window.contentView == _hostView) {
+        window.contentView = nil;
+    }
+    [window orderOut:nil];
+}
+
+- (void)requestDeferredWindowClose {
+    if (_isClosingBrowser) {
+        return;
+    }
+
+    _isClosingBrowser = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_window != nil) {
+            BlinkChromiumPopupDebugLog(@"Requesting deferred popup window close");
+            [_window performClose:nil];
+        } else if (_client != nullptr && _client->HasBrowser()) {
+            BlinkChromiumPopupDebugLog(@"Requesting deferred browser close without window");
+            _client->CloseBrowser(false);
+        } else {
+            [self finishClosing];
+            [self dismissWindowIfNeeded];
+        }
+    });
+}
+
+- (void)cancelPendingPresentationWorkItem {
+    if (_pendingPresentationWorkItem == nil) {
+        return;
+    }
+
+    dispatch_block_cancel(_pendingPresentationWorkItem);
+    _pendingPresentationWorkItem = nil;
+}
+
 - (void)presentWindowIfNeededForURLString:(NSString *)urlString {
     if (_hasPresentedWindow || ![self shouldPresentWindowForURLString:urlString]) {
         return;
     }
 
-    _hasPresentedWindow = YES;
-    [_window makeKeyAndOrderFront:nil];
+    if (_pendingPresentationWorkItem != nil) {
+        return;
+    }
+
+    NSTimeInterval presentationDelay =
+        BlinkChromiumLooksLikeAuthenticationPopupURL(urlString) ? 0.0 : 1.0;
+    __weak BlinkChromiumPopupWindowController *weakSelf = self;
+    dispatch_block_t workItem = dispatch_block_create((dispatch_block_flags_t)0, ^{
+        BlinkChromiumPopupWindowController *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+
+        strongSelf->_pendingPresentationWorkItem = nil;
+        if (strongSelf->_hasPresentedWindow ||
+            strongSelf->_didFinishClosing ||
+            ![strongSelf shouldPresentWindowForURLString:urlString]) {
+            return;
+        }
+
+        strongSelf->_hasPresentedWindow = YES;
+        [NSApp activateIgnoringOtherApps:YES];
+        [strongSelf->_window makeKeyAndOrderFront:nil];
+        [strongSelf->_window makeMainWindow];
+        if (strongSelf->_window.firstResponder != strongSelf->_hostView) {
+            [strongSelf->_window makeFirstResponder:strongSelf->_hostView];
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (strongSelf->_client != nullptr) {
+                strongSelf->_client->FocusBrowser();
+            }
+        });
+    });
+    _pendingPresentationWorkItem = workItem;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(presentationDelay * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(),
+                   workItem);
 }
 
 - (void)configureWindowInfo:(CefWindowInfo&)windowInfo
@@ -1004,13 +1197,10 @@ private:
 }
 
 - (void)abortPendingPopup {
+    [self cancelPendingPresentationWorkItem];
     [self cancelPendingResizeWorkItem];
     [self finishClosing];
-    if (_window != nil) {
-        [_window orderOut:nil];
-        [_window close];
-        _window = nil;
-    }
+    [self dismissWindowIfNeeded];
 }
 
 - (void)hostViewDidMoveToWindow {
@@ -1086,22 +1276,23 @@ private:
         _onCreated();
         _onCreated = nil;
     }
-    [self presentWindowIfNeededForURLString:_initialURLString];
-    _client->FocusBrowser();
     [self flushPendingResizeIfNeeded];
 }
 
 - (void)clientDidCloseBrowser {
     _didCreateBrowser = NO;
-    if (_window != nil) {
-        [_window close];
-    }
+    BlinkChromiumPopupDebugLog(@"Popup browser reported closed");
     [self finishClosing];
+    [self dismissWindowIfNeeded];
 }
 
 - (void)clientDidReceiveInteraction {
-    if (_window.firstResponder != _hostView) {
-        [_window makeFirstResponder:_hostView];
+    if (!_hasPresentedWindow || _window == nil) {
+        return;
+    }
+
+    if (!_window.isKeyWindow) {
+        [_window makeKeyAndOrderFront:nil];
     }
 }
 
@@ -1110,6 +1301,17 @@ private:
                        canGoBack:(BOOL)canGoBack
                     canGoForward:(BOOL)canGoForward
                        isLoading:(BOOL)isLoading {
+    BlinkChromiumPopupDebugLog(@"Popup URL update %@ loading=%d",
+                               urlString ?: @"<nil>",
+                               isLoading);
+    if ([self shouldCompleteAuthenticationPopupForURLString:urlString isLoading:isLoading]) {
+        BlinkChromiumPopupDebugLog(@"Completing auth popup %@", urlString ?: @"<nil>");
+        _didCompleteAuthenticationFlow = YES;
+        _completedAuthenticationURLString = [urlString copy];
+        [self requestDeferredWindowClose];
+        return;
+    }
+
     if ([self clientHandleExternalNavigationForURLString:urlString]) {
         return;
     }
@@ -1158,14 +1360,25 @@ private:
     }
 
     NSString *currentURLString = _snapshot.urlString ?: _initialURLString;
-    BOOL isBlankPopup = currentURLString.length == 0 || [currentURLString isEqualToString:@"about:blank"];
-    if (!isBlankPopup) {
+    BOOL isAuthenticationPopup = BlinkChromiumLooksLikeAuthenticationPopupURL(currentURLString);
+    if (isAuthenticationPopup) {
         return;
     }
 
+    [self hideWindowForDownloadIfNeeded];
+
+    if (isInProgress && !isComplete && !isCanceled && !isInterrupted) {
+        BlinkChromiumPopupDebugLog(@"Keeping hidden popup alive for active download currentURL=%@ downloadURL=%@",
+                                   currentURLString ?: @"<nil>",
+                                   urlString ?: @"<nil>");
+        return;
+    }
+
+    BlinkChromiumPopupDebugLog(@"Closing popup after terminal download update currentURL=%@ downloadURL=%@",
+                               currentURLString ?: @"<nil>",
+                               urlString ?: @"<nil>");
     if (_client != nullptr && _client->HasBrowser()) {
-        _isClosingBrowser = YES;
-        _client->CloseBrowser();
+        [self requestDeferredWindowClose];
     } else {
         [self abortPendingPopup];
     }
@@ -1181,8 +1394,7 @@ private:
     BlinkChromiumOpenURLExternally(urlString);
 
     if (_client != nullptr && _client->HasBrowser()) {
-        _isClosingBrowser = YES;
-        _client->CloseBrowser();
+        [self requestDeferredWindowClose];
     } else {
         [self abortPendingPopup];
     }
@@ -1202,6 +1414,7 @@ private:
         [[BlinkChromiumPopupWindowController alloc] initWithInitialURLString:targetURLString
                                                                popupFeatures:popupFeatures
                                                                  onOpenNewTab:_onOpenNewTab
+                                                 onAuthenticationCompleted:_onAuthenticationCompleted
                                                             onDownloadUpdate:_onDownloadUpdate
                                                                     onCreated:^{
                                                                         [weakSelf clearPendingPopupWithID:popupID];
@@ -1233,17 +1446,68 @@ private:
 }
 
 - (BOOL)windowShouldClose:(id)sender {
-    if (_client != nullptr && _client->HasBrowser() && !_isClosingBrowser) {
-        _isClosingBrowser = YES;
-        _client->CloseBrowser();
-        return NO;
+    if (_client != nullptr && _client->HasBrowser()) {
+        if (_client->IsReadyToBeClosed()) {
+            BlinkChromiumPopupDebugLog(@"windowShouldClose allowing ready popup close");
+            return YES;
+        }
+
+        BOOL shouldClose = _client->TryCloseBrowser();
+        BlinkChromiumPopupDebugLog(@"windowShouldClose TryCloseBrowser=%d", shouldClose);
+        if (!shouldClose) {
+            _isClosingBrowser = YES;
+        }
+        return shouldClose;
     }
 
+    BlinkChromiumPopupDebugLog(@"windowShouldClose allowing AppKit close");
     return YES;
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
-    [self finishClosing];
+    BlinkChromiumPopupDebugLog(@"windowWillClose");
+    NSWindow *window = notification.object;
+    if (window == _window && window.contentView == _hostView) {
+        BlinkChromiumPopupDebugLog(@"Detaching popup host view during window close");
+        window.contentView = nil;
+    }
+
+    if (_hostView != nil) {
+        _hostView.owner = nil;
+        _hostView = nil;
+    }
+
+    if (_client != nullptr) {
+        BlinkChromiumPopupDebugLog(@"Detaching popup client host during window close");
+        _client->DetachHost();
+        _client = nullptr;
+    }
+
+    if (!_didSchedulePostCloseCompletion) {
+        _didSchedulePostCloseCompletion = YES;
+        NSWindow *closingWindow = _window;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (closingWindow == _window) {
+                _window.delegate = nil;
+                _window = nil;
+            }
+
+            if (_completedAuthenticationURLString != nil && _onAuthenticationCompleted != nil) {
+                NSString *completedAuthenticationURLString = [_completedAuthenticationURLString copy];
+                BlinkChromiumAuthenticationCompletedHandler onAuthenticationCompleted = [_onAuthenticationCompleted copy];
+                onAuthenticationCompleted(completedAuthenticationURLString);
+            }
+
+            [self finishClosing];
+        });
+    }
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+    if (_window.firstResponder != _hostView) {
+        [_window makeFirstResponder:_hostView];
+    }
+    _client->FocusBrowser();
 }
 
 - (void)finishClosing {
@@ -1251,7 +1515,9 @@ private:
         return;
     }
 
+    BlinkChromiumPopupDebugLog(@"finishClosing");
     _didFinishClosing = YES;
+    [self cancelPendingPresentationWorkItem];
     [self cancelPendingResizeWorkItem];
     NSArray<BlinkChromiumPopupWindowController *> *pendingPopups = _pendingPopupControllers.allValues;
     [_pendingPopupControllers removeAllObjects];
@@ -1264,6 +1530,8 @@ private:
         _onClosed = nil;
     }
     _onCreated = nil;
+    _onAuthenticationCompleted = nil;
+    _completedAuthenticationURLString = nil;
 
     [BlinkChromiumActivePopupControllers() removeObject:self];
 }
@@ -1331,7 +1599,7 @@ private:
 @implementation BlinkChromiumBrowserHost {
 @private
     NSString *_tabIdentifier;
-    NSString *_workspaceIdentifier;
+    NSString *_profileIdentifier;
     BOOL _browserCreationPending;
     BOOL _isInvalidated;
     BOOL _isInLiveResize;
@@ -1344,7 +1612,7 @@ private:
 }
 
 - (instancetype)initWithTabIdentifier:(NSString *)tabIdentifier
-                    workspaceIdentifier:(NSString *)workspaceIdentifier
+                     profileIdentifier:(NSString *)profileIdentifier
                      initialURLString:(NSString *)initialURLString {
     self = [super init];
     if (self == nil) {
@@ -1352,7 +1620,7 @@ private:
     }
 
     _tabIdentifier = [tabIdentifier copy];
-    _workspaceIdentifier = [workspaceIdentifier copy];
+    _profileIdentifier = [profileIdentifier copy];
     _hostView = [[BlinkChromiumHostView alloc] initWithFrame:NSZeroRect];
     _hostView.owner = self;
     _pendingPopupControllers = [NSMutableDictionary dictionary];
@@ -1628,6 +1896,20 @@ private:
     return NO;
 }
 
+- (void)handleAuthenticationCompletedForURLString:(NSString *)urlString {
+    if (_isInvalidated || _client == nullptr || !_client->HasBrowser()) {
+        return;
+    }
+
+    BlinkChromiumPopupDebugLog(@"Refreshing opener after auth completion %@", urlString ?: @"<nil>");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_isInvalidated || _client == nullptr || !_client->HasBrowser()) {
+            return;
+        }
+        _client->Reload();
+    });
+}
+
 - (BOOL)clientConfigurePopupWithID:(int)popupID
                    targetURLString:(NSString *)targetURLString
                  targetDisposition:(CefLifeSpanHandler::WindowOpenDisposition)targetDisposition
@@ -1642,6 +1924,9 @@ private:
                                                                  onOpenNewTab:^(NSString *urlString) {
                                                                      [weakSelf clientDidRequestOpenNewTabWithURLString:urlString];
                                                                  }
+                                                 onAuthenticationCompleted:^(NSString *urlString) {
+                                                     [weakSelf handleAuthenticationCompletedForURLString:urlString];
+                                                 }
                                                             onDownloadUpdate:^(NSString *downloadIdentifier,
                                                                                NSString *urlString,
                                                                                NSString *suggestedFileName,
@@ -1704,7 +1989,7 @@ private:
     }
 
     BlinkChromiumRequestContext *requestContext =
-        [[BlinkChromiumRuntime sharedRuntime] requestContextForWorkspaceIdentifier:_workspaceIdentifier];
+        [[BlinkChromiumRuntime sharedRuntime] requestContextForProfileIdentifier:_profileIdentifier];
     if (requestContext == nil) {
         return;
     }

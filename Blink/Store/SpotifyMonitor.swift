@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct SpotifyStatus: Equatable {
@@ -95,12 +96,7 @@ final class SpotifyMonitor {
 }
 
 private func fetchSpotifyStatus() -> SpotifyStatus {
-    // Check if Spotify is running
-    let isRunning = runOsascript(script:
-        "tell application \"System Events\" to (name of processes) contains \"Spotify\""
-    ).trimmingCharacters(in: .whitespacesAndNewlines)
-
-    guard isRunning == "true" else { return .empty }
+    guard isSpotifyRunning() else { return .empty }
 
     // Query track info in a single script to minimize process spawns
     let script = """
@@ -127,6 +123,10 @@ private func fetchSpotifyStatus() -> SpotifyStatus {
         artworkURL: parts[3].isEmpty ? nil : parts[3],
         isPlaying: parts[4] == "playing"
     )
+}
+
+private func isSpotifyRunning() -> Bool {
+    !NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty
 }
 
 private func runOsascript(script: String) -> String {

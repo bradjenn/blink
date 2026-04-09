@@ -58,6 +58,17 @@
 		19A7388011B32BAA1810F986 /* BrowserAppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9B9ABE5070FDDE8DD1C2EB /* BrowserAppStoreTests.swift */; };
 		19F2F8B9416F42F451D3A428 /* ThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */; };
 		1AF0A1B2C3D4E5F60718293A /* AISessionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F0A1B2C3D4E5F60718293A /* AISessionPicker.swift */; };
+		A20100000000000000000001 /* BlinkModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* BlinkModal.swift */; };
+		A20100000000000000000002 /* BlinkActionButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* BlinkActionButtonStyle.swift */; };
+		A20100000000000000000003 /* WorkspaceLandingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* WorkspaceLandingPage.swift */; };
+		A20100000000000000000004 /* WorkspaceOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000004 /* WorkspaceOnboarding.swift */; };
+		A20100000000000000000005 /* WorkspacePromptModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000005 /* WorkspacePromptModal.swift */; };
+		A20100000000000000000006 /* AppStore+WorkspaceLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000006 /* AppStore+WorkspaceLifecycle.swift */; };
+		A20100000000000000000007 /* AppStore+InterfaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000007 /* AppStore+InterfaceState.swift */; };
+		A20100000000000000000008 /* AppStore+WorkspaceNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000008 /* AppStore+WorkspaceNavigation.swift */; };
+		A20100000000000000000009 /* WorkspaceSidebarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000009 /* WorkspaceSidebarPanel.swift */; };
+		A2010000000000000000000A /* WorkspaceColumnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1010000000000000000000A /* WorkspaceColumnsView.swift */; };
+		A2010000000000000000000B /* WorkspaceColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1010000000000000000000B /* WorkspaceColumnView.swift */; };
 		1A1E65AC4F44F5A15C3BED5C /* auth_callback_ctocpp.cc in Sources */ = {isa = PBXBuildFile; fileRef = C977046B05162E376732E989 /* auth_callback_ctocpp.cc */; };
 		1A5507F3090A1D18C99067D6 /* binary_value_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 8C37070C7D9C860AEA3C876B /* binary_value_ctocpp.h */; };
 		1ACA3C15FD9C709EDDC92934 /* BrowserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E6CE37B17F06FC055AB927 /* BrowserManager.swift */; };
@@ -462,6 +473,17 @@
 		D9ED1C124A86BF8C971698E1 /* BrowserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69E2405D0B399681EC6061C /* BrowserDefaults.swift */; };
 		DA0E7977C4771E1E8E2AEEFC /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E53B8CED8557F923515E7F /* TerminalTheme.swift */; };
 		DA7A141D6EEC41ED5B03E7BB /* StartScreenWorkspacePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B24EB0AEA9E3EBBA512711C /* StartScreenWorkspacePicker.swift */; };
+		A30100000000000000000001 /* BlinkModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* BlinkModal.swift */; };
+		A30100000000000000000002 /* BlinkActionButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* BlinkActionButtonStyle.swift */; };
+		A30100000000000000000003 /* WorkspaceLandingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* WorkspaceLandingPage.swift */; };
+		A30100000000000000000004 /* WorkspaceOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000004 /* WorkspaceOnboarding.swift */; };
+		A30100000000000000000005 /* WorkspacePromptModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000005 /* WorkspacePromptModal.swift */; };
+		A30100000000000000000006 /* AppStore+WorkspaceLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000006 /* AppStore+WorkspaceLifecycle.swift */; };
+		A30100000000000000000007 /* AppStore+InterfaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000007 /* AppStore+InterfaceState.swift */; };
+		A30100000000000000000008 /* AppStore+WorkspaceNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000008 /* AppStore+WorkspaceNavigation.swift */; };
+		A30100000000000000000009 /* WorkspaceSidebarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000009 /* WorkspaceSidebarPanel.swift */; };
+		A3010000000000000000000A /* WorkspaceColumnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1010000000000000000000A /* WorkspaceColumnsView.swift */; };
+		A3010000000000000000000B /* WorkspaceColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1010000000000000000000B /* WorkspaceColumnView.swift */; };
 		DA94ECC1C545668AC2BBDEDE /* run_file_dialog_callback_cpptoc.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = A4B32C126B034A1512F5121A /* run_file_dialog_callback_cpptoc.h */; };
 		DAB3ACB3C1304DC3CD8335C4 /* print_dialog_callback_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 83C089694DA355ACCEDB9873 /* print_dialog_callback_ctocpp.h */; };
 		DAC15DED6A9751A8DD2A0652 /* file_dialog_callback_ctocpp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = E7ABE63A94E6CF6B0C7DA0A5 /* file_dialog_callback_ctocpp.h */; };
@@ -798,6 +820,9 @@
 		13E2B761BC486447C060B9E6 /* delete_cookies_callback_cpptoc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = delete_cookies_callback_cpptoc.h; sourceTree = "<group>"; };
 		142E0EBB71A4A3BFB49E5E28 /* unresponsive_process_callback_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = unresponsive_process_callback_ctocpp.h; sourceTree = "<group>"; };
 		1448D063BC06561A433B9DEC /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		A10100000000000000000006 /* AppStore+WorkspaceLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+WorkspaceLifecycle.swift"; sourceTree = "<group>"; };
+		A10100000000000000000007 /* AppStore+InterfaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+InterfaceState.swift"; sourceTree = "<group>"; };
+		A10100000000000000000008 /* AppStore+WorkspaceNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+WorkspaceNavigation.swift"; sourceTree = "<group>"; };
 		147C477B8A28080A72DC50DB /* domnode_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = domnode_ctocpp.h; sourceTree = "<group>"; };
 		147CFD69423EDD7D1BD29C52 /* akane-pagoda.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "akane-pagoda.jpg"; sourceTree = "<group>"; };
 		14F67134F288CCA877CA02C1 /* scheme_handler_factory_cpptoc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = scheme_handler_factory_cpptoc.h; sourceTree = "<group>"; };
@@ -809,6 +834,11 @@
 		188062355388B795F360A5EF /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		18A33C84ADC12092560EA0EC /* ClaudeHookReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHookReceiver.swift; sourceTree = "<group>"; };
 		18A7911968BF941BBC880DDA /* context_menu_params_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = context_menu_params_ctocpp.h; sourceTree = "<group>"; };
+		A10100000000000000000002 /* BlinkActionButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlinkActionButtonStyle.swift; sourceTree = "<group>"; };
+		A10100000000000000000001 /* BlinkModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlinkModal.swift; sourceTree = "<group>"; };
+		A10100000000000000000009 /* WorkspaceSidebarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSidebarPanel.swift; sourceTree = "<group>"; };
+		A1010000000000000000000A /* WorkspaceColumnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceColumnsView.swift; sourceTree = "<group>"; };
+		A1010000000000000000000B /* WorkspaceColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceColumnView.swift; sourceTree = "<group>"; };
 		190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyMonitor.swift; sourceTree = "<group>"; };
 		19856D1016DC9FC921365D98 /* base_ref_counted_cpptoc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = base_ref_counted_cpptoc.h; sourceTree = "<group>"; };
 		19BD8E1E43E2DB74E64D1BCC /* libcef_dll_dylib.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = libcef_dll_dylib.cc; sourceTree = "<group>"; };
@@ -842,6 +872,9 @@
 		277A56F333594311BEC8B1A2 /* xml_reader_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = xml_reader_ctocpp.cc; sourceTree = "<group>"; };
 		28C540CF38E6502289851CBB /* drag_data_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = drag_data_ctocpp.cc; sourceTree = "<group>"; };
 		2918567AE906E413040E51F2 /* Shell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shell.swift; sourceTree = "<group>"; };
+		A10100000000000000000003 /* WorkspaceLandingPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLandingPage.swift; sourceTree = "<group>"; };
+		A10100000000000000000004 /* WorkspaceOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceOnboarding.swift; sourceTree = "<group>"; };
+		A10100000000000000000005 /* WorkspacePromptModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspacePromptModal.swift; sourceTree = "<group>"; };
 		29442B0FD7DADCB07265B442 /* textfield_ctocpp.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = textfield_ctocpp.cc; sourceTree = "<group>"; };
 		299440E0BF1B19B8F4B5640E /* cef_browser_info_map.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cef_browser_info_map.h; sourceTree = "<group>"; };
 		29F137100A4BF8C97C586BBD /* browser_host_ctocpp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = browser_host_ctocpp.h; sourceTree = "<group>"; };
@@ -1288,13 +1321,16 @@
 			path = Support/ChromiumHelper;
 			sourceTree = "<group>";
 		};
-		06D0136AFCDEFBC5DB3B80D5 /* Store */ = {
-			isa = PBXGroup;
-			children = (
-				1448D063BC06561A433B9DEC /* AppStore.swift */,
-				0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */,
-				190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */,
-			);
+			06D0136AFCDEFBC5DB3B80D5 /* Store */ = {
+				isa = PBXGroup;
+				children = (
+					1448D063BC06561A433B9DEC /* AppStore.swift */,
+					A10100000000000000000006 /* AppStore+WorkspaceLifecycle.swift */,
+					A10100000000000000000007 /* AppStore+InterfaceState.swift */,
+					A10100000000000000000008 /* AppStore+WorkspaceNavigation.swift */,
+					0B6278A6AA05171F5ECDEC11 /* GitStatus.swift */,
+					190E090B3F7D234349DD5D3C /* SpotifyMonitor.swift */,
+				);
 			path = Store;
 			sourceTree = "<group>";
 		};
@@ -1849,26 +1885,34 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E60DBAEDB631B2250ACE8672 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				C1F0A1B2C3D4E5F60718293A /* AISessionPicker.swift */,
-				B8F4550C3731212E497BE7C8 /* CommandPalette.swift */,
-				A8B93A6E2E9ED0C72D614E69 /* WorkspaceFavicon.swift */,
-				2F051F6B723C8DC22255A384 /* SettingsPage.swift */,
-				2918567AE906E413040E51F2 /* Shell.swift */,
-				8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */,
-				BE438921AB918C1B441ADCF2 /* SidebarWorkspaceItem.swift */,
-				7FBECED94726237307F2628C /* StartScreen.swift */,
-				50350C7F81ECA4D4A6D34A8A /* StartScreenActionRow.swift */,
-				A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */,
-				7B24EB0AEA9E3EBBA512711C /* StartScreenWorkspacePicker.swift */,
-				495E310460549B685EDCF6C4 /* StatusLine.swift */,
-				DC454B9A44EB926A6C43A58B /* TabBar.swift */,
-				6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */,
-				ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */,
-				F9FC872F5D91B5C423DD46FB /* Settings */,
-			);
+			E60DBAEDB631B2250ACE8672 /* Views */ = {
+				isa = PBXGroup;
+				children = (
+					C1F0A1B2C3D4E5F60718293A /* AISessionPicker.swift */,
+					A10100000000000000000002 /* BlinkActionButtonStyle.swift */,
+					A10100000000000000000001 /* BlinkModal.swift */,
+					B8F4550C3731212E497BE7C8 /* CommandPalette.swift */,
+					A8B93A6E2E9ED0C72D614E69 /* WorkspaceFavicon.swift */,
+					A1010000000000000000000A /* WorkspaceColumnsView.swift */,
+					A1010000000000000000000B /* WorkspaceColumnView.swift */,
+					2F051F6B723C8DC22255A384 /* SettingsPage.swift */,
+					2918567AE906E413040E51F2 /* Shell.swift */,
+					8A76CDD8E5246080B8C0CAFE /* Sidebar.swift */,
+					BE438921AB918C1B441ADCF2 /* SidebarWorkspaceItem.swift */,
+					7FBECED94726237307F2628C /* StartScreen.swift */,
+					50350C7F81ECA4D4A6D34A8A /* StartScreenActionRow.swift */,
+					A3C239E14E3DA5622953B833 /* StartScreenLogo.swift */,
+					7B24EB0AEA9E3EBBA512711C /* StartScreenWorkspacePicker.swift */,
+					495E310460549B685EDCF6C4 /* StatusLine.swift */,
+					DC454B9A44EB926A6C43A58B /* TabBar.swift */,
+					6228A41D72F4FE2C8C9DCD4A /* ThemePicker.swift */,
+					A10100000000000000000003 /* WorkspaceLandingPage.swift */,
+					A10100000000000000000004 /* WorkspaceOnboarding.swift */,
+					A10100000000000000000005 /* WorkspacePromptModal.swift */,
+					A10100000000000000000009 /* WorkspaceSidebarPanel.swift */,
+					ECFAAE734F00859E4DB70FF1 /* WorkspaceLayoutState.swift */,
+					F9FC872F5D91B5C423DD46FB /* Settings */,
+				);
 			path = Views;
 			sourceTree = "<group>";
 		};
@@ -2228,12 +2272,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A20100000000000000000006 /* AppStore+WorkspaceLifecycle.swift in Sources */,
+				A20100000000000000000007 /* AppStore+InterfaceState.swift in Sources */,
+				A20100000000000000000008 /* AppStore+WorkspaceNavigation.swift in Sources */,
 				4777F018CFB5F1153CB0AD43 /* AppStore.swift in Sources */,
 				747FC6F8B8102FD0CF1FA1BC /* AppearanceSettings.swift in Sources */,
 				7AED558C6AB2839BE23A1F2B /* BApp.swift in Sources */,
 				5AAD90705C028B4E0691E66B /* BackgroundPopover.swift in Sources */,
+				A20100000000000000000002 /* BlinkActionButtonStyle.swift in Sources */,
 				F3FE70C78D3862C4317FF942 /* BlinkChromiumBrowserHost.mm in Sources */,
 				5E675692342CFA64EB56CBD8 /* BlinkChromiumRuntime.mm in Sources */,
+				A20100000000000000000001 /* BlinkModal.swift in Sources */,
 				5C6FC3BD48FBB6948CD8CB73 /* BlinkEntry.swift in Sources */,
 				AF172D35FE3E2B0F21FFD580 /* BrowserAddressBarSuggestionsView.swift in Sources */,
 				BE8F069B8FB86941774CCA9D /* BrowserContainerView.swift in Sources */,
@@ -2265,12 +2314,16 @@
 				0F3A10C7D5A60BD7027F378D /* PointerCursor.swift in Sources */,
 				EC0AF83FC7C2722793015744 /* Workspace.swift in Sources */,
 				D1CF3AB56481E22FFD1F390F /* WorkspaceFavicon.swift in Sources */,
+				A2010000000000000000000A /* WorkspaceColumnsView.swift in Sources */,
+				A2010000000000000000000B /* WorkspaceColumnView.swift in Sources */,
+				A20100000000000000000003 /* WorkspaceLandingPage.swift in Sources */,
 				1AF0A1B2C3D4E5F60718293A /* AISessionPicker.swift in Sources */,
 				829E3D243E7C0F7AD3EDCFE8 /* SettingsPage.swift in Sources */,
 				41326086246AF35521615246 /* Shell.swift in Sources */,
 				3E5F7D0E5278F9C5CB8CD95D /* Sidebar.swift in Sources */,
 				9DCD4AFE722A23C760E3360B /* SidebarWorkspaceItem.swift in Sources */,
 				666B443D5962F1244391BC7E /* SpotifyMonitor.swift in Sources */,
+				A20100000000000000000004 /* WorkspaceOnboarding.swift in Sources */,
 				B515CCF60006105913EE07AC /* StartScreen.swift in Sources */,
 				C585FA8221E4884E04FABE09 /* StartScreenActionRow.swift in Sources */,
 				0973322112C267606F0D23CC /* StartScreenLogo.swift in Sources */,
@@ -2294,6 +2347,8 @@
 				E2C7CF53477F3E8E337009BE /* WindowDragRegion.swift in Sources */,
 				495E9FB920EF6C6537659923 /* WindowTitleBarConfigurator.swift in Sources */,
 				AB42C98139912D4E2C064CA3 /* WorkspaceLayoutState.swift in Sources */,
+				A20100000000000000000009 /* WorkspaceSidebarPanel.swift in Sources */,
+				A20100000000000000000005 /* WorkspacePromptModal.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2486,12 +2541,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A30100000000000000000006 /* AppStore+WorkspaceLifecycle.swift in Sources */,
+				A30100000000000000000007 /* AppStore+InterfaceState.swift in Sources */,
+				A30100000000000000000008 /* AppStore+WorkspaceNavigation.swift in Sources */,
 				0FB37F06131CCAF924817245 /* AppStore.swift in Sources */,
 				CB2119354411FD5665D4A7F3 /* AppearanceSettings.swift in Sources */,
 				5CA5C241E8BBD7664174D957 /* BApp.swift in Sources */,
 				7065625D6D71AB3BD5777B7F /* BackgroundPopover.swift in Sources */,
+				A30100000000000000000002 /* BlinkActionButtonStyle.swift in Sources */,
 				8392990BAA28A47F5A5ED878 /* BlinkChromiumBrowserHost.mm in Sources */,
 				0007E7523AE37351EEF86422 /* BlinkChromiumRuntime.mm in Sources */,
+				A30100000000000000000001 /* BlinkModal.swift in Sources */,
 				EF4C1E8216227DE78E8B015D /* BlinkEntry.swift in Sources */,
 				6AE50D63B2E9BB3A73ADAC68 /* BrowserAddressBarSuggestionsView.swift in Sources */,
 				65F87582D2A47D4586450C2B /* BrowserContainerView.swift in Sources */,
@@ -2523,12 +2583,16 @@
 				CB53030C537882077647C317 /* PointerCursor.swift in Sources */,
 				E2FCFEEA3E0F6D48B3FA65BE /* Workspace.swift in Sources */,
 				1FBBFD441F0D9646748F633C /* WorkspaceFavicon.swift in Sources */,
+				A3010000000000000000000A /* WorkspaceColumnsView.swift in Sources */,
+				A3010000000000000000000B /* WorkspaceColumnView.swift in Sources */,
+				A30100000000000000000003 /* WorkspaceLandingPage.swift in Sources */,
 				B1F0A1B2C3D4E5F60718293A /* AISessionPicker.swift in Sources */,
 				1BBE58619D05508B1C4B026F /* SettingsPage.swift in Sources */,
 				409BB543A7314C1BD5673A28 /* Shell.swift in Sources */,
 				E5B97668BFDCB5810D64EEA9 /* Sidebar.swift in Sources */,
 				223DE869139B404BD79E61D9 /* SidebarWorkspaceItem.swift in Sources */,
 				A315B570ECDBB171D99135D2 /* SpotifyMonitor.swift in Sources */,
+				A30100000000000000000004 /* WorkspaceOnboarding.swift in Sources */,
 				2A9063CE53776B7488FA3AC7 /* StartScreen.swift in Sources */,
 				67982F5A633D95E2C86BF651 /* StartScreenActionRow.swift in Sources */,
 				F6BC94F9CB07DF67E19FD00C /* StartScreenLogo.swift in Sources */,
@@ -2552,6 +2616,8 @@
 				F048F4D3C1F6791CB0EC32F5 /* WindowDragRegion.swift in Sources */,
 				9C54262632D1BA7B1867755D /* WindowTitleBarConfigurator.swift in Sources */,
 				AD1A61888BF08CF86B1D47F1 /* WorkspaceLayoutState.swift in Sources */,
+				A30100000000000000000009 /* WorkspaceSidebarPanel.swift in Sources */,
+				A30100000000000000000005 /* WorkspacePromptModal.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

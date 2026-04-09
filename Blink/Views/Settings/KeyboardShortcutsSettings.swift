@@ -61,33 +61,30 @@ struct KeyboardShortcutsSettings: View {
     @Environment(AppStore.self) private var store
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Text("Keyboard Shortcuts")
-                    .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
-                    .foregroundStyle(theme.text)
+        VStack(alignment: .leading, spacing: 28) {
+            Text("Keyboard Shortcuts")
+                .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
+                .foregroundStyle(theme.text)
 
-                ForEach(shortcutCategories) { category in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(category.name)
-                            .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
-                            .foregroundStyle(theme.text)
-                            .padding(.bottom, 6)
+            ForEach(shortcutCategories) { category in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.name)
+                        .font(Fonts.primary(size: 14, weight: .medium, family: store.uiFontFamily))
+                        .foregroundStyle(theme.text)
+                        .padding(.bottom, 6)
 
-                        ForEach(category.shortcuts) { shortcut in
-                            ShortcutRow(shortcut: shortcut, fontFamily: store.uiFontFamily)
-                        }
+                    ForEach(category.shortcuts) { shortcut in
+                        ShortcutRow(shortcut: shortcut, fontFamily: store.uiFontFamily)
                     }
                 }
-
-                Spacer()
             }
-            .padding(.leading, 24)
-            .padding(.trailing, 20)
-            .padding(.top, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
         }
-        .scrollContentBackground(.hidden)
+        .padding(.leading, 24)
+        .padding(.trailing, 20)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.clear)
     }
 }

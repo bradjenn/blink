@@ -12,6 +12,7 @@ final class AppStoreTests: XCTestCase {
         "blink.backgroundBlur",
         "blink.hideTitleBar",
         "blink.sidebarVisible",
+        "blink.profiles",
         "blink.workspaces",
         "blink.projects",
         "blink.lastSelectedWorkspaceId",
@@ -47,8 +48,10 @@ final class AppStoreTests: XCTestCase {
 
     func testInitialState() {
         let store = AppStore()
+        XCTAssertEqual(store.profiles.map(\.id), [Profile.personalId])
         XCTAssertEqual(store.workspaces.count, 1)
         XCTAssertEqual(store.workspaces.first?.id, Workspace.scratchSpaceId)
+        XCTAssertEqual(store.workspaces.first?.profileId, Profile.personalId)
         XCTAssertNil(store.activeWorkspaceId)
         XCTAssertNil(store.activeTabId)
         XCTAssertTrue(store.sidebarVisible)
@@ -61,14 +64,19 @@ final class AppStoreTests: XCTestCase {
         try fileManager.createDirectory(at: legacyRoot, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: legacyRoot) }
 
-        let legacyWorkspace = Workspace(
-            id: "legacy-1",
-            name: "Legacy",
-            path: legacyRoot.path,
-            color: "#123456",
-            createdAt: .now
+        let legacyWorkspaceData = try JSONSerialization.data(
+            withJSONObject: [
+                [
+                    "id": "legacy-1",
+                    "name": "Legacy",
+                    "path": legacyRoot.path,
+                    "color": "#123456",
+                    "createdAt": Date().timeIntervalSinceReferenceDate,
+                ],
+            ],
+            options: [.sortedKeys]
         )
-        defaults.set(try JSONEncoder().encode([legacyWorkspace]), forKey: "blink.projects")
+        defaults.set(legacyWorkspaceData, forKey: "blink.projects")
         defaults.set("legacy-1", forKey: "blink.lastSelectedProjectId")
 
         let legacySetupData = try JSONSerialization.data(
@@ -100,6 +108,8 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(store.workspaces.contains(where: { $0.id == "legacy-1" }))
         XCTAssertEqual(store.lastSelectedWorkspaceId, "legacy-1")
         XCTAssertEqual(store.workspaceSetups["legacy-1"]?.workspaceId, "legacy-1")
+        XCTAssertEqual(store.workspaces.first(where: { $0.id == "legacy-1" })?.profileId, "legacy-1")
+        XCTAssertTrue(store.profiles.contains(where: { $0.id == "legacy-1" }))
     }
 
     func testInitPrunesDeletedPersistedWorkspacesAndRelatedState() throws {
@@ -173,7 +183,49 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertEqual(store.activeWorkspaceId, Workspace.scratchSpaceId)
         XCTAssertEqual(store.workspaces.first?.id, Workspace.scratchSpaceId)
+        XCTAssertEqual(store.workspaces.first?.profileId, Profile.personalId)
         XCTAssertTrue(store.workspaceTabs(for: Workspace.scratchSpaceId).isEmpty)
+    }
+
+    func testSetWorkspaceProfileUpdatesWorkspace() {
+        let store = makeStore()
+        let profile = try! XCTUnwrap(store.addProfile(name: "Client A"))
+
+        let didUpdate = store.setWorkspaceProfile("1", profileId: profile.id)
+
+        XCTAssertTrue(didUpdate)
+        XCTAssertEqual(store.workspaces.first(where: { $0.id == "1" })?.profileId, profile.id)
+    }
+
+    func testRemoveProfileReassignsWorkspacesToDefaultProfile() {
+        let store = makeStore()
+        let profile = try! XCTUnwrap(store.addProfile(name: "Client A"))
+        _ = store.setWorkspaceProfile("1", profileId: profile.id)
+
+        let didRemove = store.removeProfile(profile.id)
+
+        XCTAssertTrue(didRemove)
+        XCTAssertEqual(store.workspaces.first(where: { $0.id == "1" })?.profileId, Profile.personalId)
+        XCTAssertFalse(store.profiles.contains(where: { $0.id == profile.id }))
+    }
+
+    func testSidebarProfileSectionsGroupWorkspacesByProfileOrder() {
+        let store = makeStore()
+        let clientA = try! XCTUnwrap(store.addProfile(name: "Client A"))
+        let clientB = try! XCTUnwrap(store.addProfile(name: "Client B"))
+
+        _ = store.setWorkspaceProfile("4", profileId: clientA.id)
+        _ = store.setWorkspaceProfile("2", profileId: clientB.id)
+
+        XCTAssertEqual(
+            store.sidebarProfileSections.map(\.profile.id),
+            [Profile.personalId, clientA.id, clientB.id]
+        )
+        XCTAssertEqual(
+            store.sidebarProfileSections.map { $0.workspaces.map(\.id) },
+            [["1", "3"], ["4"], ["2"]]
+        )
+        XCTAssertEqual(store.sidebarOrderedWorkspaces.map(\.id), ["1", "3", "4", "2"])
     }
 
     func testPresentWorkspaceOnboardingDismissesOtherPickers() {
@@ -213,6 +265,7 @@ final class AppStoreTests: XCTestCase {
             existingFolderPath: workspaceURL.path,
             parentFolderPath: "",
             newFolderName: "",
+            profileId: Profile.personalId,
             starter: .aiSession,
             aiProvider: .opencode,
             browserURL: ""
@@ -233,6 +286,7 @@ final class AppStoreTests: XCTestCase {
         defer { try? fileManager.removeItem(at: tempRoot) }
 
         let store = AppStore()
+        let profile = try XCTUnwrap(store.addProfile(name: "Client A"))
 
         let workspace = try store.completeWorkspaceOnboarding(
             mode: .createFolder,
@@ -240,6 +294,7 @@ final class AppStoreTests: XCTestCase {
             existingFolderPath: "",
             parentFolderPath: tempRoot.path,
             newFolderName: "client",
+            profileId: profile.id,
             starter: .browser,
             aiProvider: .claude,
             browserURL: "example.com"
@@ -252,6 +307,7 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(isDirectory.boolValue)
         XCTAssertEqual(workspace.name, "client")
         XCTAssertEqual(workspace.path, createdWorkspaceURL.path)
+        XCTAssertEqual(workspace.profileId, profile.id)
         XCTAssertEqual(store.workspaceSetups[workspace.id]?.panes.first?.kind, .browser)
         XCTAssertEqual(
             store.workspaceSetups[workspace.id]?.panes.first?.browserState?.selectedTab?.state.urlString,
@@ -270,6 +326,7 @@ final class AppStoreTests: XCTestCase {
             existingFolderPath: existingWorkspace.path,
             parentFolderPath: "",
             newFolderName: "",
+            profileId: Profile.personalId,
             starter: .browser,
             aiProvider: .claude,
             browserURL: "https://example.com"
@@ -296,6 +353,7 @@ final class AppStoreTests: XCTestCase {
                 existingFolderPath: "",
                 parentFolderPath: tempRoot.path,
                 newFolderName: "../client",
+                profileId: Profile.personalId,
                 starter: .terminal,
                 aiProvider: .claude,
                 browserURL: ""
@@ -730,6 +788,44 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(store.isWorkspacePathMissing("1"))
     }
 
+    func testResumeLastWorkspaceSessionRestoresBrowserOnlyWorkspace() {
+        let store = makeStore()
+        store.tabs.removeAll { $0.workspaceId == "1" }
+        store.columns["1"] = []
+        store.lastSelectedWorkspaceId = "1"
+        store.workspaceSetups["1"] = WorkspaceSetup(
+            workspaceId: "1",
+            updatedAt: .now,
+            columns: [
+                WorkspaceSetupColumn(id: "col-0", paneIds: ["pane-browser"])
+            ],
+            panes: [
+                WorkspaceSetupPane(
+                    id: "pane-browser",
+                    kind: .browser,
+                    label: "daily.dev",
+                    role: nil,
+                    command: nil,
+                    workingDirectory: nil,
+                    browserState: BrowserPaneState.singleTab(urlString: "https://app.daily.dev/")
+                )
+            ]
+        )
+
+        store.resumeLastWorkspaceSession()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+
+        XCTAssertEqual(store.activeWorkspaceId, "1")
+        XCTAssertEqual(store.workspaceTabs(for: "1").count, 1)
+        XCTAssertEqual(store.workspaceTabs(for: "1").first?.kind, .browser)
+        XCTAssertEqual(
+            store.workspaceTabs(for: "1").first?.browserState?.selectedTab?.state.urlString,
+            "https://app.daily.dev/"
+        )
+        XCTAssertFalse(store.sidebarFocused)
+        XCTAssertFalse(store.workspaceLandingFocused)
+    }
+
     func testEmptyRuntimeDoesNotEraseAutosavedWorkspaceSession() {
         let store = makeStore()
         let savedSetup = try! XCTUnwrap(store.workspaceSetup(for: "1"))
@@ -774,6 +870,42 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertFalse(store.sidebarFocused)
         XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusRightFromSidebarFocusesWorkspaceLandingWhenWorkspaceHasNoPanes() {
+        let store = makeStore()
+        store.setActiveWorkspace("4")
+        store.sidebarFocused = true
+
+        store.focusRight()
+
+        XCTAssertFalse(store.sidebarFocused)
+        XCTAssertTrue(store.workspaceLandingFocused)
+        XCTAssertNil(store.activeTabId)
+    }
+
+    func testFocusRightFromSidebarRecoversMissingActiveTabUsingSelectablePane() {
+        let store = makeStore()
+        store.setActiveWorkspace("1")
+        store.activeTabId = nil
+        store.sidebarFocused = true
+
+        store.focusRight()
+
+        XCTAssertFalse(store.sidebarFocused)
+        XCTAssertEqual(store.activeTabId, "t1")
+    }
+
+    func testFocusLeftFromWorkspaceLandingReturnsToSidebar() {
+        let store = makeStore()
+        store.setActiveWorkspace("4")
+        store.workspaceLandingFocused = true
+        store.sidebarVisible = true
+
+        store.focusLeft()
+
+        XCTAssertTrue(store.sidebarFocused)
+        XCTAssertFalse(store.workspaceLandingFocused)
     }
 
     func testFocusRightNoOpAtLastColumn() {

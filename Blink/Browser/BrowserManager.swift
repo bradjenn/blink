@@ -24,6 +24,7 @@ final class BrowserManager {
         }
     }
     private var controllers: [String: any BrowserHostController] = [:]
+    private var controllerProfileIds: [String: String] = [:]
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
     @ObservationIgnored private let userDefaults: UserDefaults
 
@@ -46,26 +47,36 @@ final class BrowserManager {
     func controller(
         for tabId: String,
         workspaceId: String,
+        profileId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
     ) -> any BrowserHostController {
         if let existing = controllers[tabId] {
-            return existing
+            if controllerProfileIds[tabId] == profileId {
+                return existing
+            }
+
+            existing.invalidate()
+            controllers[tabId] = nil
+            controllerProfileIds[tabId] = nil
         }
 
         let controller = makeController(
             tabId: tabId,
             workspaceId: workspaceId,
+            profileId: profileId,
             initialState: initialState,
             onStateChange: onStateChange
         )
         controllers[tabId] = controller
+        controllerProfileIds[tabId] = profileId
         return controller
     }
 
     private func makeController(
         tabId: String,
         workspaceId: String,
+        profileId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void
     ) -> any BrowserHostController {
@@ -85,6 +96,7 @@ final class BrowserManager {
             return ChromiumBrowserController(
                 tabId: tabId,
                 workspaceId: workspaceId,
+                profileId: profileId,
                 initialState: initialState,
                 onStateChange: wrappedStateChange,
                 onDownloadUpdate: { [weak self] download in
@@ -108,7 +120,9 @@ final class BrowserManager {
     }
 
     func destroyController(tabId: String) {
+        NSLog("[BlinkBrowserManager] destroyController tabId=%@", tabId)
         controllers.removeValue(forKey: tabId)?.invalidate()
+        controllerProfileIds[tabId] = nil
     }
 
     func destroyControllers(tabIds: [String]) {
@@ -239,6 +253,7 @@ final class BrowserManager {
     }
 
     private func invalidateAllControllers() {
+        NSLog("[BlinkBrowserManager] invalidateAllControllers count=%ld", controllers.count)
         let activeControllers = Array(controllers.values)
         controllers.removeAll()
         for controller in activeControllers {

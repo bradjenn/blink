@@ -19,14 +19,6 @@ struct StartScreenWorkspacePicker: View {
         }
     }
 
-    private var panelBackground: some ShapeStyle {
-        if store.hasWallpaper {
-            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-        } else {
-            AnyShapeStyle(theme.bg.opacity(0.97))
-        }
-    }
-
     private func moveSelection(by delta: Int) {
         guard !filteredWorkspaces.isEmpty else { return }
         let count = filteredWorkspaces.count
@@ -43,78 +35,74 @@ struct StartScreenWorkspacePicker: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Dismiss workspace picker")
+            BlinkModalBackdrop(
+                onDismiss: onDismiss,
+                accessibilityLabel: "Dismiss workspace picker"
+            )
 
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(">")
-                        .font(Fonts.primary(size: 14))
-                        .foregroundStyle(theme.accent)
+            BlinkModalPanel(width: 500) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Text(">")
+                            .font(Fonts.primary(size: 14))
+                            .foregroundStyle(theme.accent)
 
-                    TextField("Switch workspace...", text: $searchText)
-                        .font(Fonts.primary(size: 14))
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(theme.text)
-                        .focused($searchFocused)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                        TextField("Switch workspace...", text: $searchText)
+                            .font(Fonts.primary(size: 14))
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(theme.text)
+                            .focused($searchFocused)
+                            .onSubmit {
+                                selectCurrentWorkspace()
+                            }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            if filteredWorkspaces.isEmpty {
-                                Text("No matching workspaces")
-                                    .font(Fonts.primary(size: 13))
-                                    .foregroundStyle(theme.textDim)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.vertical, 28)
-                            } else {
-                                ForEach(Array(filteredWorkspaces.enumerated()), id: \.element.id) { index, workspace in
-                                    workspaceRow(workspace, isSelected: index == selectedIndex)
-                                        .id(workspace.id)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                if filteredWorkspaces.isEmpty {
+                                    Text("No matching workspaces")
+                                        .font(Fonts.primary(size: 13))
+                                        .foregroundStyle(theme.textDim)
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                        .padding(.vertical, 28)
+                                } else {
+                                    ForEach(Array(filteredWorkspaces.enumerated()), id: \.element.id) { index, workspace in
+                                        workspaceRow(workspace, isSelected: index == selectedIndex)
+                                            .id(workspace.id)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                        .onAppear {
+                            scrollSelection(in: proxy, animated: false)
+                        }
+                        .onChange(of: selectedIndex) {
+                            scrollSelection(in: proxy)
+                        }
+                        .onChange(of: filteredWorkspaces.map(\.id)) {
+                            scrollSelection(in: proxy, animated: false)
+                        }
                     }
-                    .onAppear {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                    .onChange(of: selectedIndex) {
-                        scrollSelection(in: proxy)
-                    }
-                    .onChange(of: filteredWorkspaces.map(\.id)) {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                }
-                .frame(maxHeight: 320)
+                    .frame(maxHeight: 320)
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                HStack(spacing: 14) {
-                    hint("↑↓ j/k", label: "navigate")
-                    hint("\u{21B5}", label: "select")
-                    hint("esc", label: "close")
+                    HStack(spacing: 14) {
+                        hint("↑↓ j/k", label: "navigate")
+                        hint("\u{21B5}", label: "select")
+                        hint("esc", label: "close")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 500)
-            .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
                 moveSelection(by: -1)
                 return .handled
@@ -142,8 +130,7 @@ struct StartScreenWorkspacePicker: View {
                 return .handled
             }
             .onKeyPress(.return) {
-                guard filteredWorkspaces.indices.contains(selectedIndex) else { return .ignored }
-                selectWorkspace(filteredWorkspaces[selectedIndex].id)
+                guard selectCurrentWorkspace() else { return .ignored }
                 return .handled
             }
         }
@@ -212,10 +199,7 @@ struct StartScreenWorkspacePicker: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .contentShape(Rectangle())
-            .background(
-                rowBackground(isSelected: isSelected, isHovered: hoveredWorkspaceId == workspace.id)
-            )
+            .blinkSelectableRow(isSelected: isSelected, isHovered: hoveredWorkspaceId == workspace.id)
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -237,21 +221,16 @@ struct StartScreenWorkspacePicker: View {
         return workspace.displayPath
     }
 
-    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(theme.accent.opacity(0.12))
-        }
-
-        if isHovered {
-            return AnyShapeStyle(theme.accent.opacity(0.08))
-        }
-
-        return AnyShapeStyle(Color.clear)
-    }
-
     private func selectWorkspace(_ id: String) {
         onSelect(id)
         onDismiss()
+    }
+
+    @discardableResult
+    private func selectCurrentWorkspace() -> Bool {
+        guard filteredWorkspaces.indices.contains(selectedIndex) else { return false }
+        selectWorkspace(filteredWorkspaces[selectedIndex].id)
+        return true
     }
 
     private func scrollSelection(in proxy: ScrollViewProxy, animated: Bool = true) {

@@ -52,14 +52,6 @@ struct AISessionPicker: View {
         ]
     }
 
-    private var panelBackground: some ShapeStyle {
-        if store.hasWallpaper {
-            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-        } else {
-            AnyShapeStyle(theme.bg.opacity(0.97))
-        }
-    }
-
     private func moveSelection(by delta: Int) {
         guard !options.isEmpty else { return }
         let count = options.count
@@ -113,54 +105,47 @@ struct AISessionPicker: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Dismiss AI session picker")
+            BlinkModalBackdrop(
+                onDismiss: onDismiss,
+                accessibilityLabel: "Dismiss AI session picker"
+            )
 
-            VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Open AI Session")
-                        .font(Fonts.primary(size: 16, weight: .bold))
-                        .foregroundStyle(theme.text)
+            BlinkModalPanel(width: 420) {
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Open AI Session")
+                            .font(Fonts.primary(size: 16, weight: .bold))
+                            .foregroundStyle(theme.text)
 
-                    Text("Choose an AI CLI session to open.")
-                        .font(Fonts.primary(size: 12))
-                        .foregroundStyle(theme.textDim)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                theme.border.frame(height: 1)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
-                        optionRow(option, isSelected: index == selectedIndex)
+                        Text("Choose an AI CLI session to open.")
+                            .font(Fonts.primary(size: 12))
+                            .foregroundStyle(theme.textDim)
                     }
-                }
-                .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                HStack(spacing: 14) {
-                    hint("↑↓ j/k", label: "navigate")
-                    hint("↵", label: "select")
-                    hint("esc", label: "close")
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
+                            optionRow(option, isSelected: index == selectedIndex)
+                        }
+                    }
+                    .padding(.vertical, 6)
+
+                    theme.border.frame(height: 1)
+
+                    HStack(spacing: 14) {
+                        hint("↑↓ j/k", label: "navigate")
+                        hint("↵", label: "select")
+                        hint("esc", label: "close")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 420)
-            .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
                 moveSelection(by: -1)
                 return .handled
@@ -225,8 +210,7 @@ struct AISessionPicker: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .contentShape(Rectangle())
-            .background(rowBackground(isSelected: isSelected, isHovered: hoveredOptionId == option.id))
+            .blinkSelectableRow(isSelected: isSelected, isHovered: hoveredOptionId == option.id)
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -234,18 +218,6 @@ struct AISessionPicker: View {
             hoveredOptionId = isHovered ? option.id : nil
         }
         .pointerCursor()
-    }
-
-    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(theme.accent.opacity(0.12))
-        }
-
-        if isHovered {
-            return AnyShapeStyle(theme.accent.opacity(0.08))
-        }
-
-        return AnyShapeStyle(Color.clear)
     }
 
     private func select(_ option: Option) {

@@ -1,19 +1,80 @@
 import Foundation
 
+struct Profile: Identifiable, Equatable, Hashable, Codable {
+    static let personalId = "blink-profile-personal"
+
+    let id: String
+    let name: String
+    let color: String
+    let createdAt: Date
+
+    init(
+        id: String,
+        name: String,
+        color: String,
+        createdAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.color = color
+        self.createdAt = createdAt
+    }
+
+    static func personal() -> Profile {
+        Profile(
+            id: personalId,
+            name: "Personal",
+            color: "#89b4fa",
+            createdAt: .distantPast
+        )
+    }
+
+    var isBuiltIn: Bool {
+        id == Self.personalId
+    }
+}
+
 struct Workspace: Identifiable, Equatable, Hashable, Codable {
     static let scratchSpaceId = "blink-scratch-space"
 
     let id: String
     let name: String
     let path: String
+    let profileId: String
     let color: String
     let createdAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case path
+        case profileId
+        case color
+        case createdAt
+    }
+
+    init(
+        id: String,
+        name: String,
+        path: String,
+        profileId: String = Profile.personalId,
+        color: String,
+        createdAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.profileId = profileId
+        self.color = color
+        self.createdAt = createdAt
+    }
 
     static func scratchSpace(homePath: String = NSHomeDirectory()) -> Workspace {
         Workspace(
             id: scratchSpaceId,
             name: "Scratch Space",
             path: homePath,
+            profileId: Profile.personalId,
             color: "#89b4fa",
             createdAt: .distantPast
         )
@@ -26,6 +87,26 @@ struct Workspace: Identifiable, Equatable, Hashable, Codable {
     /// Home directory path prefix replacement for display.
     var displayPath: String {
         path.replacing("/Users/\(NSUserName())", with: "~")
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        path = try container.decode(String.self, forKey: .path)
+        profileId = try container.decodeIfPresent(String.self, forKey: .profileId) ?? id
+        color = try container.decode(String.self, forKey: .color)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(path, forKey: .path)
+        try container.encode(profileId, forKey: .profileId)
+        try container.encode(color, forKey: .color)
+        try container.encode(createdAt, forKey: .createdAt)
     }
 }
 

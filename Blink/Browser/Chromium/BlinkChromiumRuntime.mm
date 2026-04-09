@@ -13,6 +13,9 @@
 #include "include/cef_command_line.h"
 #include "include/cef_cookie.h"
 #include "include/cef_request_context.h"
+#include "include/cef_render_process_handler.h"
+#include "include/cef_v8.h"
+#include "include/internal/cef_types_content_settings.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
 
@@ -23,14 +26,107 @@ const int32_t BlinkChromiumTimerDelayPlaceholder = INT_MAX;
 const int64_t BlinkChromiumMaxTimerDelay = 1000 / 30;
 NSString *const BlinkMainWorkspaceWindowIdentifier = @"BlinkMainWorkspaceWindow";
 NSString *const BlinkChromiumPopupWindowIdentifier = @"BlinkChromiumPopupWindow";
-
-BOOL BlinkChromiumIsMainWorkspaceWindow(NSWindow *window) {
-    if (window == nil) {
-        return NO;
-    }
-
-    return [window.identifier isEqualToString:BlinkMainWorkspaceWindowIdentifier];
-}
+NSString *const BlinkChromiumDisabledPasskeyFeatures =
+    @"WebAuthentication,"
+    @"WebAuthenticationBle,"
+    @"WebAuthenticationCable,"
+    @"AutofillReintroduceHybridPasskeyDropdownItem,"
+    @"WebAuthenticationCableExtensionAnywhere,"
+    @"WebAuthnUsePasskeyFromAnotherDeviceInContextMenu,"
+    @"WebAuthenticationHybridLinking,"
+    @"WebAuthenticationEnclaveAuthenticator,"
+    @"WebAuthenticationICloudKeychainForGoogle,"
+    @"WebAuthenticationICloudKeychainForActiveWithDrive,"
+    @"WebAuthenticationICloudKeychainForActiveWithoutDrive,"
+    @"WebAuthenticationICloudKeychainForInactiveWithDrive,"
+    @"WebAuthenticationICloudKeychainForInactiveWithoutDrive,"
+    @"WebAuthenticationAmbientSignin,"
+    @"WebAuthenticationImmediateGet,"
+    @"WebAuthenticationImmediateGetAutoselect,"
+    @"PasswordManagerPasskeysEnabled,"
+    @"WebAuthenticationPasskeyUpgrade,"
+    @"CreatePasskeysInICloudKeychain,"
+    @"DigitalCredentialsHybridLinking,"
+    @"HybridPlatform,"
+    @"HybridPlatform2,"
+    @"BrowserProvidedPasskeysAvailable";
+NSString *const BlinkChromiumDisabledBlinkFeatures =
+    @"WebAuth,"
+    @"WebAuthenticationAmbient,"
+    @"WebAuthenticationChallengeUrl,"
+    @"WebAuthenticationConditionalCreate,"
+    @"WebAuthenticationRemoteDesktopSupport";
+NSString *const BlinkChromiumDisableWebAuthnScript =
+    @"(() => {"
+    @"  const unsupported = () => new DOMException('WebAuthn is disabled in Blink.', 'NotSupportedError');"
+    @"  const rejectUnsupported = () => Promise.reject(unsupported());"
+    @"  const resolveFalse = () => Promise.resolve(false);"
+    @"  const resolveEmptyObject = () => Promise.resolve({});"
+    @"  const patchValue = (target, name, value) => {"
+    @"    if (!target) return;"
+    @"    try {"
+    @"      Object.defineProperty(target, name, {"
+    @"        configurable: true,"
+    @"        enumerable: false,"
+    @"        writable: true,"
+    @"        value"
+    @"      });"
+    @"    } catch (_) {}"
+    @"  };"
+    @"  const patchGlobal = (target) => {"
+    @"    if (!target) return;"
+    @"    try {"
+    @"      Object.defineProperty(target, 'PublicKeyCredential', {"
+    @"        configurable: true,"
+    @"        enumerable: false,"
+    @"        get() { return undefined; }"
+    @"      });"
+    @"    } catch (_) {}"
+    @"  };"
+    @"  const patchCredentialMethods = (target) => {"
+    @"    if (!target) return;"
+    @"    patchValue(target, 'get', function(options) {"
+    @"      if (options && (Object.prototype.hasOwnProperty.call(options, 'publicKey') || options.mediation === 'conditional')) {"
+    @"        return rejectUnsupported();"
+    @"      }"
+    @"      return Promise.reject(unsupported());"
+    @"    });"
+    @"    patchValue(target, 'create', function(options) {"
+    @"      if (options && Object.prototype.hasOwnProperty.call(options, 'publicKey')) {"
+    @"        return rejectUnsupported();"
+    @"      }"
+    @"      return Promise.reject(unsupported());"
+    @"    });"
+    @"  };"
+    @"  const patchPublicKeyCredentialStatics = (target) => {"
+    @"    if (!target) return;"
+    @"    patchValue(target, 'isConditionalMediationAvailable', resolveFalse);"
+    @"    patchValue(target, 'isUserVerifyingPlatformAuthenticatorAvailable', resolveFalse);"
+    @"    patchValue(target, 'getClientCapabilities', resolveEmptyObject);"
+    @"  };"
+    @"  const patchCredentialsContainer = () => {"
+    @"    const credentials = navigator && navigator.credentials;"
+    @"    patchCredentialMethods(credentials);"
+    @"    patchCredentialMethods(globalThis.CredentialsContainer && globalThis.CredentialsContainer.prototype);"
+    @"    patchValue(globalThis.Navigator && globalThis.Navigator.prototype, 'credentials', credentials);"
+    @"  };"
+    @"  const patchBluetooth = () => {"
+    @"    if (typeof navigator === 'undefined') return;"
+    @"    try {"
+    @"      Object.defineProperty(navigator, 'bluetooth', {"
+    @"        configurable: true,"
+    @"        enumerable: false,"
+    @"        get() { return undefined; }"
+    @"      });"
+    @"    } catch (_) {}"
+    @"  };"
+    @"  patchGlobal(globalThis);"
+    @"  if (typeof window !== 'undefined') patchGlobal(window);"
+    @"  if (typeof self !== 'undefined') patchGlobal(self);"
+    @"  patchPublicKeyCredentialStatics(globalThis.PublicKeyCredential);"
+    @"  patchCredentialsContainer();"
+    @"  patchBluetooth();"
+    @"})();";
 
 BOOL BlinkChromiumIsPopupWindow(NSWindow *window) {
     if (window == nil) {
@@ -38,6 +134,17 @@ BOOL BlinkChromiumIsPopupWindow(NSWindow *window) {
     }
 
     return [window.identifier isEqualToString:BlinkChromiumPopupWindowIdentifier];
+}
+
+BOOL BlinkChromiumIsCloseShortcutMenuItem(id sender) {
+    if (![sender isKindOfClass:[NSMenuItem class]]) {
+        return NO;
+    }
+
+    NSMenuItem *menuItem = (NSMenuItem *)sender;
+    NSEventModifierFlags modifiers = menuItem.keyEquivalentModifierMask & NSEventModifierFlagDeviceIndependentFlagsMask;
+    return [menuItem.keyEquivalent.lowercaseString isEqualToString:@"w"] &&
+        modifiers == NSEventModifierFlagCommand;
 }
 
 NSString *BlinkChromiumApplicationName(void) {
@@ -104,17 +211,17 @@ NSString *BlinkChromiumSupportRootPath(void) {
     return [rootURL URLByAppendingPathComponent:@"Chromium" isDirectory:YES].path;
 }
 
-NSString *BlinkChromiumSanitizedWorkspaceIdentifier(NSString *workspaceIdentifier) {
-    if (workspaceIdentifier.length == 0) {
-        return @"workspace";
+NSString *BlinkChromiumSanitizedProfileIdentifier(NSString *profileIdentifier) {
+    if (profileIdentifier.length == 0) {
+        return @"profile";
     }
 
     NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
         @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._"];
-    NSMutableString *result = [NSMutableString stringWithCapacity:workspaceIdentifier.length];
+    NSMutableString *result = [NSMutableString stringWithCapacity:profileIdentifier.length];
 
-    for (NSUInteger index = 0; index < workspaceIdentifier.length; index += 1) {
-        unichar character = [workspaceIdentifier characterAtIndex:index];
+    for (NSUInteger index = 0; index < profileIdentifier.length; index += 1) {
+        unichar character = [profileIdentifier characterAtIndex:index];
         if ([allowed characterIsMember:character]) {
             [result appendFormat:@"%C", character];
         } else {
@@ -122,16 +229,16 @@ NSString *BlinkChromiumSanitizedWorkspaceIdentifier(NSString *workspaceIdentifie
         }
     }
 
-    return result.length > 0 ? result : @"workspace";
+    return result.length > 0 ? result : @"profile";
 }
 
-NSString *BlinkChromiumWorkspaceCachePath(NSString *workspaceIdentifier) {
-    NSString *sanitized = BlinkChromiumSanitizedWorkspaceIdentifier(workspaceIdentifier);
+NSString *BlinkChromiumProfileCachePath(NSString *profileIdentifier) {
+    NSString *sanitized = BlinkChromiumSanitizedProfileIdentifier(profileIdentifier);
     return [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:sanitized];
 }
 
-NSString *BlinkChromiumLegacyWorkspaceCachePath(NSString *workspaceIdentifier) {
-    NSString *sanitized = BlinkChromiumSanitizedWorkspaceIdentifier(workspaceIdentifier);
+NSString *BlinkChromiumLegacyProfileCachePath(NSString *profileIdentifier) {
+    NSString *sanitized = BlinkChromiumSanitizedProfileIdentifier(profileIdentifier);
     NSString *profilesRoot = [BlinkChromiumSupportRootPath() stringByAppendingPathComponent:@"profiles"];
     return [profilesRoot stringByAppendingPathComponent:sanitized];
 }
@@ -143,9 +250,63 @@ BOOL BlinkChromiumEnsureDirectory(NSString *path, NSError **error) {
                                                          error:error];
 }
 
-void BlinkChromiumMigrateLegacyWorkspaceCachePathIfNeeded(NSString *workspaceIdentifier) {
-    NSString *cachePath = BlinkChromiumWorkspaceCachePath(workspaceIdentifier);
-    NSString *legacyPath = BlinkChromiumLegacyWorkspaceCachePath(workspaceIdentifier);
+void BlinkChromiumRemoveItemIfExists(NSString *path) {
+    if (path.length == 0) {
+        return;
+    }
+
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    if (![fileManager fileExistsAtPath:path]) {
+        return;
+    }
+
+    NSError *error = nil;
+    if (![fileManager removeItemAtPath:path error:&error]) {
+        NSLog(@"[ChromiumProfile] failed to remove %@: %@", path, error);
+        return;
+    }
+
+    NSLog(@"[ChromiumProfile] removed %@", path);
+}
+
+void BlinkChromiumSetBooleanPreference(CefRefPtr<CefRequestContext> requestContext,
+                                       const char *preferenceName,
+                                       bool enabled) {
+    if (requestContext == nullptr || preferenceName == nullptr) {
+        return;
+    }
+
+    CefString name(preferenceName);
+    if (!requestContext->HasPreference(name) || !requestContext->CanSetPreference(name)) {
+        return;
+    }
+
+    CefRefPtr<CefValue> value = CefValue::Create();
+    value->SetBool(enabled);
+
+    CefString error;
+    if (!requestContext->SetPreference(name, value, error) && !error.empty()) {
+        NSLog(@"[ChromiumProfile] failed to set preference %s: %s",
+              preferenceName,
+              error.ToString().c_str());
+    }
+}
+
+void BlinkChromiumBlockContentSetting(CefRefPtr<CefRequestContext> requestContext,
+                                      cef_content_setting_types_t contentType) {
+    if (requestContext == nullptr) {
+        return;
+    }
+
+    requestContext->SetContentSetting("",
+                                      "",
+                                      contentType,
+                                      CEF_CONTENT_SETTING_VALUE_BLOCK);
+}
+
+void BlinkChromiumMigrateLegacyProfileCachePathIfNeeded(NSString *profileIdentifier) {
+    NSString *cachePath = BlinkChromiumProfileCachePath(profileIdentifier);
+    NSString *legacyPath = BlinkChromiumLegacyProfileCachePath(profileIdentifier);
     NSFileManager *fileManager = NSFileManager.defaultManager;
     BOOL cacheExists = [fileManager fileExistsAtPath:cachePath];
     BOOL legacyExists = [fileManager fileExistsAtPath:legacyPath];
@@ -161,16 +322,18 @@ void BlinkChromiumMigrateLegacyWorkspaceCachePathIfNeeded(NSString *workspaceIde
     }
 
     if ([fileManager moveItemAtPath:legacyPath toPath:cachePath error:&error]) {
-        NSLog(@"[ChromiumProfile] migrated workspace cache %@ -> %@", legacyPath, cachePath);
+        NSLog(@"[ChromiumProfile] migrated profile cache %@ -> %@", legacyPath, cachePath);
     } else {
-        NSLog(@"[ChromiumProfile] failed to migrate workspace cache %@ -> %@: %@",
+        NSLog(@"[ChromiumProfile] failed to migrate profile cache %@ -> %@: %@",
               legacyPath,
               cachePath,
               error);
     }
 }
 
-class BlinkChromiumApp final : public CefApp, public CefBrowserProcessHandler {
+class BlinkChromiumApp final : public CefApp,
+                               public CefBrowserProcessHandler,
+                               public CefRenderProcessHandler {
 public:
     explicit BlinkChromiumApp(BlinkChromiumRuntime *runtime)
         : runtime_(runtime) {}
@@ -179,15 +342,49 @@ public:
         return this;
     }
 
+    CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override {
+        return this;
+    }
+
     void OnBeforeCommandLineProcessing(
         const CefString& process_type,
         CefRefPtr<CefCommandLine> command_line
     ) override {
-        if (!process_type.empty()) {
+        if (command_line == nullptr) {
             return;
         }
 
-        command_line->AppendSwitch("use-mock-keychain");
+        command_line->AppendSwitch("disable-web-bluetooth");
+        command_line->AppendSwitchWithValue("disable-features",
+                                            BlinkChromiumDisabledPasskeyFeatures.UTF8String);
+        command_line->AppendSwitchWithValue("disable-blink-features",
+                                            BlinkChromiumDisabledBlinkFeatures.UTF8String);
+
+        if (process_type.empty()) {
+            command_line->AppendSwitch("use-mock-keychain");
+        }
+    }
+
+    void OnContextCreated(CefRefPtr<CefBrowser> browser,
+                          CefRefPtr<CefFrame> frame,
+                          CefRefPtr<CefV8Context> context) override {
+        CEF_REQUIRE_RENDERER_THREAD();
+
+        if (frame == nullptr || context == nullptr || !frame->IsValid()) {
+            return;
+        }
+
+        CefRefPtr<CefV8Value> retval;
+        CefRefPtr<CefV8Exception> exception;
+        if (!context->Eval(BlinkChromiumDisableWebAuthnScript.UTF8String,
+                           "blink://disable-webauthn.js",
+                           1,
+                           retval,
+                           exception) &&
+            exception != nullptr) {
+            NSLog(@"[ChromiumProfile] failed to disable WebAuthn in renderer: %s",
+                  exception->GetMessage().ToString().c_str());
+        }
     }
 
     void OnScheduleMessagePumpWork(int64_t delay_ms) override;
@@ -254,18 +451,10 @@ private:
 }
 
 - (BOOL)sendAction:(SEL)action to:(id)target from:(id)sender {
-    if (action == @selector(performClose:) || action == @selector(terminate:)) {
+    if (action == @selector(performClose:) &&
+        BlinkChromiumIsCloseShortcutMenuItem(sender)) {
         NSWindow *keyWindow = self.keyWindow;
-        BOOL isCloseShortcutMenuItem = NO;
-        if ([sender isKindOfClass:[NSMenuItem class]]) {
-            NSMenuItem *menuItem = (NSMenuItem *)sender;
-            NSEventModifierFlags modifiers = menuItem.keyEquivalentModifierMask & NSEventModifierFlagDeviceIndependentFlagsMask;
-            isCloseShortcutMenuItem = [menuItem.keyEquivalent.lowercaseString isEqualToString:@"w"] &&
-                modifiers == NSEventModifierFlagCommand;
-        }
-
-        if (!BlinkChromiumIsPopupWindow(keyWindow) &&
-            (action == @selector(performClose:) || isCloseShortcutMenuItem || BlinkChromiumIsMainWorkspaceWindow(keyWindow))) {
+        if (!BlinkChromiumIsPopupWindow(keyWindow)) {
             [[NSNotificationCenter defaultCenter] postNotificationName:@"BlinkCloseActiveTabShortcut" object:nil];
             return YES;
         }
@@ -277,7 +466,7 @@ private:
 @end
 
 @interface BlinkChromiumRequestContext ()
-- (instancetype)initWithWorkspaceIdentifier:(NSString *)workspaceIdentifier;
+- (instancetype)initWithProfileIdentifier:(NSString *)profileIdentifier;
 - (CefRefPtr<CefRequestContext>)requestContext;
 - (void)requestContextDidInitialize;
 @end
@@ -312,21 +501,21 @@ private:
 @private
     CefRefPtr<CefRequestContext> _requestContext;
     NSMutableArray<dispatch_block_t> *_readyCallbacks;
-    NSString *_workspaceIdentifier;
+    NSString *_profileIdentifier;
     BOOL _ready;
 }
 
-- (instancetype)initWithWorkspaceIdentifier:(NSString *)workspaceIdentifier {
+- (instancetype)initWithProfileIdentifier:(NSString *)profileIdentifier {
     self = [super init];
     if (self == nil) {
         return nil;
     }
 
-    BlinkChromiumMigrateLegacyWorkspaceCachePathIfNeeded(workspaceIdentifier);
-    NSString *cachePath = BlinkChromiumWorkspaceCachePath(workspaceIdentifier);
+    BlinkChromiumMigrateLegacyProfileCachePathIfNeeded(profileIdentifier);
+    NSString *cachePath = BlinkChromiumProfileCachePath(profileIdentifier);
     BlinkChromiumEnsureDirectory(cachePath, nil);
     _readyCallbacks = [NSMutableArray array];
-    _workspaceIdentifier = [workspaceIdentifier copy];
+    _profileIdentifier = [profileIdentifier copy];
 
     CefRequestContextSettings settings;
     CefString(&settings.cache_path) = cachePath.UTF8String;
@@ -364,6 +553,10 @@ private:
     if (_ready) {
         return;
     }
+
+    BlinkChromiumSetBooleanPreference(_requestContext, "credentials_enable_passkeys", false);
+    BlinkChromiumBlockContentSetting(_requestContext, CEF_CONTENT_SETTING_TYPE_BLUETOOTH_GUARD);
+    BlinkChromiumBlockContentSetting(_requestContext, CEF_CONTENT_SETTING_TYPE_BLUETOOTH_SCANNING);
 
     _ready = YES;
     NSArray<dispatch_block_t> *callbacks = [_readyCallbacks copy];
@@ -527,19 +720,19 @@ private:
     _started = NO;
 }
 
-- (nullable BlinkChromiumRequestContext *)requestContextForWorkspaceIdentifier:(NSString *)workspaceIdentifier {
+- (nullable BlinkChromiumRequestContext *)requestContextForProfileIdentifier:(NSString *)profileIdentifier {
     if (![self startIfNeeded:nil]) {
         return nil;
     }
 
-    BlinkChromiumRequestContext *existing = _requestContexts[workspaceIdentifier];
+    BlinkChromiumRequestContext *existing = _requestContexts[profileIdentifier];
     if (existing != nil) {
         return existing;
     }
 
     BlinkChromiumRequestContext *context =
-        [[BlinkChromiumRequestContext alloc] initWithWorkspaceIdentifier:workspaceIdentifier];
-    _requestContexts[workspaceIdentifier] = context;
+        [[BlinkChromiumRequestContext alloc] initWithProfileIdentifier:profileIdentifier];
+    _requestContexts[profileIdentifier] = context;
     return context;
 }
 
@@ -635,20 +828,7 @@ private:
     NSArray<BlinkChromiumRequestContext *> *contexts = [_requestContexts.allValues copy];
     CefRefPtr<CefRequestContext> globalContext = CefRequestContext::GetGlobalContext();
     auto flushManager = ^(CefRefPtr<CefCookieManager> manager) {
-        if (manager == nullptr) {
-            return;
-        }
-
-        CefRefPtr<BlinkChromiumCompletionCallback> callback = new BlinkChromiumCompletionCallback();
-        if (!manager->FlushStore(callback)) {
-            return;
-        }
-
-        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-        while (!callback->completed() && [deadline timeIntervalSinceNow] > 0) {
-            [self performMessageLoopWork];
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+        [self flushCookieManager:manager];
     };
 
     if (globalContext != nullptr) {
@@ -659,6 +839,43 @@ private:
         CefRefPtr<CefRequestContext> requestContext = [context requestContext];
         flushManager(requestContext != nullptr ? requestContext->GetCookieManager(nullptr) : nullptr);
     }
+}
+
+- (void)flushCookieManager:(CefRefPtr<CefCookieManager>)manager {
+    if (manager == nullptr) {
+        return;
+    }
+
+    CefRefPtr<BlinkChromiumCompletionCallback> callback = new BlinkChromiumCompletionCallback();
+    if (!manager->FlushStore(callback)) {
+        return;
+    }
+
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+    while (!callback->completed() && [deadline timeIntervalSinceNow] > 0) {
+        [self performMessageLoopWork];
+        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode
+                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+}
+
+- (void)removeStorageForProfileIdentifier:(NSString *)profileIdentifier {
+    if (profileIdentifier.length == 0) {
+        return;
+    }
+
+    BlinkChromiumRequestContext *context = _requestContexts[profileIdentifier];
+    if (context != nil) {
+        CefRefPtr<CefRequestContext> requestContext = [context requestContext];
+        [self flushCookieManager:requestContext != nullptr ? requestContext->GetCookieManager(nullptr) : nullptr];
+        [_requestContexts removeObjectForKey:profileIdentifier];
+        if (_started) {
+            [self drainMessageLoopForDuration:0.25];
+        }
+    }
+
+    BlinkChromiumRemoveItemIfExists(BlinkChromiumProfileCachePath(profileIdentifier));
+    BlinkChromiumRemoveItemIfExists(BlinkChromiumLegacyProfileCachePath(profileIdentifier));
 }
 
 @end

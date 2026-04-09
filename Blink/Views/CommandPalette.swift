@@ -90,14 +90,6 @@ struct CommandPalette: View {
         let action: () -> Void
     }
 
-    private var panelBackground: some ShapeStyle {
-        if store.hasWallpaper {
-            AnyShapeStyle(theme.bg.opacity(store.backgroundOpacity))
-        } else {
-            AnyShapeStyle(theme.bg.opacity(0.97))
-        }
-    }
-
     private var commands: [PaletteCommand] {
         let hasWorkspace = store.activeWorkspaceId != nil
 
@@ -500,84 +492,77 @@ struct CommandPalette: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Dismiss command palette")
+            BlinkModalBackdrop(
+                onDismiss: onDismiss,
+                accessibilityLabel: "Dismiss command palette"
+            )
 
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "command")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.accent)
+            BlinkModalPanel(width: 560) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "command")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(theme.accent)
 
-                    TextField("Run a command...", text: $searchText)
-                        .font(Fonts.primary(size: 14))
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(theme.text)
-                        .focused($searchFocused)
+                        TextField("Run a command...", text: $searchText)
+                            .font(Fonts.primary(size: 14))
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(theme.text)
+                            .focused($searchFocused)
 
-                    Spacer(minLength: 8)
+                        Spacer(minLength: 8)
 
-                    Text("Command Palette")
-                        .font(Fonts.primary(size: 11, weight: .medium))
-                        .foregroundStyle(theme.textDim)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                        Text("Command Palette")
+                            .font(Fonts.primary(size: 11, weight: .medium))
+                            .foregroundStyle(theme.textDim)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            if filteredCommands.isEmpty {
-                                Text("No matching commands")
-                                    .font(Fonts.primary(size: 13))
-                                    .foregroundStyle(theme.textDim)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.vertical, 28)
-                            } else {
-                                ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, command in
-                                    commandRow(command, isSelected: index == selectedIndex)
-                                        .id(command.id)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if filteredCommands.isEmpty {
+                                    Text("No matching commands")
+                                        .font(Fonts.primary(size: 13))
+                                        .foregroundStyle(theme.textDim)
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                        .padding(.vertical, 28)
+                                } else {
+                                    ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, command in
+                                        commandRow(command, isSelected: index == selectedIndex)
+                                            .id(command.id)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 6)
                         }
-                        .padding(.vertical, 6)
+                        .frame(maxHeight: 360)
+                        .onAppear {
+                            scrollSelection(in: proxy, animated: false)
+                        }
+                        .onChange(of: selectedIndex) {
+                            scrollSelection(in: proxy, animated: false)
+                        }
+                        .onChange(of: filteredCommands.map(\.id)) {
+                            scrollSelection(in: proxy, animated: false)
+                        }
                     }
-                    .frame(maxHeight: 360)
-                    .onAppear {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                    .onChange(of: selectedIndex) {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                    .onChange(of: filteredCommands.map(\.id)) {
-                        scrollSelection(in: proxy, animated: false)
-                    }
-                }
 
-                theme.border.frame(height: 1)
+                    theme.border.frame(height: 1)
 
-                HStack(spacing: 14) {
-                    hint("↑↓ / tab", label: "cycle")
-                    hint("↵", label: "run")
-                    hint("esc", label: "close")
+                    HStack(spacing: 14) {
+                        hint("↑↓ / tab", label: "cycle")
+                        hint("↵", label: "run")
+                        hint("esc", label: "close")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 560)
-            .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(theme.border, lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.36), radius: 22, y: 12)
             .onKeyPress(.upArrow) {
                 moveSelection(by: -1)
                 return .handled
@@ -665,10 +650,7 @@ struct CommandPalette: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .contentShape(Rectangle())
-            .background(
-                rowBackground(isSelected: isSelected, isHovered: hoveredCommandId == command.id)
-            )
+            .blinkSelectableRow(isSelected: isSelected, isHovered: hoveredCommandId == command.id)
             .opacity(command.isEnabled ? 1 : 0.55)
         }
         .buttonStyle(.plain)
@@ -678,18 +660,6 @@ struct CommandPalette: View {
             hoveredCommandId = isHovered ? command.id : nil
         }
         .pointerCursor()
-    }
-
-    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(theme.accent.opacity(0.12))
-        }
-
-        if isHovered {
-            return AnyShapeStyle(theme.accent.opacity(0.08))
-        }
-
-        return AnyShapeStyle(Color.clear)
     }
 
     private func run(_ command: PaletteCommand) {

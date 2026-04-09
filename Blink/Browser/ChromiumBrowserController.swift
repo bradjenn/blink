@@ -8,6 +8,7 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
 
     let tabId: String
     let workspaceId: String
+    let profileId: String
     let session: BrowserSessionModel
     let host: BlinkChromiumBrowserHost
 
@@ -70,18 +71,20 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     init(
         tabId: String,
         workspaceId: String,
+        profileId: String,
         initialState: BrowserTabState,
         onStateChange: @escaping (BrowserTabState) -> Void,
         onDownloadUpdate: @escaping (BrowserDownloadItem) -> Void
     ) {
         self.tabId = tabId
         self.workspaceId = workspaceId
+        self.profileId = profileId
         self.session = BrowserSessionModel(state: initialState)
         self.onStateChange = onStateChange
         self.onDownloadUpdate = onDownloadUpdate
         self.host = BlinkChromiumBrowserHost(
             tabIdentifier: tabId,
-            workspaceIdentifier: workspaceId,
+            profileIdentifier: profileId,
             initialURLString: initialState.urlString
         )
 
@@ -175,6 +178,7 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     }
 
     func invalidate() {
+        NSLog("[BlinkChromiumController] invalidate tabId=%@", tabId)
         host.invalidate()
     }
 

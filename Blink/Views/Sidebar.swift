@@ -159,7 +159,7 @@ struct SidebarView: View {
     }
 
     private var visibleRows: [SidebarTreeSelection] {
-        store.workspaces.flatMap { workspace in
+        store.sidebarOrderedWorkspaces.flatMap { workspace in
             let children = store.isWorkspaceExpanded(workspace.id)
                 ? liveTabs(for: workspace.id).map { SidebarTreeSelection.tab(workspaceId: workspace.id, tabId: $0.id) }
                 : []
@@ -168,7 +168,9 @@ struct SidebarView: View {
     }
 
     private var selectionSyncToken: String {
-        let workspaceIds = store.workspaces.map(\.id).joined(separator: ",")
+        let workspaceIds = store.sidebarOrderedWorkspaces
+            .map { "\($0.id):\($0.profileId)" }
+            .joined(separator: ",")
         let tabIds = store.tabs.map(\.id).joined(separator: ",")
         let expandedIds = store.expandedWorkspaceIds.sorted().joined(separator: ",")
         return [
@@ -394,52 +396,65 @@ private struct AllWorkspacesSidebarView: View {
         } else {
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    ForEach(store.workspaces) { workspace in
-                        let liveTabs = {
-                            let ordered = store.orderedTabs(for: workspace.id)
-                            return ordered.isEmpty ? store.workspaceTabs(for: workspace.id) : ordered
-                        }()
-                        SidebarWorkspaceItem(
-                            workspace: workspace,
-                            isActive: store.activeWorkspaceId == workspace.id,
-                            isSelected: selectedRow == .workspace(workspace.id),
-                            isPathMissing: store.isWorkspacePathMissing(workspace.id),
-                            isExpanded: store.isWorkspaceExpanded(workspace.id),
-                            terminalCount: store.terminalCount(for: workspace.id),
-                            hasUnread: store.hasUnread(workspaceId: workspace.id),
-                            claudeTabActivities: Dictionary(
-                                uniqueKeysWithValues: liveTabs.compactMap { tab in
-                                    store.claudeActivity(for: tab.id).map { (tab.id, $0) }
-                                }
-                            ),
-                            shellDetectedAIPaneKinds: Dictionary(
-                                uniqueKeysWithValues: liveTabs.compactMap { tab in
-                                    store.shellDetectedAIPaneKinds[tab.id].map { (tab.id, $0) }
-                                }
-                            ),
-                            tabs: liveTabs,
-                            selectedTabId: {
-                                if case .tab(let workspaceId, let tabId) = selectedRow, workspaceId == workspace.id {
-                                    return tabId
-                                }
-                                return nil
-                            }(),
-                            activeTabId: store.activeWorkspaceId == workspace.id ? store.activeTabId : nil,
-                            canRemove: !workspace.isScratchSpace,
-                            onSelect: { activate in
-                                onSelectWorkspace(workspace.id, activate)
-                            },
-                            onToggleExpansion: {
-                                onToggleWorkspaceExpansion(workspace.id)
-                            },
-                            onSelectTab: { tabId, activate in
-                                onSelectTab(workspace.id, tabId, activate)
-                            },
-                            onRename: { store.promptRenameWorkspace(workspace.id) },
-                            onReveal: { store.revealWorkspaceInFinder(workspace.id) },
-                            onRelink: { store.promptRelinkWorkspace(workspace.id) },
-                            onRemove: { store.removeWorkspace(workspace.id) }
-                        )
+                    ForEach(Array(store.sidebarProfileSections.enumerated()), id: \.element.id) { index, section in
+                        VStack(alignment: .leading, spacing: 6) {
+                            if index > 0 {
+                                Color.clear.frame(height: 8)
+                            }
+
+                            SidebarProfileSectionHeader(
+                                profile: section.profile,
+                                workspaceCount: section.workspaces.count
+                            )
+
+                            ForEach(section.workspaces) { workspace in
+                                let liveTabs = {
+                                    let ordered = store.orderedTabs(for: workspace.id)
+                                    return ordered.isEmpty ? store.workspaceTabs(for: workspace.id) : ordered
+                                }()
+                                SidebarWorkspaceItem(
+                                    workspace: workspace,
+                                    isActive: store.activeWorkspaceId == workspace.id,
+                                    isSelected: selectedRow == .workspace(workspace.id),
+                                    isPathMissing: store.isWorkspacePathMissing(workspace.id),
+                                    isExpanded: store.isWorkspaceExpanded(workspace.id),
+                                    terminalCount: store.terminalCount(for: workspace.id),
+                                    hasUnread: store.hasUnread(workspaceId: workspace.id),
+                                    claudeTabActivities: Dictionary(
+                                        uniqueKeysWithValues: liveTabs.compactMap { tab in
+                                            store.claudeActivity(for: tab.id).map { (tab.id, $0) }
+                                        }
+                                    ),
+                                    shellDetectedAIPaneKinds: Dictionary(
+                                        uniqueKeysWithValues: liveTabs.compactMap { tab in
+                                            store.shellDetectedAIPaneKinds[tab.id].map { (tab.id, $0) }
+                                        }
+                                    ),
+                                    tabs: liveTabs,
+                                    selectedTabId: {
+                                        if case .tab(let workspaceId, let tabId) = selectedRow, workspaceId == workspace.id {
+                                            return tabId
+                                        }
+                                        return nil
+                                    }(),
+                                    activeTabId: store.activeWorkspaceId == workspace.id ? store.activeTabId : nil,
+                                    canRemove: !workspace.isScratchSpace,
+                                    onSelect: { activate in
+                                        onSelectWorkspace(workspace.id, activate)
+                                    },
+                                    onToggleExpansion: {
+                                        onToggleWorkspaceExpansion(workspace.id)
+                                    },
+                                    onSelectTab: { tabId, activate in
+                                        onSelectTab(workspace.id, tabId, activate)
+                                    },
+                                    onRename: { store.promptRenameWorkspace(workspace.id) },
+                                    onReveal: { store.revealWorkspaceInFinder(workspace.id) },
+                                    onRelink: { store.promptRelinkWorkspace(workspace.id) },
+                                    onRemove: { store.removeWorkspace(workspace.id) }
+                                )
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -448,6 +463,35 @@ private struct AllWorkspacesSidebarView: View {
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
         }
+    }
+}
+
+private struct SidebarProfileSectionHeader: View {
+    @Environment(\.theme) private var theme
+
+    let profile: Profile
+    let workspaceCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color(hex: profile.color))
+                .frame(width: 8, height: 8)
+
+            Text(profile.name)
+                .font(Fonts.primary(size: 11, weight: .bold))
+                .foregroundStyle(theme.textDim)
+                .textCase(.uppercase)
+
+            Spacer(minLength: 0)
+
+            Text("\(workspaceCount)")
+                .font(Fonts.primary(size: 10))
+                .foregroundStyle(theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 }
 

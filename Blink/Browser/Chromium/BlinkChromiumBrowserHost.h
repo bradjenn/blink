@@ -72,7 +72,7 @@ didRequestOpenNewTabWithURLString:(nullable NSString *)urlString;
 @property (nonatomic, strong, readonly, nullable) BlinkChromiumBrowserStateSnapshot *snapshot;
 
 - (instancetype)initWithTabIdentifier:(NSString *)tabIdentifier
-                    workspaceIdentifier:(NSString *)workspaceIdentifier
+                     profileIdentifier:(NSString *)profileIdentifier
                      initialURLString:(nullable NSString *)initialURLString NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 

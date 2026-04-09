@@ -105,6 +105,7 @@ final class BrowserAppStoreTests: XCTestCase {
         let firstController = manager.controller(
             for: browserTab.id,
             workspaceId: "workspace-1",
+            profileId: Profile.personalId,
             initialState: browserTab.state
         ) { _ in }
 
@@ -114,6 +115,7 @@ final class BrowserAppStoreTests: XCTestCase {
         let secondController = manager.controller(
             for: browserTab.id,
             workspaceId: "workspace-1",
+            profileId: Profile.personalId,
             initialState: .blank
         ) { _ in }
         XCTAssertFalse((firstController as AnyObject) === (secondController as AnyObject))
@@ -131,7 +133,7 @@ final class BrowserAppStoreTests: XCTestCase {
 
     func testSelectingDifferentBrowserTabFocusesWebViewInsteadOfAddressBar() throws {
         let store = makeStore()
-        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: nil, maximizeColumn: false)
+        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: nil, fullWidth: false, maximizeColumn: false)
         let firstBrowserTabId = try XCTUnwrap(tab.browserState?.selectedTab?.id)
         let secondBrowserTab = try XCTUnwrap(
             store.openBrowserTabInPane(
@@ -162,7 +164,7 @@ final class BrowserAppStoreTests: XCTestCase {
 
     func testToggleBrowserTabPinnedMovesTabIntoPinnedSectionOrder() throws {
         let store = makeStore()
-        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: "https://example.com", maximizeColumn: false)
+        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: "https://example.com", fullWidth: false, maximizeColumn: false)
         let firstBrowserTabId = try XCTUnwrap(store.tabsById[tab.id]?.browserState?.selectedTab?.id)
         let secondBrowserTab = try XCTUnwrap(store.openBrowserTabInPane(tab.id, url: "https://daily.dev"))
 
@@ -188,7 +190,7 @@ final class BrowserAppStoreTests: XCTestCase {
 
     func testCloseActiveTabClosesSingleBrowserPane() {
         let store = makeStore()
-        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: "https://example.com", maximizeColumn: false)
+        let tab = store.openBrowserTab(workspaceId: "workspace-1", url: "https://example.com", fullWidth: false, maximizeColumn: false)
         store.setActiveTab(tab.id)
 
         store.closeActiveTab()
@@ -210,13 +212,52 @@ final class BrowserAppStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTabId, terminal.id)
     }
 
+    func testOpenBrowserTabDefaultsToMaximizedColumn() {
+        let store = makeStore()
+
+        let browser = store.openBrowserTab(workspaceId: "workspace-1", url: "https://example.com")
+
+        XCTAssertFalse(store.isFullWidthTab(browser.id))
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").count, 1)
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").first?.tabIds, [browser.id])
+        XCTAssertTrue(store.consumePendingColumnMaximize(for: browser.id))
+    }
+
+    func testOpenBrowserTabSupportsExplicitFullWidthMode() {
+        let store = makeStore()
+        let terminal = store.openTab(workspaceId: "workspace-1")
+
+        let browser = store.openBrowserTab(
+            workspaceId: "workspace-1",
+            url: "https://example.com",
+            fullWidth: true
+        )
+
+        XCTAssertTrue(store.isFullWidthTab(browser.id))
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").count, 1)
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").first?.tabIds, [browser.id])
+
+        store.closeTab(browser.id)
+
+        XCTAssertEqual(store.activeTabId, terminal.id)
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").count, 1)
+        XCTAssertEqual(store.workspaceColumns(for: "workspace-1").first?.tabIds, [terminal.id])
+    }
+
     private func makeStore() -> AppStore {
+        let workspaceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-browser-tests-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: workspaceURL,
+            withIntermediateDirectories: true
+        )
+
         let store = AppStore()
         store.workspaces = [
             Workspace(
                 id: "workspace-1",
                 name: "Blink",
-                path: "/tmp/blink",
+                path: workspaceURL.path,
                 color: "#ffffff",
                 createdAt: .distantPast
             )

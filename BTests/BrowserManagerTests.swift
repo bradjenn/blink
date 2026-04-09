@@ -22,17 +22,38 @@ final class BrowserManagerTests: XCTestCase {
         let firstController = manager.controller(
             for: "browser-tab",
             workspaceId: "workspace-1",
+            profileId: "personal",
             initialState: .blank
         ) { _ in }
 
         let secondController = manager.controller(
             for: "browser-tab",
             workspaceId: "workspace-1",
+            profileId: "personal",
             initialState: BrowserTabState(urlString: "https://example.com")
         ) { _ in }
 
         XCTAssertTrue((firstController as AnyObject) === (secondController as AnyObject))
         XCTAssertNil(secondController.session.state.urlString)
+    }
+
+    func testChangingProfileRecreatesLiveController() {
+        let manager = BrowserManager(userDefaults: testDefaults)
+        let firstController = manager.controller(
+            for: "browser-tab",
+            workspaceId: "workspace-1",
+            profileId: "personal",
+            initialState: .blank
+        ) { _ in }
+
+        let secondController = manager.controller(
+            for: "browser-tab",
+            workspaceId: "workspace-1",
+            profileId: "client-a",
+            initialState: .blank
+        ) { _ in }
+
+        XCTAssertFalse((firstController as AnyObject) === (secondController as AnyObject))
     }
 
     func testRecentDownloadsAreScopedByWorkspaceAndSortedNewestFirst() {

@@ -57,7 +57,10 @@ struct BrowserView: View {
     }
 
     private var isSidebarExpanded: Bool {
-        paneState.isSidebarPinned
+        guard !store.hasBlockingModalPresentation || paneState.isSidebarPinned else {
+            return false
+        }
+        return paneState.isSidebarPinned
             || isSidebarHoverLatched
             || addressBarFocused
             || selectedBrowserTab?.state.preferredFocus == .addressBar
@@ -79,6 +82,7 @@ struct BrowserView: View {
         browserManager.controller(
             for: browserTab.id,
             workspaceId: workspace.id,
+            profileId: store.profileId(for: workspace.id),
             initialState: browserTab.state
         ) { state in
             DispatchQueue.main.async {
@@ -153,6 +157,10 @@ struct BrowserView: View {
                 }
                 .onChange(of: controller.session.addressBarFocusRequestID) { _, _ in
                     requestAddressBarFocus()
+                }
+                .onChange(of: store.hasBlockingModalPresentation) { _, isPresented in
+                    guard isPresented else { return }
+                    clearTransientSidebarPresentation()
                 }
                 .onChange(of: addressBarFocused) { _, focused in
                     if !focused {
@@ -241,6 +249,7 @@ struct BrowserView: View {
             onHoverChange: { isHovered in
                 handleSidebarHotspotHoverChange(isHovered)
             },
+            isEnabled: !store.hasBlockingModalPresentation,
             hotspotWidth: Layout.browserSidebarHotspotWidth,
             leadingEdgeInset: Layout.workspacePaddingH
         )
@@ -642,7 +651,22 @@ struct BrowserView: View {
         controller.navigate(to: suggestion.urlString)
     }
 
+    private func clearTransientSidebarPresentation() {
+        isSidebarHotspotHovered = false
+        isSidebarPanelHovered = false
+        cancelSidebarHoverDismiss()
+        cancelSidebarHoverProtection()
+        isSidebarHoverDismissProtected = false
+        if !paneState.isSidebarPinned {
+            isSidebarHoverLatched = false
+        }
+    }
+
     private func handleSidebarHotspotHoverChange(_ isHovered: Bool) {
+        guard !store.hasBlockingModalPresentation else {
+            clearTransientSidebarPresentation()
+            return
+        }
         isSidebarHotspotHovered = isHovered
 
         if isHovered {
@@ -653,6 +677,10 @@ struct BrowserView: View {
     }
 
     private func handleSidebarPanelHoverChange(_ isHovered: Bool) {
+        guard !store.hasBlockingModalPresentation else {
+            clearTransientSidebarPresentation()
+            return
+        }
         isSidebarPanelHovered = isHovered
 
         if isHovered {
@@ -663,6 +691,7 @@ struct BrowserView: View {
     }
 
     private func latchSidebarHover(protectDismissal: Bool = false) {
+        guard !store.hasBlockingModalPresentation else { return }
         cancelSidebarHoverDismiss()
         isSidebarHoverLatched = true
 
@@ -673,6 +702,11 @@ struct BrowserView: View {
 
     private func scheduleSidebarHoverDismissIfNeeded() {
         cancelSidebarHoverDismiss()
+
+        if store.hasBlockingModalPresentation {
+            clearTransientSidebarPresentation()
+            return
+        }
 
         guard !paneState.isSidebarPinned,
               !isSidebarPanelHovered,
@@ -737,9 +771,15 @@ struct BrowserView: View {
     }
 
     private func requestAddressBarFocus() {
+        guard !store.hasBlockingModalPresentation else { return }
         activateAddressBarSuggestions()
+        if !paneState.isSidebarPinned {
+            latchSidebarHover(protectDismissal: true)
+        }
         DispatchQueue.main.async {
-            addressBarFocused = true
+            DispatchQueue.main.async {
+                addressBarFocused = true
+            }
         }
     }
 

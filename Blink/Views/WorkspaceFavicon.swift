@@ -70,7 +70,7 @@ struct WorkspaceFavicon: View {
     @MainActor private static var cache: [String: NSImage?] = [:]
 
     /// Try to load a favicon from common workspace locations.
-    private static func loadFavicon(workspacePath: String, size: CGFloat) -> NSImage? {
+    static func faviconImage(workspacePath: String, size: CGFloat) -> NSImage? {
         if let cached = cache[workspacePath] {
             return cached
         }
@@ -88,5 +88,9 @@ struct WorkspaceFavicon: View {
 
         cache[workspacePath] = nil
         return nil
+    }
+
+    private static func loadFavicon(workspacePath: String, size: CGFloat) -> NSImage? {
+        faviconImage(workspacePath: workspacePath, size: size)
     }
 }

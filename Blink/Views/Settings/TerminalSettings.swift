@@ -11,27 +11,24 @@ struct TerminalSettings: View {
     @State private var monospaceFonts: [String] = []
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                Text("Terminal")
-                    .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
-                    .foregroundStyle(theme.text)
+        VStack(alignment: .leading, spacing: 32) {
+            Text("Terminal")
+                .font(Fonts.primary(size: 18, weight: .bold, family: store.uiFontFamily))
+                .foregroundStyle(theme.text)
 
-                fontFamilySection
-                fontSizeSection
-                cursorStyleSection
-                cursorBlinkSection
-                shellSection
-                spotifyCommandSection
+            fontFamilySection
+            fontSizeSection
+            cursorStyleSection
+            cursorBlinkSection
+            shellSection
+            spotifyCommandSection
 
-                Spacer()
-            }
-            .padding(.leading, 24)
-            .padding(.trailing, 20)
-            .padding(.top, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
-        .scrollContentBackground(.hidden)
+        .padding(.leading, 24)
+        .padding(.trailing, 20)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.clear)
         .task { monospaceFonts = Self.loadMonospaceFonts() }
     }
