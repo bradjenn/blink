@@ -1,4 +1,10 @@
+import AppKit
 import SwiftUI
+
+private struct ThemePickerMetadata: Equatable {
+    let isLight: Bool
+    let swatches: [String]
+}
 
 struct ThemePicker: View {
     @Environment(\.theme) private var theme
@@ -12,43 +18,20 @@ struct ThemePicker: View {
     @State private var selectedIndex = 0
     @State private var committedThemeName = ""
     @State private var didCommitSelection = false
-    @State private var terminalPreviewTask: Task<Void, Never>?
-    @State private var hoveredThemeName: String?
+    @State private var keyMonitor: Any?
+    @State private var previewTask: Task<Void, Never>?
+    @State private var preloadTask: Task<Void, Never>?
+    @State private var metadataByName: [String: ThemePickerMetadata] = [:]
+    @State private var filteredFavorites: [String] = []
+    @State private var filteredDark: [String] = []
+    @State private var filteredLight: [String] = []
     @FocusState private var searchFocused: Bool
 
-    /// Perceived brightness of a hex color (0 = black, 1 = white).
-    private func isLightTheme(_ name: String) -> Bool {
-        guard let parsed = themeManager.previewTheme(name: name),
-              let c = Color.hexComponents(parsed.background) else {
-            return false
-        }
-        // Relative luminance approximation
-        let luminance = 0.299 * c.red + 0.587 * c.green + 0.114 * c.blue
-        return luminance > 0.5
-    }
+    private static let previewDelayNanoseconds: UInt64 = 120_000_000
 
     private func applySearch(_ names: [String]) -> [String] {
         if searchText.isEmpty { return names }
         return names.filter { $0.localizedStandardContains(searchText) }
-    }
-
-    private var filteredFavorites: [String] {
-        let favs = ThemeManager.favorites.filter { themeManager.availableThemes.contains($0) }
-        return applySearch(favs)
-    }
-
-    private var filteredDark: [String] {
-        let nonFavs = themeManager.availableThemes.filter {
-            !ThemeManager.favorites.contains($0) && !isLightTheme($0)
-        }
-        return applySearch(nonFavs)
-    }
-
-    private var filteredLight: [String] {
-        let nonFavs = themeManager.availableThemes.filter {
-            !ThemeManager.favorites.contains($0) && isLightTheme($0)
-        }
-        return applySearch(nonFavs)
     }
 
     private var allItems: [String] {
@@ -70,6 +53,143 @@ struct ThemePicker: View {
         guard !allItems.isEmpty else { return }
         let count = allItems.count
         selectedIndex = (selectedIndex + delta + count) % count
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let hasOnlyShiftModifier = modifiers == [.shift]
+
+            switch event.keyCode {
+            case 126 where modifiers.isEmpty: // Up arrow
+                moveSelection(by: -1)
+                return nil
+            case 125 where modifiers.isEmpty: // Down arrow
+                moveSelection(by: 1)
+                return nil
+            case 36 where modifiers.isEmpty: // Return
+                guard allItems.indices.contains(selectedIndex) else { return nil }
+                commitTheme(allItems[selectedIndex])
+                return nil
+            case 53 where modifiers.isEmpty: // Escape
+                dismissPicker()
+                return nil
+            default:
+                break
+            }
+
+            guard modifiers.isEmpty || hasOnlyShiftModifier else { return event }
+
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "j":
+                moveSelection(by: 1)
+                return nil
+            case "k":
+                moveSelection(by: -1)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+    }
+
+    private func metadata(for name: String) -> ThemePickerMetadata? {
+        if let cached = metadataByName[name] {
+            return cached
+        }
+
+        guard let parsed = themeManager.previewTheme(name: name) else {
+            return nil
+        }
+
+        return Self.metadata(from: parsed)
+    }
+
+    private static func metadata(from parsed: TerminalTheme) -> ThemePickerMetadata {
+        let isLight: Bool
+        if let components = Color.hexComponents(parsed.background) {
+            let luminance = 0.299 * components.red + 0.587 * components.green + 0.114 * components.blue
+            isLight = luminance > 0.5
+        } else {
+            isLight = false
+        }
+
+        return ThemePickerMetadata(
+            isLight: isLight,
+            swatches: [
+                parsed.background,
+                parsed.foreground,
+                parsed.palette[1],
+                parsed.palette[2],
+                parsed.palette[4],
+                parsed.palette[5],
+            ]
+        )
+    }
+
+    private func refreshFilteredThemes() {
+        let favoritesSet = Set(ThemeManager.favorites)
+        let availableSet = Set(themeManager.availableThemes)
+
+        filteredFavorites = applySearch(ThemeManager.favorites.filter { availableSet.contains($0) })
+
+        let searched = searchText.isEmpty
+            ? themeManager.availableThemes
+            : themeManager.availableThemes.filter { $0.localizedStandardContains(searchText) }
+
+        var nextDark: [String] = []
+        var nextLight: [String] = []
+
+        for name in searched where !favoritesSet.contains(name) {
+            if metadata(for: name)?.isLight == true {
+                nextLight.append(name)
+            } else {
+                nextDark.append(name)
+            }
+        }
+
+        filteredDark = nextDark
+        filteredLight = nextLight
+    }
+
+    private func warmThemeMetadata() {
+        preloadTask?.cancel()
+        let names = themeManager.availableThemes
+
+        preloadTask = Task.detached(priority: .utility) {
+            var loaded: [String: ThemePickerMetadata] = [:]
+            loaded.reserveCapacity(names.count)
+
+            for name in names {
+                guard !Task.isCancelled,
+                      let parsed = TerminalTheme.load(name: name) else {
+                    continue
+                }
+                loaded[name] = Self.metadata(from: parsed)
+            }
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                metadataByName.merge(loaded) { current, _ in current }
+                for (name, metadata) in loaded {
+                    if themeManager.parsedCache[name] == nil,
+                       let parsed = TerminalTheme.load(name: name) {
+                        themeManager.parsedCache[name] = parsed
+                    }
+                    metadataByName[name] = metadata
+                }
+                refreshFilteredThemes()
+            }
+        }
     }
 
     var body: some View {
@@ -180,10 +300,13 @@ struct ThemePicker: View {
         .onAppear {
             didCommitSelection = false
             committedThemeName = store.theme
+            refreshFilteredThemes()
             if let idx = allItems.firstIndex(of: store.theme) {
                 selectedIndex = idx
             }
             requestSearchFocus()
+            installKeyMonitor()
+            warmThemeMetadata()
             previewSelectedTheme()
         }
         .onChange(of: store.themePickerFocusRequest) {
@@ -191,6 +314,7 @@ struct ThemePicker: View {
         }
         .onChange(of: searchText) {
             selectedIndex = 0
+            refreshFilteredThemes()
         }
         .onChange(of: allItems.map(\.self)) {
             if allItems.isEmpty {
@@ -204,7 +328,9 @@ struct ThemePicker: View {
             previewSelectedTheme()
         }
         .onDisappear {
-            terminalPreviewTask?.cancel()
+            removeKeyMonitor()
+            previewTask?.cancel()
+            preloadTask?.cancel()
             guard !didCommitSelection else { return }
             restoreCommittedTheme()
         }
@@ -226,47 +352,16 @@ struct ThemePicker: View {
         return Button {
             commitTheme(name)
         } label: {
-            HStack {
-                if isCurrent {
-                    Text("*")
-                        .font(Fonts.primary(size: 12, weight: .bold))
-                        .foregroundStyle(theme.accent)
-                        .frame(width: 16)
-                } else {
-                    Color.clear.frame(width: 16, height: 1)
-                }
-
-                Text(name)
-                    .font(Fonts.primary(size: 13))
-                    .foregroundStyle(isSelected ? theme.text : theme.textMuted)
-                    .lineLimit(1)
-
-                Spacer()
-
-                // Color preview dots
-                if let parsed = themeManager.previewTheme(name: name) {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color(hex: parsed.background)).frame(width: 10, height: 10)
-                            .overlay { Circle().stroke(theme.border, lineWidth: 0.5) }
-                        Circle().fill(Color(hex: parsed.foreground)).frame(width: 10, height: 10)
-                        Circle().fill(Color(hex: parsed.palette[1])).frame(width: 10, height: 10)
-                        Circle().fill(Color(hex: parsed.palette[2])).frame(width: 10, height: 10)
-                        Circle().fill(Color(hex: parsed.palette[4])).frame(width: 10, height: 10)
-                        Circle().fill(Color(hex: parsed.palette[5])).frame(width: 10, height: 10)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .blinkSelectableRow(isSelected: isSelected, isHovered: hoveredThemeName == name)
+            ThemePickerRow(
+                name: name,
+                isSelected: isSelected,
+                isCurrent: isCurrent,
+                metadata: metadata(for: name)
+            )
         }
         .buttonStyle(.plain)
         .id(name)
         .contentShape(Rectangle())
-        .onHover { isHovered in
-            hoveredThemeName = isHovered ? name : nil
-        }
         .pointerCursor()
     }
 
@@ -291,8 +386,7 @@ struct ThemePicker: View {
     }
 
     private func previewTheme(_ name: String) {
-        themeManager.setTheme(name: name)
-        scheduleTerminalPreview(name)
+        scheduleThemePreview(name)
     }
 
     private func restoreCommittedTheme() {
@@ -312,15 +406,16 @@ struct ThemePicker: View {
         onDismiss()
     }
 
-    private func scheduleTerminalPreview(_ name: String) {
-        terminalPreviewTask?.cancel()
-        terminalPreviewTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 20_000_000)
+    private func scheduleThemePreview(_ name: String) {
+        previewTask?.cancel()
+        previewTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: Self.previewDelayNanoseconds)
             guard !Task.isCancelled,
                   let termTheme = themeManager.previewTheme(name: name) else {
                 return
             }
 
+            themeManager.setTheme(name: name)
             ghosttyApp.updateConfig(
                 terminalTheme: termTheme,
                 backgroundOpacity: effectiveBackgroundOpacity,
@@ -333,8 +428,8 @@ struct ThemePicker: View {
     }
 
     private func applyThemeImmediately(_ name: String) {
-        terminalPreviewTask?.cancel()
-        terminalPreviewTask = nil
+        previewTask?.cancel()
+        previewTask = nil
         themeManager.setTheme(name: name)
         guard let termTheme = themeManager.previewTheme(name: name) else { return }
         ghosttyApp.updateConfig(
@@ -356,6 +451,59 @@ struct ThemePicker: View {
             Text(label)
                 .font(Fonts.primary(size: 10))
                 .foregroundStyle(theme.textDim)
+        }
+    }
+}
+
+private struct ThemePickerRow: View {
+    @Environment(\.theme) private var theme
+
+    let name: String
+    let isSelected: Bool
+    let isCurrent: Bool
+    let metadata: ThemePickerMetadata?
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            if isCurrent {
+                Text("*")
+                    .font(Fonts.primary(size: 12, weight: .bold))
+                    .foregroundStyle(theme.accent)
+                    .frame(width: 16)
+            } else {
+                Color.clear.frame(width: 16, height: 1)
+            }
+
+            Text(name)
+                .font(Fonts.primary(size: 13))
+                .foregroundStyle(isSelected ? theme.text : theme.textMuted)
+                .lineLimit(1)
+
+            Spacer()
+
+            if let metadata {
+                HStack(spacing: 4) {
+                    ForEach(Array(metadata.swatches.enumerated()), id: \.offset) { idx, swatch in
+                        Circle()
+                            .fill(Color(hex: swatch))
+                            .frame(width: 10, height: 10)
+                            .overlay {
+                                if idx == 0 {
+                                    Circle().stroke(theme.border, lineWidth: 0.5)
+                                }
+                            }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .blinkSelectableRow(isSelected: isSelected, isHovered: isHovered)
+        .onHover { hovered in
+            isHovered = hovered
         }
     }
 }

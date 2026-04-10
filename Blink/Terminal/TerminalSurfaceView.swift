@@ -462,6 +462,28 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             ghostty_env_var_s(key: strdup("BLINK_PROJECT_NAME"), value: strdup(workspaceName)),
             ghostty_env_var_s(key: strdup("BLINK_PROJECT_PATH"), value: strdup(workingDirectory)),
         ]
+        if let realNvimPath = NvimLauncher.resolvedNvimBinaryPath() {
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_REAL_NVIM"),
+                    value: strdup(realNvimPath)
+                )
+            )
+        }
+        if let nvimWrapperPath = NvimLauncher.wrapperCommandPath() {
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_NVIM_WRAPPER_PATH"),
+                    value: strdup(nvimWrapperPath)
+                )
+            )
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_VIM_WRAPPER_PATH"),
+                    value: strdup(nvimWrapperPath)
+                )
+            )
+        }
         if let hookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
             envVars.append(
                 ghostty_env_var_s(
@@ -581,6 +603,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
 
         let home = NSHomeDirectory()
+        append(NvimLauncher.wrapperBinPath())
         for relativePath in Self.defaultShellPATHEntries {
             append((home as NSString).appendingPathComponent(relativePath))
         }

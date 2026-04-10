@@ -273,7 +273,7 @@ extension AppStore {
                 kind: .command,
                 label: "Neovim",
                 role: nil,
-                command: NvimLauncher.command(),
+                command: NvimLauncher.command(theme: TerminalTheme.load(name: theme)),
                 workingDirectory: nil,
                 browserState: nil
             )

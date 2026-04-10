@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkspaceLandingPage: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
+    @Environment(ThemeManager.self) private var themeManager
 
     let workspace: Workspace
 
@@ -98,7 +99,7 @@ struct WorkspaceLandingPage: View {
                 action: {
                     _ = store.openOrFocusCommandTab(
                         workspaceId: workspace.id,
-                        command: NvimLauncher.command(),
+                        command: NvimLauncher.command(theme: themeManager.activeTerminalTheme),
                         label: "Neovim"
                     )
                 }

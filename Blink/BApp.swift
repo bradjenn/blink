@@ -56,7 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        NSLog("[BlinkApp] applicationWillTerminate")
         NotificationCenter.default.post(name: BrowserManager.willTerminateNotification, object: nil)
         BlinkChromiumRuntime.shared().shutdown()
     }
@@ -66,21 +65,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func requestCloseActiveTab() {
-        NSLog("[BlinkApp] requestCloseActiveTab")
         closeTabTerminationGuardUntil = Date().addingTimeInterval(1)
         closeActiveTab()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        NSLog("[BlinkApp] applicationShouldTerminate guardActive=%@", closeTabTerminationGuardUntil != nil ? "1" : "0")
         if let deadline = closeTabTerminationGuardUntil,
            deadline > Date() {
             closeTabTerminationGuardUntil = nil
-            NSLog("[BlinkApp] applicationShouldTerminate returning terminateCancel")
             return .terminateCancel
         }
 
-        NSLog("[BlinkApp] applicationShouldTerminate returning terminateNow")
         return .terminateNow
     }
 
@@ -375,7 +370,7 @@ struct BApp: App {
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Button("Open Neovim") {
-                    let command = NvimLauncher.command()
+                    let command = NvimLauncher.command(theme: themeManager.activeTerminalTheme)
                     store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Neovim")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])

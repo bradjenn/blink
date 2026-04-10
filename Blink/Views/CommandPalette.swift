@@ -284,7 +284,7 @@ struct CommandPalette: View {
                 keywords: ["neovim", "nvim", "vim", "editor"],
                 isEnabled: hasWorkspace
             ) {
-                let command = NvimLauncher.command()
+                let command = NvimLauncher.command(theme: themeManager.activeTerminalTheme)
                 store.openOrFocusCommandTabForActiveWorkspace(command: command, label: "Neovim")
             },
             PaletteCommand(

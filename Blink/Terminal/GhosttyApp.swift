@@ -97,8 +97,10 @@ final class GhosttyApp {
                 cursorStyle: cursorStyle,
                 cursorBlink: cursorBlink
             )
+            NvimLauncher.syncRuntime(theme: defaultTheme, backgroundOpacity: opacity)
         } else {
             configString = "background-opacity = \(opacity)\n"
+            NvimLauncher.syncRuntime(theme: nil, backgroundOpacity: opacity)
         }
         guard let cfg = clonedConfig(for: configString) ?? buildConfig(from: configString) else {
             print("[GhosttyApp] Failed to create config")
@@ -265,6 +267,8 @@ final class GhosttyApp {
         guard let newCfg = clonedConfig(for: configString) ?? buildConfig(from: configString) else {
             return
         }
+
+        NvimLauncher.syncRuntime(theme: terminalTheme, backgroundOpacity: backgroundOpacity)
 
         ghostty_app_update_config(app, newCfg)
         surfaceManager?.surfaces.values.forEach { $0.updateConfig(newCfg) }

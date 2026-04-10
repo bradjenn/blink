@@ -1,5 +1,6 @@
-import SwiftUI
 import Combine
+import AppKit
+import SwiftUI
 
 struct BrowserView: View {
     private static let sidebarTransition = Animation.snappy(duration: 0.24, extraBounce: 0)
@@ -35,7 +36,7 @@ struct BrowserView: View {
     @State private var swipeIndicatorHideWorkItem: DispatchWorkItem?
     @State private var swipeNavigationFeedback: BrowserSwipeNavigationFeedback?
     @State private var visibleWorkspaceDownloads: [BrowserDownloadItem] = []
-    @FocusState private var addressBarFocused: Bool
+    @State private var addressBarFocused = false
 
     @State private var sidebarHoverDismissWorkItem: DispatchWorkItem?
     @State private var sidebarHoverProtectionWorkItem: DispatchWorkItem?
@@ -367,23 +368,24 @@ struct BrowserView: View {
         browserTab: BrowserPaneTab,
         controller: any BrowserHostController
     ) -> some View {
-        TextField("Enter URL", text: $addressText)
-            .textFieldStyle(.plain)
-            .font(Fonts.primary(size: 12))
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(height: 16, alignment: .center)
-            .padding(.top, addressBarFocused ? 1 : 0)
-            .padding(.bottom, addressBarFocused ? -1 : 0)
-            .focused($addressBarFocused)
-            .onSubmit {
+        BrowserAddressBarTextField(
+            text: $addressText,
+            isFocused: Binding(
+                get: { addressBarFocused },
+                set: { addressBarFocused = $0 }
+            ),
+            placeholder: "Enter URL",
+            theme: theme,
+            onSubmit: {
                 submitAddressBar(controller: controller)
-            }
-            .onKeyPress(.escape) {
+            },
+            onEscape: {
                 dismissAddressBarFocus(for: browserTab.id)
-                return .handled
-            }
-            .onTapGesture {
+            },
+            onMoveSelection: { delta in
+                moveAddressSuggestionSelection(by: delta)
+            },
+            onActivate: {
                 if store.activeTabId != tab.id {
                     store.setActiveTab(tab.id)
                 }
@@ -391,6 +393,10 @@ struct BrowserView: View {
                 store.setBrowserFocusTarget(.addressBar, for: browserTab.id, in: tab.id)
                 activateAddressBarSuggestions()
             }
+        )
+            .frame(height: 16, alignment: .center)
+            .padding(.top, addressBarFocused ? 1 : 0)
+            .padding(.bottom, addressBarFocused ? -1 : 0)
             .padding(.leading, 12)
             .padding(.trailing, 72)
             .padding(.vertical, 10)
@@ -629,6 +635,25 @@ struct BrowserView: View {
             highlightedAddressSuggestionID = nil
             return
         }
+    }
+
+    private func moveAddressSuggestionSelection(
+        by delta: Int
+    ) {
+        let suggestions = addressBarSuggestions
+        guard !suggestions.isEmpty else { return }
+
+        activateAddressBarSuggestions()
+
+        if let currentHighlightedID = highlightedAddressSuggestionID,
+           let currentIndex = suggestions.firstIndex(where: { $0.id == currentHighlightedID }) {
+            let count = suggestions.count
+            let nextIndex = (currentIndex + delta + count) % count
+            highlightedAddressSuggestionID = suggestions[nextIndex].id
+            return
+        }
+
+        highlightedAddressSuggestionID = delta >= 0 ? suggestions.first?.id : suggestions.last?.id
     }
 
     private func submitAddressBar(controller: any BrowserHostController) {
@@ -973,6 +998,116 @@ struct BrowserView: View {
         }
 
         return "arrow.down.circle"
+    }
+}
+
+private struct BrowserAddressBarTextField: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
+    let placeholder: String
+    let theme: Theme
+    let onSubmit: () -> Void
+    let onEscape: () -> Void
+    let onMoveSelection: (Int) -> Void
+    let onActivate: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField(string: text)
+        textField.delegate = context.coordinator
+        textField.isBordered = false
+        textField.isBezeled = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.isAutomaticTextCompletionEnabled = false
+        textField.font = NSFont(name: "MesloLGSNFM-Regular", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textField.textColor = NSColor(theme.text)
+        textField.placeholderString = placeholder
+        textField.lineBreakMode = .byTruncatingTail
+        textField.maximumNumberOfLines = 1
+        textField.cell?.wraps = false
+        textField.cell?.isScrollable = true
+        return textField
+    }
+
+    func updateNSView(_ textField: NSTextField, context: Context) {
+        context.coordinator.parent = self
+
+        if textField.stringValue != text {
+            textField.stringValue = text
+        }
+
+        textField.placeholderString = placeholder
+        textField.textColor = NSColor(theme.text)
+        textField.font = NSFont(name: "MesloLGSNFM-Regular", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+
+        DispatchQueue.main.async {
+            guard textField.window != nil else { return }
+
+            let currentEditor = textField.currentEditor()
+            if isFocused {
+                if currentEditor == nil {
+                    textField.window?.makeFirstResponder(textField)
+                }
+            } else if currentEditor != nil {
+                textField.window?.makeFirstResponder(nil)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate, NSControlTextEditingDelegate {
+        var parent: BrowserAddressBarTextField
+
+        init(parent: BrowserAddressBarTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            if !parent.isFocused {
+                parent.isFocused = true
+            }
+            parent.onActivate()
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let textField = notification.object as? NSTextField else { return }
+            if parent.text != textField.stringValue {
+                parent.text = textField.stringValue
+            }
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            if parent.isFocused {
+                parent.isFocused = false
+            }
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.moveUp(_:)):
+                parent.onMoveSelection(-1)
+                return true
+            case #selector(NSResponder.moveDown(_:)):
+                parent.onMoveSelection(1)
+                return true
+            case #selector(NSResponder.insertNewline(_:)):
+                parent.onSubmit()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                parent.onEscape()
+                return true
+            default:
+                return false
+            }
+        }
     }
 }
 

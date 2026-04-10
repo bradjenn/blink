@@ -178,7 +178,6 @@ final class ChromiumBrowserController: NSObject, BrowserHostController {
     }
 
     func invalidate() {
-        NSLog("[BlinkChromiumController] invalidate tabId=%@", tabId)
         host.invalidate()
     }
 

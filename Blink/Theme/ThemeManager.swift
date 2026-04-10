@@ -25,25 +25,46 @@ final class ThemeManager {
     /// Cache of parsed themes (for color preview dots in picker).
     var parsedCache: [String: TerminalTheme] = [:]
 
-    /// The 10 favorite theme names, pinned at top of the picker.
+    /// Curated Blink theme set. Keep this intentionally small and balanced.
+    static let curatedThemes: [String] = [
+        "Josean",
+        "Dracula",
+        "TokyoNight",
+        "Catppuccin Mocha",
+        "Rose Pine",
+        "Kanagawa Wave",
+        "Catppuccin Latte",
+        "TokyoNight Day",
+        "Kanagawa Lotus",
+        "Gruvbox Dark",
+        "Everforest Dark Hard",
+        "GitHub Dark Default",
+        "GitHub Light Default",
+        "Rose Pine Dawn",
+    ]
+
+    /// Pinned themes shown first in the picker.
     static let favorites: [String] = [
         "Josean",
         "Dracula",
         "TokyoNight",
         "Catppuccin Mocha",
-        "Gruvbox Dark",
-        "Nord",
-        "Atom One Dark",
-        "Solarized Dark Patched",
         "Rose Pine",
         "Kanagawa Wave",
+        "Gruvbox Dark",
     ]
 
     init() {
-        availableThemes = TerminalTheme.availableThemes()
-
         // Load persisted theme, fall back to Josean
         let defaultName = UserDefaults.standard.string(forKey: "blink.theme") ?? "Josean"
+        let allAvailableThemes = Set(TerminalTheme.availableThemes())
+        var curatedThemeNames = Self.curatedThemes.filter { allAvailableThemes.contains($0) }
+        if allAvailableThemes.contains(defaultName),
+           !curatedThemeNames.contains(defaultName) {
+            curatedThemeNames.insert(defaultName, at: 0)
+        }
+        availableThemes = curatedThemeNames
+
         if let theme = TerminalTheme.load(name: defaultName) {
             activeTerminalTheme = theme
             activeTheme = theme.deriveUITheme()

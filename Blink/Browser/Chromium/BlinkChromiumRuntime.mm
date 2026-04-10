@@ -265,8 +265,6 @@ void BlinkChromiumRemoveItemIfExists(NSString *path) {
         NSLog(@"[ChromiumProfile] failed to remove %@: %@", path, error);
         return;
     }
-
-    NSLog(@"[ChromiumProfile] removed %@", path);
 }
 
 void BlinkChromiumSetBooleanPreference(CefRefPtr<CefRequestContext> requestContext,
@@ -321,9 +319,7 @@ void BlinkChromiumMigrateLegacyProfileCachePathIfNeeded(NSString *profileIdentif
         return;
     }
 
-    if ([fileManager moveItemAtPath:legacyPath toPath:cachePath error:&error]) {
-        NSLog(@"[ChromiumProfile] migrated profile cache %@ -> %@", legacyPath, cachePath);
-    } else {
+    if (![fileManager moveItemAtPath:legacyPath toPath:cachePath error:&error]) {
         NSLog(@"[ChromiumProfile] failed to migrate profile cache %@ -> %@: %@",
               legacyPath,
               cachePath,

@@ -1227,7 +1227,6 @@ final class AppStore {
     }
 
     func closeBrowserTab(_ browserTabId: String, in paneTabId: String) {
-        NSLog("[BlinkStore] closeBrowserTab browserTabId=%@ paneTabId=%@", browserTabId, paneTabId)
         guard let idx = tabs.firstIndex(where: { $0.id == paneTabId && $0.isBrowser }),
               var paneState = tabs[idx].browserState else { return }
 
@@ -1630,7 +1629,6 @@ final class AppStore {
     }
 
     func closeTab(_ id: String) {
-        NSLog("[BlinkStore] closeTab id=%@ activeTabId=%@ tabs=%ld", id, activeTabId ?? "<nil>", tabs.count)
         guard let tab = tabsById[id] else { return }
         let workspaceId = tab.workspaceId
         let paneId = tab.workspaceSetupPaneId
@@ -1754,7 +1752,6 @@ final class AppStore {
     }
 
     func closeActiveTab() {
-        NSLog("[BlinkStore] closeActiveTab activeTabId=%@", activeTabId ?? "<nil>")
         guard let activeTabId else { return }
         if let activeTab = tabsById[activeTabId],
            activeTab.isBrowser,
@@ -2295,7 +2292,12 @@ final class AppStore {
                 tab: tab,
                 workspace: workspace,
                 workingDirectory: effectiveWorkingDirectory(tab.workingDirectory, workspaceId: workspaceId),
-                text: NvimLauncher.command(path: path, line: line, column: column)
+                text: NvimLauncher.command(
+                    theme: TerminalTheme.load(name: theme),
+                    path: path,
+                    line: line,
+                    column: column
+                )
             ))
         }
 
@@ -2320,7 +2322,12 @@ final class AppStore {
             workingDirectory: workingDirectory
         )
 
-        pendingTmuxShellCommands[tab.id] = NvimLauncher.command(path: path, line: line, column: column)
+        pendingTmuxShellCommands[tab.id] = NvimLauncher.command(
+            theme: TerminalTheme.load(name: theme),
+            path: path,
+            line: line,
+            column: column
+        )
     }
 
     private func runDetachedShellCommand(_ command: String) {
@@ -2367,19 +2374,35 @@ final class AppStore {
         if let hookEventDirectoryPath = claudeHookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
             assignments.append(("BLINK_HOOK_EVENT_DIR", hookEventDirectoryPath))
         }
+        var pathPrefixes: [String] = []
+        if let wrapperBinPath = NvimLauncher.wrapperBinPath(), !wrapperBinPath.isEmpty {
+            pathPrefixes.append(wrapperBinPath)
+        }
+        if let realNvimPath = NvimLauncher.resolvedNvimBinaryPath(), !realNvimPath.isEmpty {
+            assignments.append(("BLINK_REAL_NVIM", realNvimPath))
+        }
+        if let nvimWrapperPath = NvimLauncher.wrapperCommandPath(), !nvimWrapperPath.isEmpty {
+            assignments.append(("BLINK_NVIM_WRAPPER_PATH", nvimWrapperPath))
+            assignments.append(("BLINK_VIM_WRAPPER_PATH", nvimWrapperPath))
+        }
         if let hookScriptDirectoryPath = claudeHookScriptPath, !hookScriptDirectoryPath.isEmpty {
             let wrapperPath = (hookScriptDirectoryPath as NSString).appendingPathComponent("claude")
             assignments.append(("BLINK_CLAUDE_WRAPPER_PATH", wrapperPath))
+            pathPrefixes.append(hookScriptDirectoryPath)
+        }
+
+        if !pathPrefixes.isEmpty {
             let inheritedPATH = ProcessInfo.processInfo.environment["PATH"] ?? ""
-            let prefixedPath: String
-            if inheritedPATH.split(separator: ":").contains(Substring(hookScriptDirectoryPath)) {
-                prefixedPath = inheritedPATH
-            } else if inheritedPATH.isEmpty {
-                prefixedPath = hookScriptDirectoryPath
-            } else {
-                prefixedPath = "\(hookScriptDirectoryPath):\(inheritedPATH)"
+            let inheritedEntries = inheritedPATH.split(separator: ":").map(String.init)
+            var seen = Set<String>()
+            var mergedEntries: [String] = []
+
+            for entry in pathPrefixes + inheritedEntries {
+                guard !entry.isEmpty, seen.insert(entry).inserted else { continue }
+                mergedEntries.append(entry)
             }
-            assignments.append(("PATH", prefixedPath))
+
+            assignments.append(("PATH", mergedEntries.joined(separator: ":")))
         }
         if let hookShellIntegrationPath = claudeHookShellIntegrationPath, !hookShellIntegrationPath.isEmpty {
             assignments.append(("BLINK_SHELL_INTEGRATION", "1"))

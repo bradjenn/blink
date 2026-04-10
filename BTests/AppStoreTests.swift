@@ -1407,9 +1407,11 @@ final class AppStoreTests: XCTestCase {
         store.handleTerminalSurfaceReady(for: newTab.id)
 
         let command = try! XCTUnwrap(commands.first)
+        let wrapperPath = NvimLauncher.wrapperCommandPath() ?? "nvim"
         XCTAssertTrue(command.contains("blink-1:pane-\(paneId)"))
         XCTAssertTrue(command.contains("send-keys"))
-        XCTAssertTrue(command.contains("nvim +12"))
+        XCTAssertTrue(command.contains(wrapperPath))
+        XCTAssertTrue(command.contains("+12"))
         XCTAssertTrue(command.contains("/tmp/blink/README.md"))
     }
 
@@ -1447,7 +1449,9 @@ final class AppStoreTests: XCTestCase {
 
         let command = try XCTUnwrap(commands.first)
         let missingPath = tempRoot.appendingPathComponent("Views/Sidebar.swift").path
-        XCTAssertTrue(command.contains("nvim +130"))
+        let wrapperPath = NvimLauncher.wrapperCommandPath() ?? "nvim"
+        XCTAssertTrue(command.contains(wrapperPath))
+        XCTAssertTrue(command.contains("+130"))
         XCTAssertTrue(command.contains(actualFile.path))
         XCTAssertFalse(command.contains(missingPath))
     }

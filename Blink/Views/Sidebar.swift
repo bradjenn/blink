@@ -93,7 +93,7 @@ struct SidebarView: View {
             let command = YaziLauncher.command(theme: themeManager.activeTerminalTheme)
             store.openOrFocusCommandTab(workspaceId: workspaceId, command: command, label: "Yazi")
         case .neovim:
-            let command = NvimLauncher.command()
+            let command = NvimLauncher.command(theme: themeManager.activeTerminalTheme)
             store.openOrFocusCommandTab(workspaceId: workspaceId, command: command, label: "Neovim")
         }
     }
@@ -101,7 +101,8 @@ struct SidebarView: View {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard store.sidebarFocused else { return event }
+            guard store.sidebarFocused,
+                  !store.hasBlockingModalPresentation else { return event }
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
             // Never intercept command-driven app shortcuts while the sidebar is focused.

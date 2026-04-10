@@ -148,8 +148,11 @@ extension AppStore {
     }
 
     func presentThemePicker(focusSearch: Bool = false) {
+        sidebarFocused = false
+        workspaceLandingFocused = false
         workspacePrompt = nil
         showWorkspaceOnboarding = false
+        showWorkspaceSwitcher = false
         showAISessionPicker = false
         showCommandPalette = false
         showThemePicker = true

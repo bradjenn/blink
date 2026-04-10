@@ -193,6 +193,9 @@ enum ClaudeHookScriptInstaller {
                 withIntermediateDirectories: true
             )
             try write(script: zshBootstrapScript, named: ".zshenv", into: directoryURL)
+            try write(script: zshProfileScript, named: ".zprofile", into: directoryURL)
+            try write(script: zshRcScript, named: ".zshrc", into: directoryURL)
+            try write(script: zshLoginScript, named: ".zlogin", into: directoryURL)
             try write(script: zshIntegrationScript, named: "blink-zsh-integration.zsh", into: directoryURL)
             return directoryURL
         } catch {
@@ -337,15 +340,31 @@ fi
 
     private static let zshBootstrapScript = #"""
 # Blink ZDOTDIR bootstrap for zsh.
-if [[ -n "${BLINK_ZSH_ZDOTDIR+X}" ]]; then
-    builtin export ZDOTDIR="$BLINK_ZSH_ZDOTDIR"
-    builtin unset BLINK_ZSH_ZDOTDIR
-else
-    builtin unset ZDOTDIR
-fi
-
 {
-    builtin typeset _blink_file="${ZDOTDIR-$HOME}/.zshenv"
+    builtin typeset _blink_original_zdotdir="${BLINK_ZSH_ZDOTDIR:-$HOME}"
+    builtin typeset _blink_file="${_blink_original_zdotdir}/.zshenv"
+    [[ ! -r "$_blink_file" ]] || builtin source -- "$_blink_file"
+} always {
+    builtin unset _blink_original_zdotdir _blink_file
+}
+"""#
+
+    private static let zshProfileScript = #"""
+# Blink ZDOTDIR wrapper for zsh profile.
+{
+    builtin typeset _blink_original_zdotdir="${BLINK_ZSH_ZDOTDIR:-$HOME}"
+    builtin typeset _blink_file="${_blink_original_zdotdir}/.zprofile"
+    [[ ! -r "$_blink_file" ]] || builtin source -- "$_blink_file"
+} always {
+    builtin unset _blink_original_zdotdir _blink_file
+}
+"""#
+
+    private static let zshRcScript = #"""
+# Blink ZDOTDIR wrapper for zsh rc.
+{
+    builtin typeset _blink_original_zdotdir="${BLINK_ZSH_ZDOTDIR:-$HOME}"
+    builtin typeset _blink_file="${_blink_original_zdotdir}/.zshrc"
     [[ ! -r "$_blink_file" ]] || builtin source -- "$_blink_file"
 } always {
     if [[ -o interactive && "${BLINK_SHELL_INTEGRATION:-1}" != "0" && -n "${BLINK_SHELL_INTEGRATION_DIR:-}" ]]; then
@@ -353,7 +372,18 @@ fi
         [[ -r "$_blink_integration" ]] && builtin source -- "$_blink_integration"
     fi
 
-    builtin unset _blink_file _blink_integration
+    builtin unset _blink_original_zdotdir _blink_file _blink_integration
+}
+"""#
+
+    private static let zshLoginScript = #"""
+# Blink ZDOTDIR wrapper for zsh login.
+{
+    builtin typeset _blink_original_zdotdir="${BLINK_ZSH_ZDOTDIR:-$HOME}"
+    builtin typeset _blink_file="${_blink_original_zdotdir}/.zlogin"
+    [[ ! -r "$_blink_file" ]] || builtin source -- "$_blink_file"
+} always {
+    builtin unset _blink_original_zdotdir _blink_file
 }
 """#
 
@@ -370,6 +400,20 @@ if [[ -n "${BLINK_CLAUDE_WRAPPER_PATH:-}" && -x "${BLINK_CLAUDE_WRAPPER_PATH}" ]
 
     claude() {
         "${BLINK_CLAUDE_WRAPPER_PATH}" "$@"
+    }
+fi
+
+if [[ -n "${BLINK_NVIM_WRAPPER_PATH:-}" && -x "${BLINK_NVIM_WRAPPER_PATH}" ]]; then
+    nvim() {
+        "${BLINK_NVIM_WRAPPER_PATH}" "$@"
+    }
+    export EDITOR="${BLINK_NVIM_WRAPPER_PATH}"
+    export VISUAL="${BLINK_NVIM_WRAPPER_PATH}"
+fi
+
+if [[ -n "${BLINK_VIM_WRAPPER_PATH:-}" && -x "${BLINK_VIM_WRAPPER_PATH}" ]]; then
+    vim() {
+        "${BLINK_VIM_WRAPPER_PATH}" "$@"
     }
 fi
 

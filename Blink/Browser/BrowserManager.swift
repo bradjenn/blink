@@ -120,7 +120,6 @@ final class BrowserManager {
     }
 
     func destroyController(tabId: String) {
-        NSLog("[BlinkBrowserManager] destroyController tabId=%@", tabId)
         controllers.removeValue(forKey: tabId)?.invalidate()
         controllerProfileIds[tabId] = nil
     }
@@ -253,7 +252,6 @@ final class BrowserManager {
     }
 
     private func invalidateAllControllers() {
-        NSLog("[BlinkBrowserManager] invalidateAllControllers count=%ld", controllers.count)
         let activeControllers = Array(controllers.values)
         controllers.removeAll()
         for controller in activeControllers {
