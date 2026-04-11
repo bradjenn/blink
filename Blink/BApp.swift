@@ -183,6 +183,30 @@ struct BApp: App {
                     minHeight: Layout.windowMinHeight
                 )
                 .preferredColorScheme(.dark)
+                .alert(
+                    updateChecker.presentedAlert?.title ?? "",
+                    isPresented: Binding(
+                        get: { updateChecker.presentedAlert != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                updateChecker.dismissAlert()
+                            }
+                        }
+                    )
+                ) {
+                    if case .updateAvailable(let release) = updateChecker.presentedAlert {
+                        Button("View Release") {
+                            updateChecker.openReleasePage(for: release)
+                            updateChecker.dismissAlert()
+                        }
+                    }
+
+                    Button("OK", role: .cancel) {
+                        updateChecker.dismissAlert()
+                    }
+                } message: {
+                    Text(updateChecker.presentedAlert?.message ?? "")
+                }
                 .onAppear {
                     appDelegate.closeActiveTab = {
                         guard store.activeWorkspaceId != nil,
@@ -242,6 +266,7 @@ struct BApp: App {
                 Button("Check for Updates...") {
                     Task { await updateChecker.check() }
                 }
+                .disabled(updateChecker.isChecking)
 
                 Button("Settings...") {
                     store.toggleSettings()

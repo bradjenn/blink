@@ -13,9 +13,39 @@ struct AppRelease: Codable {
     }
 }
 
+enum UpdateCheckAlert {
+    case updateAvailable(AppRelease)
+    case upToDate(currentVersion: String)
+    case failed
+
+    var title: String {
+        switch self {
+        case .updateAvailable(let release):
+            return "\(release.name) Available"
+        case .upToDate:
+            return "Blink Is Up to Date"
+        case .failed:
+            return "Update Check Failed"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .updateAvailable(let release):
+            return "A newer version of Blink is available. View the release page to download and install \(release.tagName)."
+        case .upToDate(let currentVersion):
+            return "You’re already running Blink \(currentVersion)."
+        case .failed:
+            return "Blink couldn’t reach GitHub to check for updates right now."
+        }
+    }
+}
+
 @MainActor @Observable
 final class UpdateChecker {
     var availableRelease: AppRelease?
+    var presentedAlert: UpdateCheckAlert?
+    var isChecking = false
 
     private static let repo = "bradjenn/blink"
     private static let checkInterval: TimeInterval = 6 * 60 * 60 // 6 hours
@@ -31,28 +61,49 @@ final class UpdateChecker {
         let last = UserDefaults.standard.double(forKey: Self.lastCheckKey)
         let elapsed = Date().timeIntervalSince1970 - last
         guard elapsed > Self.checkInterval || last == 0 else { return }
-        Task { await check() }
+        Task { await check(presentResult: false) }
     }
 
     func check() async {
+        await check(presentResult: true)
+    }
+
+    func check(presentResult: Bool) async {
+        guard !isChecking else { return }
+        isChecking = true
+        defer { isChecking = false }
+
         guard let url = URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest") else { return }
 
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                if presentResult {
+                    presentedAlert = .failed
+                }
+                return
+            }
 
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastCheckKey)
 
             let release = try JSONDecoder().decode(AppRelease.self, from: data)
-            let latestVersion = String(release.tagName.trimmingPrefix("v"))
-
-            if Self.isNewer(latestVersion, than: currentVersion) {
+            let result = Self.resolveResult(for: release, currentVersion: currentVersion)
+            switch result {
+            case .updateAvailable(let release):
                 availableRelease = release
-            } else {
+            case .upToDate:
+                availableRelease = nil
+            case .failed:
                 availableRelease = nil
             }
+
+            if presentResult {
+                presentedAlert = result
+            }
         } catch {
-            // Silent failure — update check is non-critical
+            if presentResult {
+                presentedAlert = .failed
+            }
         }
     }
 
@@ -62,8 +113,22 @@ final class UpdateChecker {
         NSWorkspace.shared.open(url)
     }
 
-    func dismiss() {
-        availableRelease = nil
+    func openReleasePage(for release: AppRelease) {
+        guard let url = URL(string: release.htmlUrl) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func dismissAlert() {
+        presentedAlert = nil
+    }
+
+    static func resolveResult(for release: AppRelease, currentVersion: String) -> UpdateCheckAlert {
+        let latestVersion = String(release.tagName.trimmingPrefix("v"))
+        if isNewer(latestVersion, than: currentVersion) {
+            return .updateAvailable(release)
+        }
+
+        return .upToDate(currentVersion: currentVersion)
     }
 
     private static func isNewer(_ latest: String, than current: String) -> Bool {
