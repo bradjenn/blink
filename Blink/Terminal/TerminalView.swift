@@ -7,9 +7,17 @@ import GhosttyKit
 class TerminalContainerView: NSView {
     private var currentTabId: String?
     private weak var currentSurface: TerminalSurfaceView?
+    var allowsPointerPassthrough = false
 
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if allowsPointerPassthrough {
+            return nil
+        }
+        return super.hitTest(point)
+    }
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
@@ -81,6 +89,11 @@ struct TerminalView: NSViewRepresentable {
     let workingDirectory: String
     let isFocused: Bool
     var command: String? = nil
+    var autoFocusOnReady: Bool = true
+    var shellPathOverride: String? = nil
+    var usesLoginShell: Bool = true
+    var shellIntegrationEnabled: Bool = true
+    var allowsPointerPassthrough: Bool = false
 
     final class Coordinator {
         var store: AppStore?
@@ -94,6 +107,8 @@ struct TerminalView: NSViewRepresentable {
     }
 
     func updateNSView(_ container: TerminalContainerView, context: Context) {
+        container.allowsPointerPassthrough = allowsPointerPassthrough
+
         let coordinator = context.coordinator
         coordinator.store = store
         coordinator.tabId = tabId
@@ -112,7 +127,11 @@ struct TerminalView: NSViewRepresentable {
                 hookEventDirectoryPath: store.claudeHookEventDirectoryPath,
                 app: ghosttyApp,
                 workingDirectory: workingDirectory,
-                command: command
+                command: command,
+                autoFocusOnReady: autoFocusOnReady,
+                shellPathOverride: shellPathOverride,
+                usesLoginShell: usesLoginShell,
+                shellIntegrationEnabled: shellIntegrationEnabled
             )
 
             // Set closures once per surface, reading current state via coordinator

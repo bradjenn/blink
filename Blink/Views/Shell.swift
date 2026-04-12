@@ -209,7 +209,10 @@ struct Shell: View {
                 Rectangle()
                     .fill(chromeBackground)
                     .overlay {
-                        StartScreen()
+                        StartScreen(
+                            ghosttyApp: ghosttyApp,
+                            surfaceManager: surfaceManager
+                        )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
             } else if let workspace = activeWorkspace {

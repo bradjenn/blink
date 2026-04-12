@@ -2408,7 +2408,9 @@ final class AppStore {
             assignments.append(("BLINK_SHELL_INTEGRATION", "1"))
             assignments.append(("BLINK_SHELL_INTEGRATION_DIR", hookShellIntegrationPath))
             if shellName == "zsh" {
-                if let currentZdotdir = ProcessInfo.processInfo.environment["ZDOTDIR"], !currentZdotdir.isEmpty {
+                if let currentZdotdir = originalZdotdir(
+                    hookShellIntegrationPath: hookShellIntegrationPath
+                ) {
                     assignments.append(("BLINK_ZSH_ZDOTDIR", currentZdotdir))
                 }
                 assignments.append(("ZDOTDIR", hookShellIntegrationPath))
@@ -2420,6 +2422,28 @@ final class AppStore {
             .joined(separator: " ")
         let envPrefix = envAssignments.isEmpty ? "" : "\(envAssignments) "
         return "env -u TMUX \(envPrefix)\(shellQuote(shell)) -l"
+    }
+
+    private func originalZdotdir(hookShellIntegrationPath: String) -> String? {
+        let environment = ProcessInfo.processInfo.environment
+
+        if let originalZdotdir = environment["BLINK_ZSH_ZDOTDIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !originalZdotdir.isEmpty {
+            return originalZdotdir
+        }
+
+        guard let candidateZdotdir = environment["ZDOTDIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !candidateZdotdir.isEmpty else {
+            return nil
+        }
+
+        let normalizedCandidate = URL(fileURLWithPath: candidateZdotdir).standardizedFileURL.path
+        let normalizedWrapper = URL(fileURLWithPath: hookShellIntegrationPath).standardizedFileURL.path
+        guard normalizedCandidate != normalizedWrapper else { return nil }
+
+        return candidateZdotdir
     }
 
     private func tmuxEnsureWindowCommand(tab: AppTab, workspace: Workspace, workingDirectory: String) -> String {

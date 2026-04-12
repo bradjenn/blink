@@ -5,7 +5,16 @@ struct StartScreen: View {
     @Environment(\.theme) private var theme
     @Environment(AppStore.self) private var store
 
+    let ghosttyApp: GhosttyApp
+    let surfaceManager: SurfaceManager
+
     @State private var keyMonitor: Any?
+
+    private static let terminalWorkspaceId = "__start_screen__"
+    private static let terminalWorkspaceName = "Blink"
+    private static let terminalPrefix = "start-screen-"
+    private static let bannerPaddingRows = 2
+    private static let menuWidth: CGFloat = 540
 
     private struct ActionItem: Identifiable {
         let id: String
@@ -37,7 +46,7 @@ struct StartScreen: View {
             ActionItem(
                 id: "switch",
                 icon: "\u{2318}",
-                label: "Switch Workspace",
+                label: "Open Workspace",
                 keyHint: "p",
                 isEnabled: !store.workspaces.isEmpty,
                 action: { store.presentWorkspaceSwitcher() }
@@ -88,58 +97,139 @@ struct StartScreen: View {
         "\(store.workspaces.count) workspace\(store.workspaces.count == 1 ? "" : "s")"
     }
 
+    private var dashboardLogoLines: [String] {
+        let logo = [
+            "██████╗ ██╗     ██╗███╗   ██╗██╗  ██╗",
+            "██╔══██╗██║     ██║████╗  ██║██║ ██╔╝",
+            "██████╔╝██║     ██║██╔██╗ ██║█████╔╝ ",
+            "██╔══██╗██║     ██║██║╚██╗██║██╔═██╗ ",
+            "██████╔╝███████╗██║██║ ╚████║██║  ██╗",
+            "╚═════╝ ╚══════╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝",
+        ]
+        let blockWidth = logo.map(\.count).max() ?? 0
+
+        return logo.map { Self.centeredLine($0, width: blockWidth) }
+    }
+
+    private var dashboardCommand: String {
+        Self.dashboardCommand(lines: dashboardLogoLines)
+    }
+
+    private var dashboardTabId: String {
+        "\(Self.terminalPrefix)\(abs(dashboardCommand.hashValue))"
+    }
+
+    private var terminalRowHeight: CGFloat {
+        max(18, CGFloat(store.fontSize) * 1.26)
+    }
+
+    private var bannerHeight: CGFloat {
+        CGFloat(dashboardLogoLines.count + Self.bannerPaddingRows) * terminalRowHeight
+    }
+
     var body: some View {
         ZStack {
             backgroundGlow
 
-            VStack(spacing: 40) {
-                StartScreenLogo()
+            VStack(spacing: 28) {
+                TerminalView(
+                    tabId: dashboardTabId,
+                    paneId: dashboardTabId,
+                    ghosttyApp: ghosttyApp,
+                    surfaceManager: surfaceManager,
+                    workspaceId: Self.terminalWorkspaceId,
+                    workspaceName: Self.terminalWorkspaceName,
+                    workingDirectory: NSHomeDirectory(),
+                    isFocused: false,
+                    command: dashboardCommand,
+                    autoFocusOnReady: false,
+                    shellPathOverride: "/bin/sh",
+                    usesLoginShell: false,
+                    shellIntegrationEnabled: false,
+                    allowsPointerPassthrough: true
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: bannerHeight)
+                .accessibilityHidden(true)
 
-                VStack(spacing: 14) {
-                    VStack(spacing: 4) {
-                        ForEach(actionItems) { item in
-                            StartScreenActionRow(
-                                icon: item.icon,
-                                label: item.label,
-                                keyHint: item.keyHint,
-                                isEnabled: item.isEnabled,
-                                action: item.action
-                            )
-                        }
-                    }
-                    .frame(width: 320)
-
-                    Text("\(versionText) · \(workspaceCountText)")
-                        .font(Fonts.primary(size: 11))
-                        .foregroundStyle(theme.textDim)
-                        .padding(.top, 8)
-                }
+                menuContent
             }
-
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)
         .onAppear {
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
-                guard !store.showWorkspaceSwitcher,
-                      !store.showWorkspaceOnboarding,
-                      event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] else {
-                    return event
-                }
-                let key = event.characters?.lowercased() ?? ""
-                guard let item = actionItems.first(where: { $0.keyHint == key }),
-                      item.isEnabled else {
-                    return event
-                }
-                item.action()
-                return nil
-            }
+            installKeyMonitor()
+            destroyStaleStartScreenSurfaces(keeping: dashboardTabId)
         }
         .onDisappear {
-            if let monitor = keyMonitor {
-                NSEvent.removeMonitor(monitor)
-                keyMonitor = nil
+            removeKeyMonitor()
+            destroyAllStartScreenSurfaces()
+        }
+        .onChange(of: dashboardTabId, initial: false) { oldValue, newValue in
+            surfaceManager.destroySurface(tabId: oldValue)
+            destroyStaleStartScreenSurfaces(keeping: newValue)
+        }
+    }
+
+    private var menuContent: some View {
+        VStack(spacing: 12) {
+            ForEach(actionItems) { item in
+                StartScreenActionRow(
+                    icon: item.icon,
+                    label: item.label,
+                    keyHint: item.keyHint,
+                    isEnabled: item.isEnabled,
+                    action: item.action
+                )
+                .frame(width: Self.menuWidth)
             }
+
+            Text("\(versionText) · \(workspaceCountText)")
+                .font(Fonts.primary(size: 11))
+                .foregroundStyle(theme.textDim)
+                .padding(.top, 14)
+        }
+        .frame(width: Self.menuWidth)
+    }
+
+    private func installKeyMonitor() {
+        removeKeyMonitor()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            guard !store.showWorkspaceSwitcher,
+                  !store.showWorkspaceOnboarding,
+                  event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] else {
+                return event
+            }
+            let key = event.characters?.lowercased() ?? ""
+            guard let item = actionItems.first(where: { $0.keyHint == key }),
+                  item.isEnabled else {
+                return event
+            }
+            item.action()
+            return nil
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
+    }
+
+    private func destroyAllStartScreenSurfaces() {
+        let tabIds = surfaceManager.surfaces.keys.filter { $0.hasPrefix(Self.terminalPrefix) }
+        for tabId in tabIds {
+            surfaceManager.destroySurface(tabId: tabId)
+        }
+    }
+
+    private func destroyStaleStartScreenSurfaces(keeping activeTabId: String) {
+        let staleTabIds = surfaceManager.surfaces.keys.filter {
+            $0.hasPrefix(Self.terminalPrefix) && $0 != activeTabId
+        }
+        for tabId in staleTabIds {
+            surfaceManager.destroySurface(tabId: tabId)
         }
     }
 
@@ -160,4 +250,108 @@ struct StartScreen: View {
         .allowsHitTesting(false)
     }
 
+    private static func dashboardCommand(lines: [String]) -> String {
+        let topPadding = max(0, lines.count)
+        let blockWidth = lines.map(\.count).max() ?? 0
+        let renderedLines = lines.map { "print_line \(shellLiteral($0))" }.joined(separator: "\n")
+
+        return """
+        cols=0
+        rows=0
+        last_size=""
+        stable_size=""
+        stable_count=0
+
+        read_size() {
+          size="$(stty size 2>/dev/null)"
+          rows="$(printf '%s' "$size" | awk '{print $1}')"
+          cols="$(printf '%s' "$size" | awk '{print $2}')"
+        }
+
+        has_real_size() {
+          [ -n "$cols" ] && [ -n "$rows" ] && [ "$cols" -gt 0 ] && [ "$rows" -gt 0 ]
+        }
+
+        wait_for_stable_size() {
+          attempts=0
+          while [ "$attempts" -lt 30 ]; do
+            read_size
+            if has_real_size; then
+              size_key="${rows}x${cols}"
+              if [ "$size_key" = "$stable_size" ]; then
+                stable_count=$((stable_count + 1))
+              else
+                stable_size="$size_key"
+                stable_count=1
+              fi
+
+              if [ "$stable_count" -ge 3 ]; then
+                return
+              fi
+            fi
+
+            attempts=$((attempts + 1))
+            sleep 0.05
+          done
+
+          [ -n "$cols" ] || cols=120
+          [ -n "$rows" ] || rows=40
+        }
+
+        print_line() {
+          printf '%*s%s\\n' "$left_pad" '' "$1"
+        }
+
+        redraw() {
+          read_size
+          left_pad=$(( (cols - \(blockWidth)) / 2 ))
+          [ "$left_pad" -lt 0 ] && left_pad=0
+          top=$(( (rows - \(topPadding)) / 2 ))
+          [ "$top" -lt 0 ] && top=0
+
+          printf '\\033[2J\\033[H\\033[?25l'
+          i=0
+          while [ "$i" -lt "$top" ]; do
+            printf '\\n'
+            i=$((i + 1))
+          done
+
+          \(renderedLines)
+        }
+
+        cleanup() {
+          printf '\\033[?25h'
+        }
+
+        trap redraw WINCH
+        trap cleanup EXIT INT TERM
+        wait_for_stable_size
+        redraw
+
+        while :; do
+          read_size
+          if has_real_size; then
+            size_key="${rows}x${cols}"
+          else
+            size_key="$last_size"
+          fi
+          if [ -n "$size_key" ] && [ "$size_key" != "$last_size" ]; then
+            redraw
+            last_size="$size_key"
+          fi
+          sleep 0.1
+        done
+        """
+    }
+
+    private static func shellLiteral(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    }
+
+    private static func centeredLine(_ value: String, width: Int) -> String {
+        guard value.count < width else { return value }
+        let leftPadding = max(0, (width - value.count) / 2)
+        let centered = String(repeating: " ", count: leftPadding) + value
+        return centered.padding(toLength: width, withPad: " ", startingAt: 0)
+    }
 }

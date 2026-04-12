@@ -296,6 +296,14 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private let workingDirectory: String
     /// Optional command to run instead of the default shell.
     private let command: String?
+    /// Whether the surface should focus itself once created.
+    private let autoFocusOnReady: Bool
+    /// Optional shell path override used for special-purpose surfaces.
+    private let shellPathOverride: String?
+    /// Whether to launch the shell as a login shell.
+    private let usesLoginShell: Bool
+    /// Whether Blink shell integration variables should be injected.
+    private let shellIntegrationEnabled: Bool
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
     /// Called once after the terminal surface is created and attached.
@@ -356,7 +364,11 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         hookShellIntegrationDirectoryPath: String? = nil,
         hookEventDirectoryPath: String? = nil,
         workingDirectory: String,
-        command: String? = nil
+        command: String? = nil,
+        autoFocusOnReady: Bool = true,
+        shellPathOverride: String? = nil,
+        usesLoginShell: Bool = true,
+        shellIntegrationEnabled: Bool = true
     ) {
         self.ghosttyApp = app
         self.tabId = tabId
@@ -368,6 +380,10 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         self.hookEventDirectoryPath = hookEventDirectoryPath
         self.workingDirectory = workingDirectory
         self.command = command
+        self.autoFocusOnReady = autoFocusOnReady
+        self.shellPathOverride = shellPathOverride
+        self.usesLoginShell = usesLoginShell
+        self.shellIntegrationEnabled = shellIntegrationEnabled
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         // Layer setup for transparency — Metal renders text at full opacity
@@ -484,7 +500,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 )
             )
         }
-        if let hookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
+        if shellIntegrationEnabled, let hookEventDirectoryPath, !hookEventDirectoryPath.isEmpty {
             envVars.append(
                 ghostty_env_var_s(
                     key: strdup("BLINK_HOOK_EVENT_DIR"),
@@ -492,7 +508,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 )
             )
         }
-        if let hookScriptDirectoryPath, !hookScriptDirectoryPath.isEmpty {
+        if shellIntegrationEnabled, let hookScriptDirectoryPath, !hookScriptDirectoryPath.isEmpty {
             let wrapperPath = (hookScriptDirectoryPath as NSString).appendingPathComponent("claude")
             envVars.append(
                 ghostty_env_var_s(
@@ -501,7 +517,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
                 )
             )
         }
-        if let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
+        if shellIntegrationEnabled, let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
             envVars.append(
                 ghostty_env_var_s(
                     key: strdup("BLINK_SHELL_INTEGRATION"),
@@ -516,13 +532,16 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
             )
         }
 
-        let shell = UserDefaults.standard.string(forKey: "blink.shell")
+        let shell = shellPathOverride
+            ?? UserDefaults.standard.string(forKey: "blink.shell")
             ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let shellName = URL(fileURLWithPath: shell).lastPathComponent
-        if shellName == "zsh",
+        if shellIntegrationEnabled,
+           shellName == "zsh",
            let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
-            if let candidateZdotdir = ProcessInfo.processInfo.environment["ZDOTDIR"],
-               !candidateZdotdir.isEmpty {
+            if let candidateZdotdir = Self.originalZdotdir(
+                hookShellIntegrationDirectoryPath: hookShellIntegrationDirectoryPath
+            ) {
                 envVars.append(
                     ghostty_env_var_s(
                         key: strdup("BLINK_ZSH_ZDOTDIR"),
@@ -552,12 +571,14 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
         let wrapped: String
         if let command {
-            // Command tabs: non-interactive login shell running a specific command
-            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell)) -l -c \(Self.shellQuote(command))"
+            // Command tabs: run a specific command through the configured shell.
+            let loginFlag = usesLoginShell ? " -l" : ""
+            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell))\(loginFlag) -c \(Self.shellQuote(command))"
         } else {
             // Normal tabs: interactive login shell (no -c flag, so the shell
             // detects the PTY and enters interactive mode with full job control)
-            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell)) -l"
+            let loginFlag = usesLoginShell ? " -l" : ""
+            wrapped = "env -u NO_COLOR \(Self.shellQuote(shell))\(loginFlag)"
         }
         wrapped.withCString { createWithConfig($0) }
 
@@ -583,7 +604,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         // so the focus call lands at a deterministic point in the run loop,
         // before SwiftUI's cooperative scheduler can interleave focus-cleanup.
         DispatchQueue.main.async { [weak self] in
-            self?.focus()
+            if let self, self.autoFocusOnReady {
+                self.focus()
+            }
             if let self {
                 self.onReady?(self.tabId)
             }
@@ -623,6 +646,29 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         }
 
         return entries.joined(separator: ":")
+    }
+
+    private static func originalZdotdir(hookShellIntegrationDirectoryPath: String) -> String? {
+        let environment = ProcessInfo.processInfo.environment
+
+        if let originalZdotdir = environment["BLINK_ZSH_ZDOTDIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !originalZdotdir.isEmpty {
+            return originalZdotdir
+        }
+
+        guard let candidateZdotdir = environment["ZDOTDIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !candidateZdotdir.isEmpty else {
+            return nil
+        }
+
+        let normalizedCandidate = URL(fileURLWithPath: candidateZdotdir).standardizedFileURL.path
+        let normalizedWrapper = URL(fileURLWithPath: hookShellIntegrationDirectoryPath)
+            .standardizedFileURL.path
+        guard normalizedCandidate != normalizedWrapper else { return nil }
+
+        return candidateZdotdir
     }
 
     private static func shellQuote(_ value: String) -> String {

@@ -22,7 +22,11 @@ final class SurfaceManager {
         hookEventDirectoryPath: String?,
         app: GhosttyApp,
         workingDirectory: String,
-        command: String? = nil
+        command: String? = nil,
+        autoFocusOnReady: Bool = true,
+        shellPathOverride: String? = nil,
+        usesLoginShell: Bool = true,
+        shellIntegrationEnabled: Bool = true
     ) -> TerminalSurfaceView {
         let view = TerminalSurfaceView(
             app: app,
@@ -34,7 +38,11 @@ final class SurfaceManager {
             hookShellIntegrationDirectoryPath: hookShellIntegrationDirectoryPath,
             hookEventDirectoryPath: hookEventDirectoryPath,
             workingDirectory: workingDirectory,
-            command: command
+            command: command,
+            autoFocusOnReady: autoFocusOnReady,
+            shellPathOverride: shellPathOverride,
+            usesLoginShell: usesLoginShell,
+            shellIntegrationEnabled: shellIntegrationEnabled
         )
         view.onClose = { [weak self] tabId in
             self?.onProcessExit?(tabId)

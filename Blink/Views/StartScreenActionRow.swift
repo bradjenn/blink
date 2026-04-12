@@ -31,14 +31,26 @@ struct StartScreenActionRow: View {
 
                 Text(keyHint)
                     .font(Fonts.primary(size: 14))
-                    .foregroundStyle(isEnabled ? theme.accent : theme.textDim.opacity(0.4))
+                    .foregroundStyle(
+                        isEnabled
+                            ? (isHovered ? theme.text : theme.accent)
+                            : theme.textDim.opacity(0.4)
+                    )
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.bg.opacity(isHovered ? 0.2 : 0.001))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(theme.accent.opacity(isHovered ? 0.34 : 0), lineWidth: 1)
+                )
+        )
         .onHover { isHovered = $0 }
         .pointerCursor()
         .accessibilityLabel("\(label), key \(keyHint)")
