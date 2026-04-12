@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select Xcode 16
         run: |
@@ -51,7 +51,7 @@ jobs:
         run: ./scripts/build-dmg.sh
 
       - name: Upload DMG to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: Blink.dmg
 
