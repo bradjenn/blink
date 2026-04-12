@@ -5,7 +5,11 @@
 <h1 align="center">Blink</h1>
 
 <p align="center">
-  A native macOS terminal workspace for developers with column-based layout, tmux-backed persistence, fast workspace switching, CLI AI sessions, and an isolated workspace browser
+  A native macOS workspace for tmux, Neovim, and AI CLI workflows
+</p>
+
+<p align="center">
+  Persistent column layouts, tmux-backed session restore, and a built-in project browser for localhost, docs, and auth flows
 </p>
 
 <p align="center">
@@ -26,6 +30,12 @@
 <p align="center">
   <img src="screenshot.png" width="800" alt="Blink screenshot" />
 </p>
+
+## Why Blink
+
+- **Resume real project sessions** — reopen a workspace and reconnect the shell, editor, and tool panes you were already using
+- **Keep dev flows in one place** — terminals, AI CLIs, localhost previews, docs, and auth redirects live inside the same workspace
+- **Navigate by workspace, not by window pile** — Niri-style columns make it easy to keep multiple surfaces open without losing the thread
 
 ## Features
 
