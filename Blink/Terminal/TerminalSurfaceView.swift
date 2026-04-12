@@ -546,16 +546,15 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         if shellIntegrationEnabled,
            shellName == "zsh",
            let hookShellIntegrationDirectoryPath, !hookShellIntegrationDirectoryPath.isEmpty {
-            if let candidateZdotdir = Self.originalZdotdir(
+            let candidateZdotdir = Self.originalZdotdir(
                 hookShellIntegrationDirectoryPath: hookShellIntegrationDirectoryPath
-            ) {
-                envVars.append(
-                    ghostty_env_var_s(
-                        key: strdup("BLINK_ZSH_ZDOTDIR"),
-                        value: strdup(candidateZdotdir)
-                    )
+            ) ?? ""
+            envVars.append(
+                ghostty_env_var_s(
+                    key: strdup("BLINK_ZSH_ZDOTDIR"),
+                    value: strdup(candidateZdotdir)
                 )
-            }
+            )
             envVars.append(
                 ghostty_env_var_s(
                     key: strdup("ZDOTDIR"),
@@ -660,7 +659,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
 
         if let originalZdotdir = environment["BLINK_ZSH_ZDOTDIR"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-           !originalZdotdir.isEmpty {
+           !originalZdotdir.isEmpty,
+           !isBlinkShellIntegrationDirectory(originalZdotdir) {
             return originalZdotdir
         }
 
@@ -673,9 +673,18 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         let normalizedCandidate = URL(fileURLWithPath: candidateZdotdir).standardizedFileURL.path
         let normalizedWrapper = URL(fileURLWithPath: hookShellIntegrationDirectoryPath)
             .standardizedFileURL.path
-        guard normalizedCandidate != normalizedWrapper else { return nil }
+        guard normalizedCandidate != normalizedWrapper,
+              !isBlinkShellIntegrationDirectory(normalizedCandidate) else {
+            return nil
+        }
 
         return candidateZdotdir
+    }
+
+    private static func isBlinkShellIntegrationDirectory(_ path: String) -> Bool {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let lastComponent = URL(fileURLWithPath: normalizedPath).lastPathComponent
+        return lastComponent.hasSuffix("-shell-integration")
     }
 
     private static func shellQuote(_ value: String) -> String {

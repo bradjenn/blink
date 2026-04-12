@@ -2233,22 +2233,36 @@ final class AppStore {
         let clientSession = tmuxClientSessionName(workspaceId: workspace.id, paneId: paneId)
         let windowName = tmuxWindowName(for: paneId)
         let tmuxPrefix = tmuxCommandPrefix()
-        let baseTarget = shellQuote(baseSession)
+        let ensureWorkspace = tmuxEnsureWorkspaceCommands(
+            baseSession: baseSession,
+            windowName: windowName,
+            workingDirectory: workingDirectory,
+            shellCommand: tmuxShellLaunchCommand(workspace: workspace, tab: tab)
+        )
         let clientTarget = shellQuote(clientSession)
-        let windowTarget = shellQuote(windowName)
         let sessionWindowTarget = shellQuote("\(clientSession):\(windowName)")
-        let workingDirectoryArg = shellQuote(workingDirectory)
-        let shellCommand = tmuxShellLaunchCommand(workspace: workspace, tab: tab)
+        let ensureClientSession = """
+        \(tmuxPrefix) has-session -t \(clientTarget) >/dev/null 2>&1 || \
+        \(tmuxPrefix) new-session -d -t \(shellQuote(baseSession)) -s \(clientTarget) >/dev/null 2>&1 || true
+        """
+        let configureClient = """
+        \(tmuxPrefix) set-option -t \(clientTarget) status off >/dev/null 2>&1 || true
+        \(tmuxPrefix) set-option -t \(clientTarget) allow-rename off >/dev/null 2>&1 || true
+        """
 
-        let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
-        let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
-        let ensureClientSession = "\(tmuxPrefix) has-session -t \(clientTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -t \(baseTarget) -s \(clientTarget)"
-        let configureClient = "\(tmuxPrefix) set-option -t \(clientTarget) status off >/dev/null 2>&1; \(tmuxPrefix) set-option -t \(clientTarget) allow-rename off >/dev/null 2>&1"
-        let selectWindow = "\(tmuxPrefix) select-window -t \(sessionWindowTarget) >/dev/null 2>&1"
-        let attachClient = "exec \(tmuxPrefix) attach-session -t \(clientTarget)"
-
-        return [ensureBaseSession, ensureWindow, ensureClientSession, configureClient, selectWindow, attachClient]
-            .joined(separator: "; ")
+        return """
+        for _blink_tmux_attach_attempt in 1 2 3 4 5; do
+          \(ensureWorkspace)
+          \(ensureClientSession)
+          \(configureClient)
+          \(tmuxPrefix) select-window -t \(sessionWindowTarget) >/dev/null 2>&1 || true
+          if \(tmuxPrefix) attach-session -t \(clientTarget); then
+            exit 0
+          fi
+          sleep 0.1
+        done
+        exit 1
+        """
     }
 
     private func destroyTmuxPane(workspaceId: String, paneId: String) {
@@ -2426,11 +2440,10 @@ final class AppStore {
             assignments.append(("BLINK_SHELL_INTEGRATION", "1"))
             assignments.append(("BLINK_SHELL_INTEGRATION_DIR", hookShellIntegrationPath))
             if shellName == "zsh" {
-                if let currentZdotdir = originalZdotdir(
+                let currentZdotdir = originalZdotdir(
                     hookShellIntegrationPath: hookShellIntegrationPath
-                ) {
-                    assignments.append(("BLINK_ZSH_ZDOTDIR", currentZdotdir))
-                }
+                ) ?? ""
+                assignments.append(("BLINK_ZSH_ZDOTDIR", currentZdotdir))
                 assignments.append(("ZDOTDIR", hookShellIntegrationPath))
             }
         }
@@ -2447,7 +2460,8 @@ final class AppStore {
 
         if let originalZdotdir = environment["BLINK_ZSH_ZDOTDIR"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-           !originalZdotdir.isEmpty {
+           !originalZdotdir.isEmpty,
+           !Self.isBlinkShellIntegrationDirectory(originalZdotdir) {
             return originalZdotdir
         }
 
@@ -2459,25 +2473,54 @@ final class AppStore {
 
         let normalizedCandidate = URL(fileURLWithPath: candidateZdotdir).standardizedFileURL.path
         let normalizedWrapper = URL(fileURLWithPath: hookShellIntegrationPath).standardizedFileURL.path
-        guard normalizedCandidate != normalizedWrapper else { return nil }
+        guard normalizedCandidate != normalizedWrapper,
+              !Self.isBlinkShellIntegrationDirectory(normalizedCandidate) else {
+            return nil
+        }
 
         return candidateZdotdir
     }
 
+    private static func isBlinkShellIntegrationDirectory(_ path: String) -> Bool {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let lastComponent = URL(fileURLWithPath: normalizedPath).lastPathComponent
+        return lastComponent.hasSuffix("-shell-integration")
+    }
+
     private func tmuxEnsureWindowCommand(tab: AppTab, workspace: Workspace, workingDirectory: String) -> String {
         guard let paneId = tab.workspaceSetupPaneId else { return "true" }
+        return tmuxEnsureWorkspaceCommands(
+            baseSession: tmuxBaseSessionName(for: workspace.id),
+            windowName: tmuxWindowName(for: paneId),
+            workingDirectory: workingDirectory,
+            shellCommand: tmuxShellLaunchCommand(workspace: workspace, tab: tab)
+        )
+    }
+
+    private func tmuxEnsureWorkspaceCommands(
+        baseSession: String,
+        windowName: String,
+        workingDirectory: String,
+        shellCommand: String
+    ) -> String {
         let tmuxPrefix = tmuxCommandPrefix()
-        let baseSession = tmuxBaseSessionName(for: workspace.id)
-        let windowName = tmuxWindowName(for: paneId)
         let baseTarget = shellQuote(baseSession)
         let windowTarget = shellQuote(windowName)
         let workingDirectoryArg = shellQuote(workingDirectory)
-        let shellCommand = tmuxShellLaunchCommand(workspace: workspace, tab: tab)
 
-        let ensureBaseSession = "\(tmuxPrefix) has-session -t \(baseTarget) 2>/dev/null || \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
-        let ensureWindow = "\(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand)"
+        let ensureBaseSession = """
+        \(tmuxPrefix) has-session -t \(baseTarget) >/dev/null 2>&1 || \
+        \(tmuxPrefix) new-session -d -s \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand) >/dev/null 2>&1 || true
+        """
+        let ensureWindow = """
+        \(tmuxPrefix) list-windows -t \(baseTarget) -F '#{window_name}' 2>/dev/null | grep -Fqx -- \(windowTarget) || \
+        \(tmuxPrefix) new-window -d -t \(baseTarget) -n \(windowTarget) -c \(workingDirectoryArg) \(shellCommand) >/dev/null 2>&1 || true
+        """
 
-        return [ensureBaseSession, ensureWindow].joined(separator: "; ")
+        return """
+        \(ensureBaseSession)
+        \(ensureWindow)
+        """
     }
 
     private static func tmuxSocketName() -> String {
