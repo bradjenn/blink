@@ -64,6 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        true
+    }
+
     func requestCloseActiveTab() {
         closeTabTerminationGuardUntil = Date().addingTimeInterval(1)
         closeActiveTab()
@@ -163,7 +167,7 @@ struct BApp: App {
     @State private var updateChecker = UpdateChecker()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             Shell(
                 ghosttyApp: ghosttyApp,
                 surfaceManager: surfaceManager,
@@ -257,10 +261,6 @@ struct BApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(
-            width: Layout.windowDefaultWidth,
-            height: Layout.windowDefaultHeight
-        )
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Check for Updates...") {

@@ -457,6 +457,35 @@ extension AppStore {
     func setWorkspaceViewportOffset(_ offset: CGFloat, for workspaceId: String) {
         workspaceViewportOffsets[workspaceId] = Double(offset)
     }
+
+    func workspaceColumnFractions(for workspaceId: String) -> [String: CGFloat] {
+        (workspaceColumnFractions[workspaceId] ?? [:]).reduce(into: [:]) { result, entry in
+            result[entry.key] = CGFloat(entry.value)
+        }
+    }
+
+    func setWorkspaceColumnFraction(_ fraction: CGFloat, for columnId: String, workspaceId: String) {
+        var fractions = workspaceColumnFractions[workspaceId] ?? [:]
+        fractions[columnId] = Double(fraction)
+        workspaceColumnFractions[workspaceId] = fractions
+    }
+
+    func syncWorkspaceColumnFractions(for workspaceId: String, validColumnIds: [String]) {
+        let validIds = Set(validColumnIds)
+        let existing = workspaceColumnFractions[workspaceId] ?? [:]
+        let filtered = existing.filter { validIds.contains($0.key) }
+
+        if filtered.isEmpty {
+            if workspaceColumnFractions[workspaceId] != nil {
+                workspaceColumnFractions[workspaceId] = nil
+            }
+            return
+        }
+
+        if filtered != existing {
+            workspaceColumnFractions[workspaceId] = filtered
+        }
+    }
 }
 
 extension AppStore {

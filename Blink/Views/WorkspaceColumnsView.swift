@@ -399,6 +399,7 @@ struct WorkspaceColumnsView: View {
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
                         let _ = layoutState.increasePreset(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
+                        persistColumnFraction(columnId: colId)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -408,6 +409,7 @@ struct WorkspaceColumnsView: View {
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
                         let _ = layoutState.decreasePreset(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
+                        persistColumnFraction(columnId: colId)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -417,6 +419,7 @@ struct WorkspaceColumnsView: View {
                     cachedLayoutKey = ""
                     withAnimation(.easeInOut(duration: 0.18)) {
                         let _ = layoutState.toggleMaximize(for: colId, workspaceId: workspaceId, viewportWidth: viewportWidth)
+                        persistColumnFraction(columnId: colId)
                         ensureActiveColumnVisible(viewportWidth: viewportWidth)
                     }
                 }
@@ -449,10 +452,12 @@ struct WorkspaceColumnsView: View {
 
     private func syncColumns(viewportWidth: CGFloat) {
         let columnIds = columns.map(\.id)
+        store.syncWorkspaceColumnFractions(for: workspace.id, validColumnIds: columnIds)
         layoutState.sync(
             workspaceId: workspace.id,
             columnIds: columnIds,
-            defaultFraction: defaultColumnFraction(for: columnIds)
+            defaultFraction: defaultColumnFraction(for: columnIds),
+            persistedFractions: store.workspaceColumnFractions(for: workspace.id)
         )
     }
 
@@ -534,8 +539,17 @@ struct WorkspaceColumnsView: View {
         cachedLayoutKey = ""
         withAnimation(workspaceAnimation) {
             let _ = layoutState.maximize(for: colId, workspaceId: workspace.id, viewportWidth: viewportWidth)
+            persistColumnFraction(columnId: colId)
             ensureActiveColumnVisible(viewportWidth: viewportWidth)
         }
+    }
+
+    private func persistColumnFraction(columnId: String) {
+        store.setWorkspaceColumnFraction(
+            layoutState.fraction(for: columnId, workspaceId: workspace.id),
+            for: columnId,
+            workspaceId: workspace.id
+        )
     }
 
     private func clampViewportOffset(viewportWidth: CGFloat, animated: Bool) {

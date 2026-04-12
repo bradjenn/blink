@@ -31,6 +31,7 @@ enum StorageKeys {
     static let lastSelectedWorkspaceId = "blink.lastSelectedWorkspaceId"
     static let lastActiveTabs = "blink.lastActiveTabs"
     static let workspaceViewportOffsets = "blink.workspaceViewportOffsets"
+    static let workspaceColumnFractions = "blink.workspaceColumnFractions"
     static let columns = "blink.columns"
     static let workspaceSetups = "blink.workspaceSetups"
     static let legacyWorkspaces = "blink.projects"
@@ -198,6 +199,9 @@ final class AppStore {
     var workspaceViewportOffsets: [String: Double] {
         didSet { Self.saveDictionary(workspaceViewportOffsets, forKey: StorageKeys.workspaceViewportOffsets) }
     }
+    var workspaceColumnFractions: [String: [String: Double]] {
+        didSet { Self.saveDictionary(workspaceColumnFractions, forKey: StorageKeys.workspaceColumnFractions) }
+    }
     @ObservationIgnored
     private let tmuxIntegrationEnabled: Bool
     @ObservationIgnored
@@ -298,6 +302,7 @@ final class AppStore {
         self.focusCenteringMode = FocusCenteringMode(rawValue: defaults.string(forKey: StorageKeys.focusCenteringMode) ?? "") ?? .never
         self.lastActiveTab = Self.loadDictionary(forKey: StorageKeys.lastActiveTabs)
         self.workspaceViewportOffsets = Self.loadDictionary(forKey: StorageKeys.workspaceViewportOffsets)
+        self.workspaceColumnFractions = Self.loadDictionary(forKey: StorageKeys.workspaceColumnFractions)
         self.columns = Self.loadColumns()
         if let storedLastWorkspaceId,
            loadedWorkspaces.contains(where: { $0.id == storedLastWorkspaceId }) {
@@ -2049,6 +2054,19 @@ final class AppStore {
         let nextViewportOffsets = workspaceViewportOffsets.filter { validWorkspaceIds.contains($0.key) }
         if nextViewportOffsets != workspaceViewportOffsets {
             workspaceViewportOffsets = nextViewportOffsets
+        }
+
+        let nextColumnFractions = workspaceColumnFractions
+            .filter { validWorkspaceIds.contains($0.key) }
+            .reduce(into: [String: [String: Double]]()) { result, entry in
+                let validColumnIds = Set((columns[entry.key] ?? []).map(\.id))
+                let filtered = entry.value.filter { validColumnIds.contains($0.key) }
+                if !filtered.isEmpty {
+                    result[entry.key] = filtered
+                }
+            }
+        if nextColumnFractions != workspaceColumnFractions {
+            workspaceColumnFractions = nextColumnFractions
         }
 
         let nextExpandedWorkspaceIds = expandedWorkspaceIds.intersection(validWorkspaceIds)

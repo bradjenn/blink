@@ -8,12 +8,17 @@ final class WorkspaceLayoutState {
     private var preMaximizeFractions: [String: [String: CGFloat]] = [:]
     private var initializedWorkspaces: Set<String> = []
 
-    func sync(workspaceId: String, columnIds: [String], defaultFraction: CGFloat) {
+    func sync(
+        workspaceId: String,
+        columnIds: [String],
+        defaultFraction: CGFloat,
+        persistedFractions: [String: CGFloat] = [:]
+    ) {
         let existing = columnFractions[workspaceId] ?? [:]
         var next: [String: CGFloat] = [:]
 
         for columnId in columnIds {
-            next[columnId] = existing[columnId] ?? defaultFraction
+            next[columnId] = existing[columnId] ?? persistedFractions[columnId] ?? defaultFraction
         }
 
         columnFractions[workspaceId] = next
@@ -33,6 +38,10 @@ final class WorkspaceLayoutState {
         var fractions = columnFractions[workspaceId] ?? [:]
         fractions[columnId] = fraction
         columnFractions[workspaceId] = fractions
+    }
+
+    func fraction(for columnId: String, workspaceId: String) -> CGFloat {
+        columnFractions[workspaceId]?[columnId] ?? Layout.workspaceColumnDefaultFraction
     }
 
     /// Increase to next larger preset. Caps at 1.0.
