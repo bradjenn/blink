@@ -14,9 +14,9 @@ struct StartScreen: View {
     private static let terminalWorkspaceId = "__start_screen__"
     private static let terminalWorkspaceName = "Blink"
     private static let terminalPrefix = "start-screen-"
-    private static let bannerPaddingRows = 3
-    private static let preferredBannerFontSize: CGFloat = 14
-    private static let minimumBannerFontSize: CGFloat = 12
+    private static let bannerPaddingRows = 4
+    private static let preferredBannerFontSize: CGFloat = 13
+    private static let minimumBannerFontSize: CGFloat = 11
     private static let bannerCellWidthMultiplier: CGFloat = 0.9
     private static let bannerRowHeightMultiplier: CGFloat = 1.32
     private static let contentPadding: CGFloat = 96
