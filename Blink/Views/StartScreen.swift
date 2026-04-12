@@ -9,13 +9,20 @@ struct StartScreen: View {
     let surfaceManager: SurfaceManager
 
     @State private var keyMonitor: Any?
+    @State private var displayedBannerFontSize: CGFloat?
 
     private static let terminalWorkspaceId = "__start_screen__"
     private static let terminalWorkspaceName = "Blink"
     private static let terminalPrefix = "start-screen-"
     private static let bannerPaddingRows = 3
-    private static let bannerFontScale: CGFloat = 1.14
+    private static let preferredBannerFontSize: CGFloat = 22
+    private static let minimumBannerFontSize: CGFloat = 16
+    private static let bannerCellWidthMultiplier: CGFloat = 0.9
+    private static let bannerRowHeightMultiplier: CGFloat = 1.32
+    private static let contentPadding: CGFloat = 96
+    private static let estimatedMenuHeight: CGFloat = 320
     private static let menuWidth: CGFloat = 540
+    private static let bannerResizeDebounceNanoseconds: UInt64 = 180_000_000
 
     private struct ActionItem: Identifiable {
         let id: String
@@ -116,64 +123,92 @@ struct StartScreen: View {
         Self.dashboardCommand(lines: dashboardLogoLines)
     }
 
-    private var dashboardTabId: String {
-        "\(Self.terminalPrefix)\(abs(dashboardCommand.hashValue))"
+    private func dashboardTabId(for bannerFontSize: CGFloat) -> String {
+        "\(Self.terminalPrefix)\(abs(dashboardCommand.hashValue))-\(Int(bannerFontSize.rounded()))"
     }
 
-    private var terminalRowHeight: CGFloat {
-        max(18, bannerFontSize * 1.26)
+    private func terminalRowHeight(for bannerFontSize: CGFloat) -> CGFloat {
+        bannerFontSize * Self.bannerRowHeightMultiplier
     }
 
-    private var bannerFontSize: CGFloat {
-        max(18, store.fontSize * Self.bannerFontScale)
+    private func bannerHeight(for bannerFontSize: CGFloat) -> CGFloat {
+        CGFloat(dashboardLogoLines.count + Self.bannerPaddingRows) * terminalRowHeight(for: bannerFontSize)
     }
 
-    private var bannerHeight: CGFloat {
-        CGFloat(dashboardLogoLines.count + Self.bannerPaddingRows) * terminalRowHeight
+    private func bannerFontSize(for size: CGSize) -> CGFloat {
+        let blockWidth = CGFloat(dashboardLogoLines.map(\.count).max() ?? 37)
+        let blockHeight = CGFloat(dashboardLogoLines.count + Self.bannerPaddingRows)
+
+        let availableWidth = max(280, min(size.width - Self.contentPadding, size.width * 0.58))
+        let availableHeight = max(220, size.height - Self.estimatedMenuHeight)
+
+        let widthLimitedFont = availableWidth / (blockWidth * Self.bannerCellWidthMultiplier)
+        let heightLimitedFont = availableHeight / (blockHeight * Self.bannerRowHeightMultiplier)
+        let clampedFont = min(Self.preferredBannerFontSize, widthLimitedFont, heightLimitedFont)
+
+        return max(Self.minimumBannerFontSize, clampedFont)
     }
 
     var body: some View {
-        ZStack {
-            backgroundGlow
+        GeometryReader { geometry in
+            let targetBannerFontSize = CGFloat(Int(bannerFontSize(for: geometry.size).rounded()))
+            let resolvedBannerFontSize = displayedBannerFontSize ?? targetBannerFontSize
+            let dashboardTabId = dashboardTabId(for: resolvedBannerFontSize)
+            let bannerHeight = bannerHeight(for: resolvedBannerFontSize)
 
-            VStack(spacing: 28) {
-                TerminalView(
-                    tabId: dashboardTabId,
-                    paneId: dashboardTabId,
-                    ghosttyApp: ghosttyApp,
-                    surfaceManager: surfaceManager,
-                    workspaceId: Self.terminalWorkspaceId,
-                    workspaceName: Self.terminalWorkspaceName,
-                    workingDirectory: NSHomeDirectory(),
-                    isFocused: false,
-                    command: dashboardCommand,
-                    autoFocusOnReady: false,
-                    shellPathOverride: "/bin/sh",
-                    usesLoginShell: false,
-                    shellIntegrationEnabled: false,
-                    fontSizeOverride: bannerFontSize,
-                    allowsPointerPassthrough: true
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: bannerHeight)
-                .accessibilityHidden(true)
+            ZStack {
+                backgroundGlow
 
-                menuContent
+                VStack(spacing: 28) {
+                    TerminalView(
+                        tabId: dashboardTabId,
+                        paneId: dashboardTabId,
+                        ghosttyApp: ghosttyApp,
+                        surfaceManager: surfaceManager,
+                        workspaceId: Self.terminalWorkspaceId,
+                        workspaceName: Self.terminalWorkspaceName,
+                        workingDirectory: NSHomeDirectory(),
+                        isFocused: false,
+                        command: dashboardCommand,
+                        autoFocusOnReady: false,
+                        shellPathOverride: "/bin/sh",
+                        usesLoginShell: false,
+                        shellIntegrationEnabled: false,
+                        fontSizeOverride: resolvedBannerFontSize,
+                        allowsPointerPassthrough: true
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bannerHeight)
+                    .accessibilityHidden(true)
+
+                    menuContent
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding(32)
-        .onAppear {
-            installKeyMonitor()
-            destroyStaleStartScreenSurfaces(keeping: dashboardTabId)
-        }
-        .onDisappear {
-            removeKeyMonitor()
-            destroyAllStartScreenSurfaces()
-        }
-        .onChange(of: dashboardTabId, initial: false) { oldValue, newValue in
-            surfaceManager.destroySurface(tabId: oldValue)
-            destroyStaleStartScreenSurfaces(keeping: newValue)
+            .padding(32)
+            .onAppear {
+                displayedBannerFontSize = targetBannerFontSize
+                installKeyMonitor()
+                destroyStaleStartScreenSurfaces(keeping: dashboardTabId)
+            }
+            .onDisappear {
+                removeKeyMonitor()
+                destroyAllStartScreenSurfaces()
+            }
+            .task(id: targetBannerFontSize) {
+                guard displayedBannerFontSize != nil else { return }
+                if displayedBannerFontSize == targetBannerFontSize {
+                    return
+                }
+
+                try? await Task.sleep(nanoseconds: Self.bannerResizeDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+                displayedBannerFontSize = targetBannerFontSize
+            }
+            .onChange(of: dashboardTabId, initial: false) { oldValue, newValue in
+                surfaceManager.destroySurface(tabId: oldValue)
+                destroyStaleStartScreenSurfaces(keeping: newValue)
+            }
         }
     }
 
