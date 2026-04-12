@@ -26,7 +26,8 @@ final class SurfaceManager {
         autoFocusOnReady: Bool = true,
         shellPathOverride: String? = nil,
         usesLoginShell: Bool = true,
-        shellIntegrationEnabled: Bool = true
+        shellIntegrationEnabled: Bool = true,
+        fontSizeOverride: CGFloat? = nil
     ) -> TerminalSurfaceView {
         let view = TerminalSurfaceView(
             app: app,
@@ -42,7 +43,8 @@ final class SurfaceManager {
             autoFocusOnReady: autoFocusOnReady,
             shellPathOverride: shellPathOverride,
             usesLoginShell: usesLoginShell,
-            shellIntegrationEnabled: shellIntegrationEnabled
+            shellIntegrationEnabled: shellIntegrationEnabled,
+            fontSizeOverride: fontSizeOverride
         )
         view.onClose = { [weak self] tabId in
             self?.onProcessExit?(tabId)

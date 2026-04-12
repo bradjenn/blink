@@ -304,6 +304,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
     private let usesLoginShell: Bool
     /// Whether Blink shell integration variables should be injected.
     private let shellIntegrationEnabled: Bool
+    /// Optional per-surface font size override.
+    private let fontSizeOverride: CGFloat?
     /// Called when the shell process exits.
     var onClose: ((String) -> Void)?
     /// Called once after the terminal surface is created and attached.
@@ -368,7 +370,8 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         autoFocusOnReady: Bool = true,
         shellPathOverride: String? = nil,
         usesLoginShell: Bool = true,
-        shellIntegrationEnabled: Bool = true
+        shellIntegrationEnabled: Bool = true,
+        fontSizeOverride: CGFloat? = nil
     ) {
         self.ghosttyApp = app
         self.tabId = tabId
@@ -384,6 +387,7 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         self.shellPathOverride = shellPathOverride
         self.usesLoginShell = usesLoginShell
         self.shellIntegrationEnabled = shellIntegrationEnabled
+        self.fontSizeOverride = fontSizeOverride
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
 
         // Layer setup for transparency — Metal renders text at full opacity
@@ -460,6 +464,9 @@ class TerminalSurfaceView: NSView, NSTextInputClient {
         )
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.scale_factor = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
+        if let fontSizeOverride {
+            cfg.font_size = Float(fontSizeOverride)
+        }
 
         // Both command tabs and normal shells are wrapped with `env -u NO_COLOR`
         // to strip the NO_COLOR variable that may be inherited from the parent

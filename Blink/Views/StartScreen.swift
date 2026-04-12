@@ -13,7 +13,8 @@ struct StartScreen: View {
     private static let terminalWorkspaceId = "__start_screen__"
     private static let terminalWorkspaceName = "Blink"
     private static let terminalPrefix = "start-screen-"
-    private static let bannerPaddingRows = 2
+    private static let bannerPaddingRows = 3
+    private static let bannerFontScale: CGFloat = 1.14
     private static let menuWidth: CGFloat = 540
 
     private struct ActionItem: Identifiable {
@@ -120,7 +121,11 @@ struct StartScreen: View {
     }
 
     private var terminalRowHeight: CGFloat {
-        max(18, CGFloat(store.fontSize) * 1.26)
+        max(18, bannerFontSize * 1.26)
+    }
+
+    private var bannerFontSize: CGFloat {
+        max(18, store.fontSize * Self.bannerFontScale)
     }
 
     private var bannerHeight: CGFloat {
@@ -146,6 +151,7 @@ struct StartScreen: View {
                     shellPathOverride: "/bin/sh",
                     usesLoginShell: false,
                     shellIntegrationEnabled: false,
+                    fontSizeOverride: bannerFontSize,
                     allowsPointerPassthrough: true
                 )
                 .frame(maxWidth: .infinity)
@@ -304,7 +310,7 @@ struct StartScreen: View {
 
         redraw() {
           read_size
-          left_pad=$(( (cols - \(blockWidth)) / 2 ))
+          left_pad=$(( (cols - \(blockWidth) + 1) / 2 ))
           [ "$left_pad" -lt 0 ] && left_pad=0
           top=$(( (rows - \(topPadding)) / 2 ))
           [ "$top" -lt 0 ] && top=0

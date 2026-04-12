@@ -93,6 +93,7 @@ struct TerminalView: NSViewRepresentable {
     var shellPathOverride: String? = nil
     var usesLoginShell: Bool = true
     var shellIntegrationEnabled: Bool = true
+    var fontSizeOverride: CGFloat? = nil
     var allowsPointerPassthrough: Bool = false
 
     final class Coordinator {
@@ -131,7 +132,8 @@ struct TerminalView: NSViewRepresentable {
                 autoFocusOnReady: autoFocusOnReady,
                 shellPathOverride: shellPathOverride,
                 usesLoginShell: usesLoginShell,
-                shellIntegrationEnabled: shellIntegrationEnabled
+                shellIntegrationEnabled: shellIntegrationEnabled,
+                fontSizeOverride: fontSizeOverride
             )
 
             // Set closures once per surface, reading current state via coordinator
