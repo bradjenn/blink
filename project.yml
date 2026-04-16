@@ -1,8 +1,8 @@
 name: Blink
 settings:
   base:
-    MARKETING_VERSION: "0.8.5"
-    CURRENT_PROJECT_VERSION: 14
+    MARKETING_VERSION: "0.8.7"
+    CURRENT_PROJECT_VERSION: 15
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
