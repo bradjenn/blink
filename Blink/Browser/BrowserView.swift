@@ -93,6 +93,7 @@ struct BrowserView: View {
     }
 
     var body: some View {
+        let _ = browserManager.controllerGeneration
         Group {
             if let selectedBrowserTab {
                 let resolvedWorkspaceDownloads = visibleWorkspaceDownloads.isEmpty ? workspaceDownloads : visibleWorkspaceDownloads

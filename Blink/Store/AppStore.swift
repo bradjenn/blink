@@ -337,6 +337,10 @@ final class AppStore {
         claudeHookShellIntegrationDirectoryPath = ClaudeHookScriptInstaller.installShellIntegration(
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
         )?.path
+        BrowserProfileStorage.cleanupOrphanedStorage(
+            activeProfileIds: loadedProfiles.map(\.id),
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "com.blink.app"
+        )
         Self.saveProfiles(loadedProfiles)
         Self.saveWorkspaces(loadedWorkspaces)
         sanitizePersistedWorkspaceState()

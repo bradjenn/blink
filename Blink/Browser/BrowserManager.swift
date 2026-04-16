@@ -23,6 +23,7 @@ final class BrowserManager {
             saveHistoryEntries()
         }
     }
+    var controllerGeneration: Int = 0
     private var controllers: [String: any BrowserHostController] = [:]
     private var controllerProfileIds: [String: String] = [:]
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
@@ -120,8 +121,12 @@ final class BrowserManager {
     }
 
     func destroyController(tabId: String) {
-        controllers.removeValue(forKey: tabId)?.invalidate()
+        let removedController = controllers.removeValue(forKey: tabId)
         controllerProfileIds[tabId] = nil
+        removedController?.invalidate()
+        if removedController != nil {
+            controllerGeneration &+= 1
+        }
     }
 
     func destroyControllers(tabIds: [String]) {
@@ -254,8 +259,12 @@ final class BrowserManager {
     private func invalidateAllControllers() {
         let activeControllers = Array(controllers.values)
         controllers.removeAll()
+        controllerProfileIds.removeAll()
         for controller in activeControllers {
             controller.invalidate()
+        }
+        if !activeControllers.isEmpty {
+            controllerGeneration &+= 1
         }
     }
 

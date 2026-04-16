@@ -104,6 +104,7 @@ private struct ProfilesSettings: View {
     @State private var editingProfileId: String?
     @State private var renameDraft = ""
     @State private var pendingRemovalProfile: Profile?
+    @State private var pendingBrowserResetProfile: Profile?
 
     private var activeWorkspace: Workspace? {
         guard let activeWorkspaceId = store.activeWorkspaceId else { return nil }
@@ -155,6 +156,29 @@ private struct ProfilesSettings: View {
         } message: {
             if let profile = pendingRemovalProfile {
                 Text(removalMessage(for: profile))
+            }
+        }
+        .confirmationDialog(
+            pendingBrowserResetProfile.map { "Reset browser data for \($0.name)?" } ?? "Reset Browser Data?",
+            isPresented: Binding(
+                get: { pendingBrowserResetProfile != nil },
+                set: { if !$0 { pendingBrowserResetProfile = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let profile = pendingBrowserResetProfile {
+                Button("Reset Browser Data", role: .destructive) {
+                    _ = store.resetBrowserStorage(for: profile.id)
+                    pendingBrowserResetProfile = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingBrowserResetProfile = nil
+            }
+        } message: {
+            if let profile = pendingBrowserResetProfile {
+                Text(browserResetMessage(for: profile))
             }
         }
     }
@@ -431,9 +455,7 @@ private struct ProfilesSettings: View {
                         .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
                     }
 
-                    if profile.isBuiltIn {
-                        EmptyView()
-                    } else if isEditing {
+                    if isEditing {
                         Button("Cancel") {
                             cancelRename()
                         }
@@ -445,15 +467,22 @@ private struct ProfilesSettings: View {
                         .buttonStyle(BlinkActionButtonStyle(kind: .primary))
                         .disabled(renameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
-                        Button("Rename") {
-                            beginRenaming(profile)
+                        Button("Reset Browser Data") {
+                            pendingBrowserResetProfile = profile
                         }
                         .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
 
-                        Button("Remove") {
-                            pendingRemovalProfile = profile
+                        if !profile.isBuiltIn {
+                            Button("Rename") {
+                                beginRenaming(profile)
+                            }
+                            .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
+
+                            Button("Remove") {
+                                pendingRemovalProfile = profile
+                            }
+                            .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
                         }
-                        .buttonStyle(BlinkActionButtonStyle(kind: .secondaryCompact))
                     }
                 }
             }
@@ -599,6 +628,12 @@ private struct ProfilesSettings: View {
         let workspaceCount = attachedWorkspaces(for: profile).count
         let workspaceSummary = workspaceCount == 1 ? "1 attached workspace" : "\(workspaceCount) attached workspaces"
         return "\(workspaceSummary) will be moved to Personal, and Blink will delete this profile’s Chromium storage."
+    }
+
+    private func browserResetMessage(for profile: Profile) -> String {
+        let workspaceCount = attachedWorkspaces(for: profile).count
+        let workspaceSummary = workspaceCount == 1 ? "1 attached workspace uses this profile." : "\(workspaceCount) attached workspaces use this profile."
+        return "\(workspaceSummary) Blink will close and recreate this Chromium session, which signs you out of sites and clears cookies, cache, and stored browser data for that profile."
     }
 }
 

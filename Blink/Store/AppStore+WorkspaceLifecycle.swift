@@ -86,7 +86,44 @@ extension AppStore {
             _ = setWorkspaceProfile(workspace.id, profileId: replacementProfileId)
         }
         BlinkChromiumRuntime.shared().removeStorage(forProfileIdentifier: profile.id)
+        BrowserProfileStorage.removeStorage(for: profile.id)
         profiles.removeAll { $0.id == id }
+        return true
+    }
+
+    @discardableResult
+    func resetBrowserStorage(for profileId: String) -> Bool {
+        guard profile(withId: profileId) != nil else { return false }
+
+        let affectedWorkspaceIds = workspaces
+            .filter { $0.profileId == profileId }
+            .map(\.id)
+        let browserTabIds = affectedWorkspaceIds.flatMap { workspaceId in
+            workspaceTabs(for: workspaceId).flatMap { browserControllerIds(for: $0) }
+        }
+
+        browserManager?.destroyControllers(tabIds: browserTabIds)
+        BlinkChromiumRuntime.shared().removeStorage(forProfileIdentifier: profileId)
+        BrowserProfileStorage.removeStorage(for: profileId)
+
+        for workspaceId in affectedWorkspaceIds {
+            for index in tabs.indices where tabs[index].workspaceId == workspaceId && tabs[index].isBrowser {
+                guard var paneState = tabs[index].browserState else { continue }
+                for browserTabIndex in paneState.tabs.indices {
+                    paneState.tabs[browserTabIndex].state = BrowserTabState(
+                        urlString: paneState.tabs[browserTabIndex].state.urlString,
+                        title: nil,
+                        canGoBack: false,
+                        canGoForward: false,
+                        isLoading: false,
+                        preferredFocus: paneState.tabs[browserTabIndex].state.preferredFocus
+                    )
+                }
+                tabs[index].browserState = paneState
+                tabs[index].label = browserPaneLabel(for: paneState, fallback: tabs[index].defaultLabel)
+            }
+        }
+
         return true
     }
 
